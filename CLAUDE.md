@@ -127,3 +127,8 @@ Every PR must include:
 - Use TypeScript strict mode for all code
 - Implement graceful error handling with fallback suggestions
 - **Code File Size**: Don't let code files get too big (e.g. > 1000 lines in a file is a major code smell). Ensure that everything is factored properly, modular, and minimizes code duplication.
+
+## Development Best Practices
+
+- **Asynchronous Programming**:
+  - async is better than sync in virtually any case that's got blocking I/O, etc.
