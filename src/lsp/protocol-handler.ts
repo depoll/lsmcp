@@ -73,15 +73,21 @@ export class ProtocolHandler {
     }
   }
 
-  async sendRequest<P, R>(method: string, params: P): Promise<R> {
+  async sendRequest<P = any, R = any>(
+    method: string,
+    params: P,
+    options?: { timeout?: number }
+  ): Promise<R> {
+    const timeout = options?.timeout || this.requestTimeout;
+
     const timeoutPromise = new Promise<never>((_, reject) => {
       setTimeout(() => {
-        reject(new TimeoutError(`Request ${method} timed out after ${this.requestTimeout}ms`));
-      }, this.requestTimeout);
+        reject(new TimeoutError(`Request ${method} timed out after ${timeout}ms`));
+      }, timeout);
     });
 
-    const requestPromise = this.connection.sendRequest(method, params);
-    return Promise.race([requestPromise as Promise<R>, timeoutPromise]);
+    const requestPromise = this.connection.sendRequest<P, R>(method, params);
+    return Promise.race([requestPromise, timeoutPromise]);
   }
 
   dispose(): void {

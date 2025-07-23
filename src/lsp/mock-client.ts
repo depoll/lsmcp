@@ -24,7 +24,7 @@ export class MockLSPClient extends EventEmitter {
     this.connected = true;
   }
 
-  stop(): void {
+  async stop(): Promise<void> {
     if (!this.connected) {
       throw new Error('Client is not connected');
     }

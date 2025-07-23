@@ -103,7 +103,7 @@ export class LSPClientV2 extends EventEmitter {
 
       this.logger.info(`Language server started: ${this.id}`);
     } catch (error) {
-      this.cleanup();
+      await this.cleanup();
       throw error;
     }
   }
@@ -123,10 +123,10 @@ export class LSPClientV2 extends EventEmitter {
       this.logger.warn('Error during shutdown:', error);
     }
 
-    this.cleanup();
+    await this.cleanup();
   }
 
-  private cleanup(): void {
+  private async cleanup(): Promise<void> {
     this.connected = false;
 
     if (this.protocolHandler) {
@@ -135,7 +135,7 @@ export class LSPClientV2 extends EventEmitter {
     }
 
     this.connection = null;
-    this.processManager.stop();
+    await this.processManager.stop();
   }
 
   async ping(): Promise<boolean> {

@@ -137,26 +137,9 @@ export class ConnectionPool {
       });
 
       client.on('crash', () => {
-        void (async () => {
-          const key = `${language}:${workspace}`;
-          const info = this.connections.get(key);
-          if (info) {
-            info.health.crashes++;
-            info.health.status = 'unhealthy';
-
-            // Attempt recovery
-            if (info.health.crashes <= this.options.maxRetries) {
-              this.logger.info(`Attempting to restart ${language} server for ${workspace}`);
-              info.health.status = 'restarting';
-
-              try {
-                await this.restartConnection(key, language, workspace, config);
-              } catch (error) {
-                this.logger.error(`Failed to restart ${language} server:`, error);
-              }
-            }
-          }
-        })();
+        this.handleCrashRecovery(language, workspace, config).catch((error) =>
+          this.logger.error('Crash recovery failed:', error)
+        );
       });
 
       await client.start();
@@ -258,5 +241,66 @@ export class ConnectionPool {
 
   getDefaultServers(): Record<string, LanguageServerConfig> {
     return { ...DEFAULT_SERVERS };
+  }
+
+  private async handleCrashRecovery(
+    language: string,
+    workspace: string,
+    config: LanguageServerConfig
+  ): Promise<void> {
+    const key = `${language}:${workspace}`;
+    const info = this.connections.get(key);
+    if (!info) return;
+
+    info.health.crashes++;
+    info.health.status = 'unhealthy';
+
+    // Attempt recovery
+    if (info.health.crashes <= this.options.maxRetries) {
+      this.logger.info(`Attempting to restart ${language} server for ${workspace}`);
+      info.health.status = 'restarting';
+
+      try {
+        await this.restartConnection(key, language, workspace, config);
+      } catch (error) {
+        this.logger.error(`Failed to restart ${language} server:`, error);
+        throw error;
+      }
+    }
+  }
+
+  private async restartConnection(
+    key: string,
+    language: string,
+    workspace: string,
+    config: LanguageServerConfig
+  ): Promise<void> {
+    // Remove old connection
+    const oldInfo = this.connections.get(key);
+    if (oldInfo) {
+      try {
+        await oldInfo.client.stop();
+      } catch (error) {
+        // Ignore errors during stop
+      }
+    }
+
+    // Create new connection
+    const newClient = await this.createClient(language, workspace, config);
+    const health: HealthStatus = {
+      status: 'healthy',
+      lastCheck: new Date(),
+      crashes: oldInfo?.health.crashes || 0,
+      uptime: 0,
+      capabilities: newClient.getCapabilities() || undefined,
+    };
+
+    this.connections.set(key, {
+      client: newClient,
+      health,
+      language,
+      workspace,
+      config,
+    });
   }
 }

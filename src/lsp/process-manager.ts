@@ -77,13 +77,32 @@ export class ProcessManager extends EventEmitter {
     });
   }
 
-  stop(): void {
+  async stop(): Promise<void> {
     if (!this.process) {
       return;
     }
 
-    this.process.kill('SIGTERM');
+    const process = this.process;
     this.process = null;
+
+    // Kill the process
+    process.kill('SIGTERM');
+
+    // Wait for process to exit (with timeout)
+    await new Promise<void>((resolve) => {
+      const timeout = setTimeout(() => {
+        // Force kill if still running
+        if (!process.killed) {
+          process.kill('SIGKILL');
+        }
+        resolve();
+      }, 5000);
+
+      process.once('exit', () => {
+        clearTimeout(timeout);
+        resolve();
+      });
+    });
   }
 
   isRunning(): boolean {
