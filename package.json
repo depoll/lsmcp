@@ -1,0 +1,56 @@
+{
+  "name": "lsmcp",
+  "version": "0.1.0",
+  "description": "Language Server Protocol MCP - An MCP implementation for LSP integration",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "test": "NODE_OPTIONS=\"--experimental-vm-modules\" jest",
+    "test:unit": "NODE_OPTIONS=\"--experimental-vm-modules\" jest tests/unit",
+    "test:integration": "NODE_OPTIONS=\"--experimental-vm-modules\" jest tests/integration",
+    "test:efficiency": "NODE_OPTIONS=\"--experimental-vm-modules\" jest tests/efficiency",
+    "lint": "eslint src tests --ext .ts",
+    "type-check": "tsc --noEmit",
+    "format": "prettier --write \"src/**/*.ts\" \"tests/**/*.ts\""
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/depoll/lsmcp.git"
+  },
+  "keywords": [
+    "mcp",
+    "lsp",
+    "language-server",
+    "modelcontextprotocol"
+  ],
+  "author": "depoll",
+  "license": "Apache-2.0",
+  "bugs": {
+    "url": "https://github.com/depoll/lsmcp/issues"
+  },
+  "homepage": "https://github.com/depoll/lsmcp#readme",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.16.0",
+    "@types/node": "^24.1.0",
+    "pino": "^9.7.0",
+    "tsx": "^4.20.3",
+    "typescript": "^5.8.3"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.31.0",
+    "@jest/globals": "^30.0.5",
+    "@types/jest": "^30.0.0",
+    "@typescript-eslint/eslint-plugin": "^8.38.0",
+    "@typescript-eslint/parser": "^8.38.0",
+    "eslint": "^9.31.0",
+    "jest": "^30.0.5",
+    "prettier": "^3.6.2",
+    "ts-jest": "^29.4.0"
+  }
+}
