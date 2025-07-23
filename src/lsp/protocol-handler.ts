@@ -20,11 +20,14 @@ export class ProtocolHandler {
   async initialize(params: InitializeParams): Promise<InitializeResult> {
     this.logger.info('Sending initialize request');
 
-    const result = await this.sendRequestWithTimeout<InitializeParams, InitializeResult>(
-      InitializeRequest.type,
-      params,
-      30000 // 30s timeout for initialization
-    );
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      setTimeout(() => {
+        reject(new TimeoutError(`Initialize request timed out after 30000ms`));
+      }, 30000);
+    });
+
+    const requestPromise = this.connection.sendRequest(InitializeRequest.type, params);
+    const result = await Promise.race([requestPromise, timeoutPromise]);
 
     // Send initialized notification
     await this.connection.sendNotification('initialized', {});
@@ -36,7 +39,15 @@ export class ProtocolHandler {
     this.logger.info('Sending shutdown request');
 
     try {
-      await this.sendRequestWithTimeout(ShutdownRequest.type, undefined, 5000);
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(() => {
+          reject(new TimeoutError(`Shutdown request timed out after 5000ms`));
+        }, 5000);
+      });
+
+      const requestPromise = this.connection.sendRequest(ShutdownRequest.type);
+      await Promise.race([requestPromise, timeoutPromise]);
+
       await this.connection.sendNotification(ExitNotification.type);
     } catch (error) {
       this.logger.warn('Error during shutdown:', error);
@@ -47,7 +58,14 @@ export class ProtocolHandler {
 
   async ping(): Promise<boolean> {
     try {
-      await this.sendRequestWithTimeout('$/ping', {}, this.requestTimeout);
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(() => {
+          reject(new TimeoutError(`Ping request timed out after ${this.requestTimeout}ms`));
+        }, this.requestTimeout);
+      });
+
+      const requestPromise = this.connection.sendRequest('$/ping', {});
+      await Promise.race([requestPromise, timeoutPromise]);
       return true;
     } catch (error) {
       this.logger.debug('Ping failed:', error);
@@ -56,24 +74,13 @@ export class ProtocolHandler {
   }
 
   async sendRequest<P, R>(method: string, params: P): Promise<R> {
-    return this.sendRequestWithTimeout(method, params, this.requestTimeout);
-  }
-
-  private async sendRequestWithTimeout<P, R>(
-    method: string | { method: string },
-    params: P,
-    timeout: number
-  ): Promise<R> {
-    const methodName = typeof method === 'string' ? method : method.method;
-
     const timeoutPromise = new Promise<never>((_, reject) => {
       setTimeout(() => {
-        reject(new TimeoutError(`Request ${methodName} timed out after ${timeout}ms`));
-      }, timeout);
+        reject(new TimeoutError(`Request ${method} timed out after ${this.requestTimeout}ms`));
+      }, this.requestTimeout);
     });
 
-    const requestPromise = this.connection.sendRequest(method as any, params);
-
+    const requestPromise = this.connection.sendRequest(method, params);
     return Promise.race([requestPromise as Promise<R>, timeoutPromise]);
   }
 
