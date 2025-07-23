@@ -68,7 +68,7 @@ export class LSPClientV2 extends EventEmitter {
       const reader = new StreamMessageReader(streams.reader);
       const writer = new StreamMessageWriter(streams.writer);
 
-      this.connection = createProtocolConnection(reader, writer, this.logger);
+      this.connection = createProtocolConnection(reader, writer);
       this.protocolHandler = new ProtocolHandler(this.connection, this.options.requestTimeout);
 
       this.connection.onError((error) => {

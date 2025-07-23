@@ -20,7 +20,7 @@ export class ProtocolHandler {
   async initialize(params: InitializeParams): Promise<InitializeResult> {
     this.logger.info('Sending initialize request');
 
-    const result = await this.sendRequestWithTimeout(
+    const result = await this.sendRequestWithTimeout<InitializeParams, InitializeResult>(
       InitializeRequest.type,
       params,
       30000 // 30s timeout for initialization
@@ -72,10 +72,7 @@ export class ProtocolHandler {
       }, timeout);
     });
 
-    const requestPromise =
-      typeof method === 'string'
-        ? this.connection.sendRequest(method, params)
-        : this.connection.sendRequest(method, params);
+    const requestPromise = this.connection.sendRequest(method as any, params);
 
     return Promise.race([requestPromise as Promise<R>, timeoutPromise]);
   }

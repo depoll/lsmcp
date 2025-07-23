@@ -12,7 +12,7 @@ export class MockLSPClient extends EventEmitter {
   constructor(
     private readonly id: string,
     private readonly config: LanguageServerConfig,
-    private readonly options: Record<string, unknown> = {}
+    _options: Record<string, unknown> = {}
   ) {
     super();
   }
