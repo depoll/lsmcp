@@ -1,4 +1,4 @@
-import { describe, it, expect, jest, beforeEach } from '@jest/globals';
+import { describe, it, expect, beforeEach } from '@jest/globals';
 import { LSPClientV2 } from '../../../src/lsp/client-v2.js';
 import { LanguageServerConfig } from '../../../src/types/lsp.js';
 
@@ -8,7 +8,6 @@ describe('LSPClientV2', () => {
 
   beforeEach(() => {
     config = {
-      language: 'typescript',
       command: 'typescript-language-server',
       args: ['--stdio'],
     };
