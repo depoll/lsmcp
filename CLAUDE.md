@@ -33,9 +33,19 @@ The project has a comprehensive implementation plan (see PLAN.md) and foundation
    - TypeScript, tsx, and type definitions
 4. **CI/CD**: GitHub Actions pipeline configured with matrix testing and coverage reporting
 
+### ✅ Issue #2 Complete - LSP Client Manager Implementation
+   - `vscode-languageclient` & `vscode-languageserver-protocol` - Installed and integrated
+   - Connection pooling with health monitoring implemented
+   - Error handling and recovery system in place
+   - Modular architecture with separate components:
+     - `client-v2.ts` - Main LSP client
+     - `process-manager.ts` - Process lifecycle management
+     - `protocol-handler.ts` - LSP protocol communication
+     - `manager.ts` - Connection pool with health monitoring
+     - `errors.ts` - Custom error types and recovery logic
+
 ### Next dependencies to install (when needed):
-   - `vscode-languageclient` & `vscode-languageserver-protocol` - LSP communication
-   - `p-queue` - Request queuing and batching
+   - `p-queue` - Request queuing and batching (for Issue #3)
 
 ## Architecture Overview
 
@@ -116,3 +126,9 @@ Every PR must include:
 - Document performance improvements in code comments
 - Use TypeScript strict mode for all code
 - Implement graceful error handling with fallback suggestions
+- **Code File Size**: Don't let code files get too big (e.g. > 1000 lines in a file is a major code smell). Ensure that everything is factored properly, modular, and minimizes code duplication.
+
+## Development Best Practices
+
+- **Asynchronous Programming**:
+  - async is better than sync in virtually any case that's got blocking I/O, etc.
