@@ -1,11 +1,11 @@
 #!/usr/bin/env node
-import { MCPServer } from './server.js';
+import { LSMCPServer } from './server.js';
 import pino from 'pino';
 
 const logger = pino({ level: 'info' });
 
 async function main(): Promise<void> {
-  const server = new MCPServer();
+  const server = new LSMCPServer();
 
   // Handle graceful shutdown
   process.on('SIGINT', () => {
@@ -51,4 +51,4 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   });
 }
 
-export { MCPServer } from './server.js';
+export { LSMCPServer } from './server.js';
