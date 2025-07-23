@@ -8,14 +8,14 @@
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
-    "test": "NODE_OPTIONS=\"--experimental-vm-modules\" jest",
-    "test:unit": "NODE_OPTIONS=\"--experimental-vm-modules\" jest tests/unit",
-    "test:integration": "NODE_OPTIONS=\"--experimental-vm-modules\" jest tests/integration",
-    "test:efficiency": "NODE_OPTIONS=\"--experimental-vm-modules\" jest tests/efficiency",
+    "test": "cross-env NODE_OPTIONS=--experimental-vm-modules jest",
+    "test:unit": "cross-env NODE_OPTIONS=--experimental-vm-modules jest tests/unit",
+    "test:integration": "cross-env NODE_OPTIONS=--experimental-vm-modules jest tests/integration",
+    "test:efficiency": "cross-env NODE_OPTIONS=--experimental-vm-modules jest tests/efficiency",
     "lint": "eslint src tests --ext .ts",
     "type-check": "tsc --noEmit",
     "format": "prettier --write \"src/**/*.ts\" \"tests/**/*.ts\"",
-    "post-edit-check": "scripts/hooks/post-edit-check.sh"
+    "post-edit-check": "node scripts/hooks/post-edit-check.js"
   },
   "repository": {
     "type": "git",
@@ -51,6 +51,7 @@
     "@types/jest": "^30.0.0",
     "@typescript-eslint/eslint-plugin": "^8.38.0",
     "@typescript-eslint/parser": "^8.38.0",
+    "cross-env": "^7.0.3",
     "eslint": "^9.31.0",
     "jest": "^30.0.5",
     "prettier": "^3.6.2",
