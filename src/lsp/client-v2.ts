@@ -162,11 +162,11 @@ export class LSPClientV2 extends EventEmitter {
     return Math.floor((Date.now() - this.startTime) / 1000);
   }
 
-  async sendRequest<P, R>(method: string, params: P): Promise<R> {
+  async sendRequest<R = unknown>(method: string, params?: unknown): Promise<R> {
     if (!this.protocolHandler) {
       throw new Error('Client is not connected');
     }
 
-    return this.protocolHandler.sendRequest<P, R>(method, params);
+    return this.protocolHandler.sendRequest<R>(method, params);
   }
 }

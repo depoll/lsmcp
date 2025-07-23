@@ -73,9 +73,9 @@ export class ProtocolHandler {
     }
   }
 
-  async sendRequest<P = any, R = any>(
+  async sendRequest<R = unknown>(
     method: string,
-    params: P,
+    params?: unknown,
     options?: { timeout?: number }
   ): Promise<R> {
     const timeout = options?.timeout || this.requestTimeout;
@@ -86,7 +86,8 @@ export class ProtocolHandler {
       }, timeout);
     });
 
-    const requestPromise = this.connection.sendRequest<P, R>(method, params);
+    // Use the untyped string-based sendRequest overload
+    const requestPromise: Promise<R> = this.connection.sendRequest(method, params);
     return Promise.race([requestPromise, timeoutPromise]);
   }
 

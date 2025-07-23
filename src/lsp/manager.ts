@@ -268,39 +268,4 @@ export class ConnectionPool {
       }
     }
   }
-
-  private async restartConnection(
-    key: string,
-    language: string,
-    workspace: string,
-    config: LanguageServerConfig
-  ): Promise<void> {
-    // Remove old connection
-    const oldInfo = this.connections.get(key);
-    if (oldInfo) {
-      try {
-        await oldInfo.client.stop();
-      } catch (error) {
-        // Ignore errors during stop
-      }
-    }
-
-    // Create new connection
-    const newClient = await this.createClient(language, workspace, config);
-    const health: HealthStatus = {
-      status: 'healthy',
-      lastCheck: new Date(),
-      crashes: oldInfo?.health.crashes || 0,
-      uptime: 0,
-      capabilities: newClient.getCapabilities() || undefined,
-    };
-
-    this.connections.set(key, {
-      client: newClient,
-      health,
-      language,
-      workspace,
-      config,
-    });
-  }
 }

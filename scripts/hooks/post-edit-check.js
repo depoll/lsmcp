@@ -43,22 +43,22 @@ console.log('❌ Code quality issues detected:');
 console.log('');
 
 if (lintExitCode !== 0) {
-  console.log('## Linting Errors:');
+  console.error('## Linting Errors:');
   const errors = lintOutput.split('\n').filter(line => 
     line.includes('error') || line.includes('warning')
   ).slice(0, 20);
-  errors.forEach(error => console.log(error));
-  console.log('');
+  errors.forEach(error => console.error(error));
+  console.error('');
 }
 
 if (typeCheckExitCode !== 0) {
-  console.log('## Type Checking Errors:');
+  console.error('## Type Checking Errors:');
   const errors = typeCheckOutput.split('\n').filter(line => 
     line.includes('error') || /TS\d+/.test(line)
   ).slice(0, 20);
-  errors.forEach(error => console.log(error));
-  console.log('');
+  errors.forEach(error => console.error(error));
+  console.error('');
 }
 
-console.log('Please fix the above issues before continuing.');
+console.error('Please fix the above issues before continuing.');
 process.exit(2);
