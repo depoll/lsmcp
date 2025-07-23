@@ -1,5 +1,5 @@
 import { EventEmitter } from 'events';
-import { 
+import {
   createProtocolConnection,
   ProtocolConnection,
   InitializeParams,
@@ -36,7 +36,7 @@ export class LSPClientV2 extends EventEmitter {
     super();
     this.options.startTimeout = this.options.startTimeout ?? 30000;
     this.options.requestTimeout = this.options.requestTimeout ?? 5000;
-    
+
     this.processManager = new ProcessManager(this.config, this.options.startTimeout);
     this.setupProcessListeners();
   }
@@ -63,14 +63,14 @@ export class LSPClientV2 extends EventEmitter {
     try {
       // Start the process
       const streams = await this.processManager.start();
-      
+
       // Create protocol connection
       const reader = new StreamMessageReader(streams.reader);
       const writer = new StreamMessageWriter(streams.writer);
-      
+
       this.connection = createProtocolConnection(reader, writer, this.logger);
       this.protocolHandler = new ProtocolHandler(this.connection, this.options.requestTimeout);
-      
+
       this.connection.onError((error) => {
         this.logger.error('Protocol error:', error);
         this.emit('error', error);
@@ -89,17 +89,18 @@ export class LSPClientV2 extends EventEmitter {
         processId: process.pid,
         capabilities: {},
         rootUri: this.options.workspaceFolders?.[0] || null,
-        workspaceFolders: this.options.workspaceFolders?.map(folder => ({
-          uri: folder,
-          name: folder.split('/').pop() || folder
-        })) || null,
+        workspaceFolders:
+          this.options.workspaceFolders?.map((folder) => ({
+            uri: folder,
+            name: folder.split('/').pop() || folder,
+          })) || null,
         initializationOptions: this.config.initializationOptions,
       };
 
       const result = await this.protocolHandler.initialize(initParams);
       this.capabilities = result.capabilities;
       this.connected = true;
-      
+
       this.logger.info(`Language server started: ${this.id}`);
     } catch (error) {
       this.cleanup();

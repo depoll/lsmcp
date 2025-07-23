@@ -31,10 +31,10 @@ describe('MCPServer', () => {
 
     it('should track uptime in seconds', async () => {
       const firstCheck = server.handleHealthCheck();
-      
+
       // Wait 1 second
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+
       const secondCheck = server.handleHealthCheck();
       expect(secondCheck.uptime).toBeGreaterThan(firstCheck.uptime);
     });
@@ -43,10 +43,10 @@ describe('MCPServer', () => {
   describe('lifecycle', () => {
     it('should start and stop cleanly', async () => {
       expect(server.isRunning()).toBe(false);
-      
+
       await server.start();
       expect(server.isRunning()).toBe(true);
-      
+
       await server.stop();
       expect(server.isRunning()).toBe(false);
     });

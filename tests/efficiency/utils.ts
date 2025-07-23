@@ -45,9 +45,12 @@ export class EfficiencyMeasurement {
     speedImprovement: number;
   } {
     return {
-      contextReduction: ((baseline.contextTokens - actual.contextTokens) / baseline.contextTokens) * 100,
-      operationReduction: ((baseline.operationCount - actual.operationCount) / baseline.operationCount) * 100,
-      speedImprovement: ((baseline.executionTimeMs - actual.executionTimeMs) / baseline.executionTimeMs) * 100,
+      contextReduction:
+        ((baseline.contextTokens - actual.contextTokens) / baseline.contextTokens) * 100,
+      operationReduction:
+        ((baseline.operationCount - actual.operationCount) / baseline.operationCount) * 100,
+      speedImprovement:
+        ((baseline.executionTimeMs - actual.executionTimeMs) / baseline.executionTimeMs) * 100,
     };
   }
 }

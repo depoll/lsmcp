@@ -14,7 +14,8 @@
     "test:efficiency": "NODE_OPTIONS=\"--experimental-vm-modules\" jest tests/efficiency",
     "lint": "eslint src tests --ext .ts",
     "type-check": "tsc --noEmit",
-    "format": "prettier --write \"src/**/*.ts\" \"tests/**/*.ts\""
+    "format": "prettier --write \"src/**/*.ts\" \"tests/**/*.ts\"",
+    "post-edit-check": "scripts/hooks/post-edit-check.sh"
   },
   "repository": {
     "type": "git",

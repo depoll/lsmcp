@@ -20,7 +20,7 @@ export class MCPServer {
   constructor() {
     this.startTime = Date.now();
     this.version = '0.1.0'; // Will be loaded from package.json
-    
+
     this.server = new Server(
       {
         name: 'lsmcp',
@@ -50,7 +50,7 @@ export class MCPServer {
 
   handleHealthCheck(): HealthCheckResponse {
     const uptimeSeconds = Math.floor((Date.now() - this.startTime) / 1000);
-    
+
     return {
       status: 'healthy',
       version: this.version,
@@ -68,10 +68,10 @@ export class MCPServer {
     }
 
     this.logger.info('Starting LSMCP server...');
-    
+
     // Connect the transport to the server
     await this.server.connect(this.transport);
-    
+
     this.running = true;
     this.logger.info('LSMCP server started');
   }
@@ -82,9 +82,9 @@ export class MCPServer {
     }
 
     this.logger.info('Stopping LSMCP server...');
-    
+
     await this.server.close();
-    
+
     this.running = false;
     this.logger.info('LSMCP server stopped');
   }

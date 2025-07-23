@@ -11,7 +11,7 @@ describe('Error utilities', () => {
   describe('LSPError', () => {
     it('should create basic LSP error', () => {
       const error = new LSPError('Test error', 'TEST_CODE', 'typescript', '/workspace');
-      
+
       expect(error.message).toBe('Test error');
       expect(error.code).toBe('TEST_CODE');
       expect(error.language).toBe('typescript');
@@ -23,7 +23,7 @@ describe('Error utilities', () => {
   describe('ConnectionError', () => {
     it('should create connection error', () => {
       const error = new ConnectionError('Failed to connect', 'python');
-      
+
       expect(error.message).toBe('Failed to connect');
       expect(error.code).toBe('CONNECTION_ERROR');
       expect(error.language).toBe('python');
@@ -33,14 +33,8 @@ describe('Error utilities', () => {
 
   describe('ServerCrashError', () => {
     it('should create server crash error', () => {
-      const error = new ServerCrashError(
-        'Server crashed',
-        1,
-        'SIGTERM',
-        'rust',
-        '/project'
-      );
-      
+      const error = new ServerCrashError('Server crashed', 1, 'SIGTERM', 'rust', '/project');
+
       expect(error.message).toBe('Server crashed');
       expect(error.code).toBe('SERVER_CRASH');
       expect(error.exitCode).toBe(1);
@@ -53,7 +47,7 @@ describe('Error utilities', () => {
   describe('TimeoutError', () => {
     it('should create timeout error', () => {
       const error = new TimeoutError('Request timed out', 'java');
-      
+
       expect(error.message).toBe('Request timed out');
       expect(error.code).toBe('TIMEOUT');
       expect(error.language).toBe('java');

@@ -15,7 +15,7 @@ describe('Health Monitoring', () => {
     // Simulate unhealthy state
     health.status = 'unhealthy';
     health.crashes++;
-    
+
     expect(health.status).toBe('unhealthy');
     expect(health.crashes).toBe(1);
   });
@@ -24,7 +24,7 @@ describe('Health Monitoring', () => {
     const startTime = Date.now() - 60000; // 1 minute ago
     const currentTime = Date.now();
     const uptime = Math.floor((currentTime - startTime) / 1000);
-    
+
     expect(uptime).toBeGreaterThanOrEqual(59);
     expect(uptime).toBeLessThanOrEqual(61);
   });

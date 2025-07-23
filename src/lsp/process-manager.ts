@@ -28,9 +28,9 @@ export class ProcessManager extends EventEmitter {
 
     return new Promise((resolve, reject) => {
       const timeout = setTimeout(() => {
-        reject(new ConnectionError(
-          `Language server failed to start within ${this.startTimeout}ms`
-        ));
+        reject(
+          new ConnectionError(`Language server failed to start within ${this.startTimeout}ms`)
+        );
       }, this.startTimeout);
 
       this.process = spawn(this.config.command, this.config.args, {
@@ -40,7 +40,7 @@ export class ProcessManager extends EventEmitter {
 
       this.process.once('spawn', () => {
         clearTimeout(timeout);
-        
+
         if (!this.process!.stdin || !this.process!.stdout) {
           reject(new ConnectionError('Process streams not available'));
           return;
@@ -61,13 +61,9 @@ export class ProcessManager extends EventEmitter {
       this.process.on('exit', (code, signal) => {
         this.logger.warn(`Process exited: code=${code}, signal=${signal}`);
         this.emit('exit', code, signal);
-        
+
         if (code !== 0 || signal) {
-          this.emit('crash', new ServerCrashError(
-            'Language server crashed',
-            code,
-            signal
-          ));
+          this.emit('crash', new ServerCrashError('Language server crashed', code, signal));
         }
       });
 

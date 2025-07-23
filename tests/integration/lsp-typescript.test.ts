@@ -35,7 +35,7 @@ describe('TypeScript Language Server Integration', () => {
     const client = await pool.get('typescript', process.cwd());
     expect(client).toBeDefined();
     expect(client.isConnected()).toBe(true);
-    
+
     const capabilities = client.getCapabilities();
     expect(capabilities).toBeDefined();
   });
@@ -47,7 +47,7 @@ describe('TypeScript Language Server Integration', () => {
 
     const client1 = await pool.get('typescript', process.cwd());
     const client2 = await pool.get('typescript', process.cwd());
-    
+
     expect(client1).toBe(client2);
   });
 
@@ -57,10 +57,10 @@ describe('TypeScript Language Server Integration', () => {
     }
 
     await pool.get('typescript', process.cwd());
-    
+
     const health = pool.getHealth();
     const tsHealth = health.get(`typescript:${process.cwd()}`);
-    
+
     expect(tsHealth).toBeDefined();
     expect(tsHealth?.status).toBe('healthy');
     expect(tsHealth?.crashes).toBe(0);

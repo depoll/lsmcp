@@ -1,4 +1,4 @@
-import { 
+import {
   ProtocolConnection,
   InitializeRequest,
   InitializeParams,
@@ -19,22 +19,22 @@ export class ProtocolHandler {
 
   async initialize(params: InitializeParams): Promise<InitializeResult> {
     this.logger.info('Sending initialize request');
-    
+
     const result = await this.sendRequestWithTimeout(
       InitializeRequest.type,
       params,
       30000 // 30s timeout for initialization
     );
-    
+
     // Send initialized notification
     await this.connection.sendNotification('initialized', {});
-    
+
     return result;
   }
 
   async shutdown(): Promise<void> {
     this.logger.info('Sending shutdown request');
-    
+
     try {
       await this.sendRequestWithTimeout(ShutdownRequest.type, undefined, 5000);
       await this.connection.sendNotification(ExitNotification.type);
@@ -65,16 +65,17 @@ export class ProtocolHandler {
     timeout: number
   ): Promise<R> {
     const methodName = typeof method === 'string' ? method : method.method;
-    
+
     const timeoutPromise = new Promise<never>((_, reject) => {
       setTimeout(() => {
         reject(new TimeoutError(`Request ${methodName} timed out after ${timeout}ms`));
       }, timeout);
     });
 
-    const requestPromise = typeof method === 'string'
-      ? this.connection.sendRequest(method, params)
-      : this.connection.sendRequest(method, params);
+    const requestPromise =
+      typeof method === 'string'
+        ? this.connection.sendRequest(method, params)
+        : this.connection.sendRequest(method, params);
 
     return Promise.race([requestPromise as Promise<R>, timeoutPromise]);
   }

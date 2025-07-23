@@ -1,9 +1,5 @@
 import { LSPClientV2 as LSPClient } from './client-v2.js';
-import { 
-  LanguageServerConfig, 
-  HealthStatus, 
-  ConnectionPoolOptions 
-} from '../types/lsp.js';
+import { LanguageServerConfig, HealthStatus, ConnectionPoolOptions } from '../types/lsp.js';
 import pino from 'pino';
 
 const DEFAULT_SERVERS: Record<string, LanguageServerConfig> = {
@@ -120,12 +116,9 @@ export class ConnectionPool {
 
     // Set up health monitoring
     if (this.options.healthCheckInterval > 0) {
-      info.healthCheckInterval = setInterval(
-        () => {
-          void this.checkHealth(key);
-        },
-        this.options.healthCheckInterval
-      );
+      info.healthCheckInterval = setInterval(() => {
+        void this.checkHealth(key);
+      }, this.options.healthCheckInterval);
     }
 
     this.connections.set(key, info);
@@ -145,24 +138,24 @@ export class ConnectionPool {
 
       client.on('crash', () => {
         void (async () => {
-        const key = `${language}:${workspace}`;
-        const info = this.connections.get(key);
-        if (info) {
-          info.health.crashes++;
-          info.health.status = 'unhealthy';
-          
-          // Attempt recovery
-          if (info.health.crashes <= this.options.maxRetries) {
-            this.logger.info(`Attempting to restart ${language} server for ${workspace}`);
-            info.health.status = 'restarting';
-            
-            try {
-              await this.restartConnection(key, language, workspace, config);
-            } catch (error) {
-              this.logger.error(`Failed to restart ${language} server:`, error);
+          const key = `${language}:${workspace}`;
+          const info = this.connections.get(key);
+          if (info) {
+            info.health.crashes++;
+            info.health.status = 'unhealthy';
+
+            // Attempt recovery
+            if (info.health.crashes <= this.options.maxRetries) {
+              this.logger.info(`Attempting to restart ${language} server for ${workspace}`);
+              info.health.status = 'restarting';
+
+              try {
+                await this.restartConnection(key, language, workspace, config);
+              } catch (error) {
+                this.logger.error(`Failed to restart ${language} server:`, error);
+              }
             }
           }
-        }
         })();
       });
 
@@ -173,7 +166,7 @@ export class ConnectionPool {
         this.logger.warn(
           `Failed to start ${language} server, retrying (${retryCount + 1}/${this.options.maxRetries})...`
         );
-        await new Promise(resolve => setTimeout(resolve, this.options.retryDelay));
+        await new Promise((resolve) => setTimeout(resolve, this.options.retryDelay));
         return this.createConnection(language, workspace, config, retryCount + 1);
       }
       throw error;
@@ -187,7 +180,7 @@ export class ConnectionPool {
     config: LanguageServerConfig
   ): Promise<void> {
     await this.disposeConnection(key);
-    
+
     const client = await this.createConnection(language, workspace, config);
     const info: ConnectionInfo = {
       client,
@@ -202,12 +195,9 @@ export class ConnectionPool {
     };
 
     if (this.options.healthCheckInterval > 0) {
-      info.healthCheckInterval = setInterval(
-        () => {
-          void this.checkHealth(key);
-        },
-        this.options.healthCheckInterval
-      );
+      info.healthCheckInterval = setInterval(() => {
+        void this.checkHealth(key);
+      }, this.options.healthCheckInterval);
     }
 
     this.connections.set(key, info);
@@ -219,7 +209,7 @@ export class ConnectionPool {
 
     const healthy = await info.client.ping();
     info.health.lastCheck = new Date();
-    
+
     if (!healthy) {
       info.health.status = 'unhealthy';
       this.logger.warn(`Health check failed for ${key}`);
@@ -254,9 +244,7 @@ export class ConnectionPool {
   }
 
   async disposeAll(): Promise<void> {
-    const promises = Array.from(this.connections.keys()).map(key =>
-      this.disposeConnection(key)
-    );
+    const promises = Array.from(this.connections.keys()).map((key) => this.disposeConnection(key));
     await Promise.all(promises);
   }
 
