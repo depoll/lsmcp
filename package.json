@@ -40,7 +40,9 @@
     "@types/node": "^24.1.0",
     "pino": "^9.7.0",
     "tsx": "^4.20.3",
-    "typescript": "^5.8.3"
+    "typescript": "^5.8.3",
+    "vscode-languageclient": "^9.0.1",
+    "vscode-languageserver-protocol": "^3.17.5"
   },
   "devDependencies": {
     "@eslint/js": "^9.31.0",
