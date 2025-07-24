@@ -11,15 +11,21 @@ interface CachedItem<T> {
 export class FileAwareLRUCache<V> {
   private cache: LRUCache<string, CachedItem<V>>;
   private fileToKeys: Map<string, Set<string>>;
+  private keyToFile: Map<string, string>;
 
   constructor(maxSize: number, ttl: number) {
     this.cache = new LRUCache(maxSize, ttl);
     this.fileToKeys = new Map();
+    this.keyToFile = new Map();
   }
 
   async get(key: string, fileUri: string): Promise<V | undefined> {
     const cached = this.cache.get(key);
-    if (!cached) return undefined;
+    if (!cached) {
+      // Clean up stale entries from reverse indices
+      this.cleanupKey(key);
+      return undefined;
+    }
 
     // Check if file has been modified
     try {
@@ -52,11 +58,12 @@ export class FileAwareLRUCache<V> {
         fileMtime: stats.mtimeMs,
       });
 
-      // Update reverse index
+      // Update reverse indices
       if (!this.fileToKeys.has(fileUri)) {
         this.fileToKeys.set(fileUri, new Set());
       }
       this.fileToKeys.get(fileUri)!.add(key);
+      this.keyToFile.set(key, fileUri);
     } catch (error) {
       // If we can't get file stats, don't cache
       logger.debug({ key, fileUri, error }, 'Failed to get file stats, not caching');
@@ -79,5 +86,20 @@ export class FileAwareLRUCache<V> {
   clear(): void {
     this.cache.clear();
     this.fileToKeys.clear();
+    this.keyToFile.clear();
+  }
+
+  private cleanupKey(key: string): void {
+    const fileUri = this.keyToFile.get(key);
+    if (fileUri) {
+      const keys = this.fileToKeys.get(fileUri);
+      if (keys) {
+        keys.delete(key);
+        if (keys.size === 0) {
+          this.fileToKeys.delete(fileUri);
+        }
+      }
+      this.keyToFile.delete(key);
+    }
   }
 }

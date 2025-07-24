@@ -14,6 +14,11 @@ import { logger } from '../utils/logger.js';
 import { FileAwareLRUCache } from '../utils/fileCache.js';
 import { getLanguageFromUri } from '../utils/languages.js';
 
+// Configuration constants
+const CACHE_SIZE = 100;
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+const DEFAULT_MAX_RESULTS = 50;
+
 const CodeIntelligenceParamsSchema = z.object({
   uri: z.string(),
   position: z.object({
@@ -113,7 +118,7 @@ export class CodeIntelligenceTool {
       },
       maxResults: {
         type: 'number',
-        default: 50,
+        default: DEFAULT_MAX_RESULTS,
         description: 'Maximum number of completion items to return',
       },
     },
@@ -124,9 +129,9 @@ export class CodeIntelligenceTool {
   private signatureCache: FileAwareLRUCache<SignatureHelp>;
 
   constructor(private clientManager: ConnectionPool) {
-    // 5 minute TTL for hover and signature caches
-    this.hoverCache = new FileAwareLRUCache<Hover>(100, 5 * 60 * 1000);
-    this.signatureCache = new FileAwareLRUCache<SignatureHelp>(100, 5 * 60 * 1000);
+    // Initialize caches with configured size and TTL
+    this.hoverCache = new FileAwareLRUCache<Hover>(CACHE_SIZE, CACHE_TTL);
+    this.signatureCache = new FileAwareLRUCache<SignatureHelp>(CACHE_SIZE, CACHE_TTL);
   }
 
   async execute(params: unknown): Promise<CodeIntelligenceResult> {
@@ -201,10 +206,14 @@ export class CodeIntelligenceTool {
 
         // Look for code blocks that contain type information
         for (const token of tokens) {
-          if (token.type === 'code' && !content.type && 'text' in token) {
-            content.type = (token.text as string).trim();
-          } else if ((token.type === 'paragraph' || token.type === 'text') && 'raw' in token) {
-            content.documentation = (content.documentation || '') + token.raw;
+          if (token.type === 'code' && !content.type && 'text' in token && token.text) {
+            content.type = String(token.text).trim();
+          } else if (
+            (token.type === 'paragraph' || token.type === 'text') &&
+            'raw' in token &&
+            token.raw
+          ) {
+            content.documentation = (content.documentation || '') + String(token.raw);
           }
         }
 
@@ -346,7 +355,7 @@ export class CodeIntelligenceTool {
     const items = Array.isArray(completions) ? completions : (completions?.items ?? []);
 
     // Filter and rank completions for AI usage
-    const filtered = this.filterCompletionsForAI(items, params.maxResults || 50);
+    const filtered = this.filterCompletionsForAI(items, params.maxResults || DEFAULT_MAX_RESULTS);
 
     return {
       type: 'completion',

@@ -2,6 +2,8 @@
  * Language detection utilities for LSP
  */
 
+import { fileURLToPath } from 'url';
+
 export const LANGUAGE_EXTENSIONS: Record<string, string> = {
   ts: 'typescript',
   tsx: 'typescript',
@@ -39,7 +41,12 @@ export const LANGUAGE_EXTENSIONS: Record<string, string> = {
  * Get language ID from file URI
  */
 export function getLanguageFromUri(uri: string): string {
-  const path = uri.replace('file://', '');
-  const ext = path.split('.').pop()?.toLowerCase() || '';
-  return LANGUAGE_EXTENSIONS[ext] || 'plaintext';
+  try {
+    const filePath = fileURLToPath(uri);
+    const ext = filePath.split('.').pop()?.toLowerCase() || '';
+    return LANGUAGE_EXTENSIONS[ext] || 'plaintext';
+  } catch {
+    // Fallback for invalid URIs
+    return 'plaintext';
+  }
 }
