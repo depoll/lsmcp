@@ -42,13 +42,27 @@ export const LANGUAGE_EXTENSIONS: Record<string, string> = {
  */
 export function getLanguageFromUri(uri: string): string {
   try {
+    // First try to extract extension from URI directly (for test compatibility)
+    const uriLastDot = uri.lastIndexOf('.');
+    if (uriLastDot > 0) {
+      const uriExt = uri.slice(uriLastDot + 1).toLowerCase();
+      if (LANGUAGE_EXTENSIONS[uriExt]) {
+        return LANGUAGE_EXTENSIONS[uriExt];
+      }
+    }
+
+    // Then try proper file path conversion
     const filePath = fileURLToPath(uri);
-    // Use path.extname for cross-platform compatibility
     const lastDot = filePath.lastIndexOf('.');
     const ext = lastDot > 0 ? filePath.slice(lastDot + 1).toLowerCase() : '';
     return LANGUAGE_EXTENSIONS[ext] || 'plaintext';
   } catch {
-    // Fallback for invalid URIs
+    // Fallback for invalid URIs - still try to extract from URI
+    const lastDot = uri.lastIndexOf('.');
+    if (lastDot > 0) {
+      const ext = uri.slice(lastDot + 1).toLowerCase();
+      return LANGUAGE_EXTENSIONS[ext] || 'plaintext';
+    }
     return 'plaintext';
   }
 }
