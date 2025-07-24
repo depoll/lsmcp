@@ -6,7 +6,10 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { ConnectionPool } from './lsp/index.js';
 import { CodeIntelligenceTool } from './tools/codeIntelligence.js';
-import { z } from 'zod';
+import { NavigateTool } from './tools/navigate.js';
+import { ToolRegistry } from './tools/registry.js';
+import { ToolRouter } from './tools/router.js';
+import type { z } from 'zod';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -21,6 +24,8 @@ export class LSMCPServer {
   private running = false;
   private version: string;
   private clientManager: ConnectionPool;
+  private toolRegistry: ToolRegistry;
+  private toolRouter: ToolRouter;
 
   constructor() {
     this.version = '0.1.0'; // Will be loaded from package.json
@@ -34,6 +39,13 @@ export class LSMCPServer {
     this.clientManager = new ConnectionPool({
       idleTimeout: 5 * 60 * 1000, // 5 minutes
       healthCheckInterval: 30 * 1000, // 30 seconds
+    });
+
+    this.toolRegistry = new ToolRegistry();
+    this.toolRouter = new ToolRouter(this.toolRegistry, {
+      enableBatching: true,
+      enableStreaming: true,
+      maxConcurrentRequests: 10,
     });
 
     void this.loadVersion();
@@ -54,55 +66,52 @@ export class LSMCPServer {
   private registerTools(): void {
     // Register Code Intelligence Tool
     const codeIntelligenceTool = new CodeIntelligenceTool(this.clientManager);
+    this.toolRegistry.register(codeIntelligenceTool);
 
-    // Convert the plain JSON schema to Zod schema for MCP SDK
-    const inputSchema = {
-      uri: z.string().describe('File URI (e.g., file:///path/to/file.ts)'),
-      position: z.object({
-        line: z.number().describe('Zero-based line number'),
-        character: z.number().describe('Zero-based character offset'),
-      }),
-      type: z
-        .enum(['hover', 'signature', 'completion'])
-        .describe('Type of intelligence to retrieve'),
-      completionContext: z
-        .object({
-          triggerCharacter: z
-            .string()
-            .optional()
-            .describe('Character that triggered completion (e.g., ".")'),
-          triggerKind: z
-            .number()
-            .optional()
-            .describe('How completion was triggered (1=Invoked, 2=TriggerCharacter, 3=Incomplete)'),
-        })
-        .optional(),
-      maxResults: z.number().default(50).describe('Maximum number of completion items to return'),
-    };
+    // Register Navigate Tool
+    const navigateTool = new NavigateTool(this.clientManager);
+    this.toolRegistry.register(navigateTool);
 
-    this.server.registerTool(
-      codeIntelligenceTool.name,
-      {
-        title: 'Code Intelligence',
-        description: codeIntelligenceTool.description,
-        inputSchema,
-      },
-      async (params) => {
-        const result = await codeIntelligenceTool.execute(params);
+    // Register all tools with MCP server
+    for (const registration of this.toolRegistry.getAll()) {
+      const { metadata } = registration;
 
-        // Convert to MCP tool response format
-        return {
-          content: [
+      this.server.registerTool(
+        metadata.name,
+        {
+          title: metadata.name,
+          description: metadata.description,
+          inputSchema: metadata.inputSchema as unknown as z.ZodRawShape,
+        },
+        (
+          params: unknown,
+          callbacks?: {
+            _meta?: { progressToken?: string | number };
+            onProgress?: (notification: unknown) => void;
+          }
+        ) => {
+          // Route through the tool router for consistent handling
+          return this.toolRouter.route(
             {
-              type: 'text',
-              text: JSON.stringify(result, null, 2),
+              method: 'tools/call',
+              params: {
+                name: metadata.name,
+                arguments: params as Record<string, unknown> | undefined,
+                _meta: callbacks?._meta,
+              },
             },
-          ],
-        };
-      }
-    );
+            {
+              onProgress: callbacks?.onProgress,
+            }
+          );
+        }
+      );
+    }
 
-    this.logger.info('Registered Code Intelligence tool');
+    this.logger.info(
+      { count: this.toolRegistry.getAll().length },
+      'Registered tools with MCP server'
+    );
   }
 
   isRunning(): boolean {

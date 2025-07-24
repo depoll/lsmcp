@@ -10,9 +10,9 @@ import {
 import { z } from 'zod';
 import { marked } from 'marked';
 import { ConnectionPool } from '../lsp/index.js';
-import { logger } from '../utils/logger.js';
 import { FileAwareLRUCache } from '../utils/fileCache.js';
 import { getLanguageFromUri } from '../utils/languages.js';
+import { BatchableTool } from './base.js';
 
 // Configuration constants
 const CACHE_SIZE = 100;
@@ -20,19 +20,29 @@ const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 const DEFAULT_MAX_RESULTS = 50;
 
 const CodeIntelligenceParamsSchema = z.object({
-  uri: z.string(),
+  uri: z.string().describe('File URI (e.g., file:///path/to/file.ts)'),
   position: z.object({
-    line: z.number(),
-    character: z.number(),
+    line: z.number().describe('Zero-based line number'),
+    character: z.number().describe('Zero-based character offset'),
   }),
-  type: z.enum(['hover', 'signature', 'completion']),
+  type: z.enum(['hover', 'signature', 'completion']).describe('Type of intelligence to retrieve'),
   completionContext: z
     .object({
-      triggerCharacter: z.string().optional(),
-      triggerKind: z.number().optional(),
+      triggerCharacter: z
+        .string()
+        .optional()
+        .describe('Character that triggered completion (e.g., ".")'),
+      triggerKind: z
+        .number()
+        .optional()
+        .describe('How completion was triggered (1=Invoked, 2=TriggerCharacter, 3=Incomplete)'),
     })
     .optional(),
-  maxResults: z.number().optional(),
+  maxResults: z
+    .number()
+    .default(DEFAULT_MAX_RESULTS)
+    .optional()
+    .describe('Maximum number of completion items to return'),
 });
 
 type CodeIntelligenceParams = z.infer<typeof CodeIntelligenceParamsSchema>;
@@ -71,78 +81,32 @@ interface CompletionResult {
 
 type CodeIntelligenceResult = HoverResult | SignatureResult | CompletionResult;
 
-export class CodeIntelligenceTool {
-  name = 'getCodeIntelligence';
-  description = 'Get hover info, signatures, or completions at a position';
-
-  inputSchema = {
-    type: 'object',
-    properties: {
-      uri: {
-        type: 'string',
-        format: 'uri',
-        description: 'File URI (e.g., file:///path/to/file.ts)',
-      },
-      position: {
-        type: 'object',
-        properties: {
-          line: {
-            type: 'number',
-            description: 'Zero-based line number',
-          },
-          character: {
-            type: 'number',
-            description: 'Zero-based character offset',
-          },
-        },
-        required: ['line', 'character'],
-      },
-      type: {
-        type: 'string',
-        enum: ['hover', 'signature', 'completion'],
-        description: 'Type of intelligence to retrieve',
-      },
-      completionContext: {
-        type: 'object',
-        properties: {
-          triggerCharacter: {
-            type: 'string',
-            description: 'Character that triggered completion (e.g., ".")',
-          },
-          triggerKind: {
-            type: 'number',
-            description:
-              'How completion was triggered (1=Invoked, 2=TriggerCharacter, 3=Incomplete)',
-          },
-        },
-      },
-      maxResults: {
-        type: 'number',
-        default: DEFAULT_MAX_RESULTS,
-        description: 'Maximum number of completion items to return',
-      },
-    },
-    required: ['uri', 'position', 'type'],
-  };
+export class CodeIntelligenceTool extends BatchableTool<
+  CodeIntelligenceParams,
+  CodeIntelligenceResult
+> {
+  readonly name = 'getCodeIntelligence';
+  readonly description = 'Get hover info, signatures, or completions at a position';
+  readonly inputSchema = CodeIntelligenceParamsSchema;
 
   private hoverCache: FileAwareLRUCache<Hover>;
   private signatureCache: FileAwareLRUCache<SignatureHelp>;
 
-  constructor(private clientManager: ConnectionPool) {
+  constructor(clientManager: ConnectionPool) {
+    super(clientManager);
     // Initialize caches with configured size and TTL
     this.hoverCache = new FileAwareLRUCache<Hover>(CACHE_SIZE, CACHE_TTL);
     this.signatureCache = new FileAwareLRUCache<SignatureHelp>(CACHE_SIZE, CACHE_TTL);
   }
 
-  async execute(params: unknown): Promise<CodeIntelligenceResult> {
-    const typedParams = CodeIntelligenceParamsSchema.parse(params);
-    const { uri, position, type } = typedParams;
+  async execute(params: CodeIntelligenceParams): Promise<CodeIntelligenceResult> {
+    const { uri, position, type } = params;
     const lspPosition: Position = {
       line: position.line,
       character: position.character,
     };
 
-    logger.info({ uri, position, type }, 'Executing code intelligence request');
+    this.logger.info({ uri, position, type }, 'Executing code intelligence request');
 
     try {
       switch (type) {
@@ -151,12 +115,12 @@ export class CodeIntelligenceTool {
         case 'signature':
           return await this.getSignatureHelp(uri, lspPosition);
         case 'completion':
-          return await this.getCompletions(uri, lspPosition, typedParams);
+          return await this.getCompletions(uri, lspPosition, params);
         default:
           throw new Error(`Unknown intelligence type: ${String(type)}`);
       }
     } catch (error) {
-      logger.error({ error, uri, position, type }, 'Code intelligence request failed');
+      this.logger.error({ error, uri, position, type }, 'Code intelligence request failed');
       throw error;
     }
   }
@@ -167,7 +131,7 @@ export class CodeIntelligenceTool {
     const cached = await this.hoverCache.get(cacheKey, uri);
 
     if (cached) {
-      logger.debug({ uri, position }, 'Hover cache hit');
+      this.logger.debug({ uri, position }, 'Hover cache hit');
       return this.formatHoverResult(cached);
     }
 
@@ -255,7 +219,7 @@ export class CodeIntelligenceTool {
     const cached = await this.signatureCache.get(cacheKey, uri);
 
     if (cached) {
-      logger.debug({ uri, position }, 'Signature cache hit');
+      this.logger.debug({ uri, position }, 'Signature cache hit');
       return this.formatSignatureResult(cached);
     }
 
@@ -466,7 +430,7 @@ export class CodeIntelligenceTool {
   invalidateFileCache(fileUri: string): void {
     this.hoverCache.invalidateFile(fileUri);
     this.signatureCache.invalidateFile(fileUri);
-    logger.info({ fileUri }, 'Invalidated code intelligence cache for file');
+    this.logger.info({ fileUri }, 'Invalidated code intelligence cache for file');
   }
 
   /**
@@ -475,6 +439,6 @@ export class CodeIntelligenceTool {
   clearCache(): void {
     this.hoverCache.clear();
     this.signatureCache.clear();
-    logger.info('Cleared all code intelligence caches');
+    this.logger.info('Cleared all code intelligence caches');
   }
 }

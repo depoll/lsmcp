@@ -38,11 +38,11 @@ describe('CodeIntelligenceTool', () => {
     });
 
     it('should have correct input schema', () => {
-      expect(tool.inputSchema).toHaveProperty('type', 'object');
-      expect(tool.inputSchema.properties).toHaveProperty('uri');
-      expect(tool.inputSchema.properties).toHaveProperty('position');
-      expect(tool.inputSchema.properties).toHaveProperty('type');
-      expect(tool.inputSchema.required).toEqual(['uri', 'position', 'type']);
+      // The inputSchema is now a Zod schema
+      expect(tool.inputSchema).toBeDefined();
+      expect(tool.inputSchema.shape).toHaveProperty('uri');
+      expect(tool.inputSchema.shape).toHaveProperty('position');
+      expect(tool.inputSchema.shape).toHaveProperty('type');
     });
   });
 
