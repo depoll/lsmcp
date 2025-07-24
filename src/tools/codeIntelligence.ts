@@ -11,7 +11,6 @@ import { z } from 'zod';
 import { ConnectionPool } from '../lsp/index.js';
 import { logger } from '../utils/logger.js';
 import { FileAwareLRUCache } from '../utils/fileCache.js';
-// Removed unused import
 
 const CodeIntelligenceParamsSchema = z.object({
   uri: z.string(),
