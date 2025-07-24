@@ -110,15 +110,17 @@ export class ConnectionPool {
           args: detected.serverCommand.slice(1),
         };
 
-        // Check if server is available, install if needed
+        // Check if server is available
         const provider = createLanguageServerProvider(detected);
         if (provider && !(await provider.isAvailable())) {
-          this.logger.info(`Installing language server for ${language}...`);
-          try {
-            await provider.install();
-          } catch (error) {
-            this.logger.warn(`Failed to install ${language} server, continuing anyway`, error);
-          }
+          this.logger.warn(
+            `Language server for ${language} is not installed. ` +
+              `Please install it manually: npm install -g typescript-language-server`
+          );
+          throw new Error(
+            `Language server for ${language} is not available. ` +
+              `Please install typescript-language-server manually.`
+          );
         }
       }
     }
@@ -279,15 +281,14 @@ export class ConnectionPool {
     // Update the detected language with the workspace root
     const detectedWithRoot = { ...detected, rootPath: workspace };
 
-    // Check if we need to install the language server
+    // Check if language server is available
     const provider = createLanguageServerProvider(detectedWithRoot);
     if (provider && !(await provider.isAvailable())) {
-      this.logger.info(`Installing language server for ${detected.id}...`);
-      try {
-        await provider.install();
-      } catch (error) {
-        this.logger.warn(`Failed to install ${detected.id} server`, error);
-      }
+      this.logger.warn(
+        `Language server for ${detected.id} is not installed. ` +
+          `Please install it manually: npm install -g typescript-language-server`
+      );
+      return null; // Return null if server is not available
     }
 
     // Get or create connection
