@@ -43,7 +43,9 @@ export const LANGUAGE_EXTENSIONS: Record<string, string> = {
 export function getLanguageFromUri(uri: string): string {
   try {
     const filePath = fileURLToPath(uri);
-    const ext = filePath.split('.').pop()?.toLowerCase() || '';
+    // Use path.extname for cross-platform compatibility
+    const lastDot = filePath.lastIndexOf('.');
+    const ext = lastDot > 0 ? filePath.slice(lastDot + 1).toLowerCase() : '';
     return LANGUAGE_EXTENSIONS[ext] || 'plaintext';
   } catch {
     // Fallback for invalid URIs
