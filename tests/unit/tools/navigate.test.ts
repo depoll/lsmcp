@@ -12,6 +12,7 @@ jest.mock('../../../src/utils/languages.js', () => ({
 }));
 jest.mock('fs/promises', () => ({
   readFile: jest.fn(() => Promise.resolve('// Mock file content\nconst mockLine = "test";\n')),
+  stat: jest.fn(() => Promise.resolve({ mtimeMs: Date.now() })),
 }));
 jest.mock('../../../src/utils/logger.js');
 
@@ -67,15 +68,19 @@ describe('NavigateTool', () => {
   });
 
   describe('single navigation', () => {
+    // Use platform-appropriate file URLs
+    const isWindows = process.platform === 'win32';
+    const filePrefix = isWindows ? 'file:///C:' : 'file://';
+
     const singleParams = {
-      uri: 'file:///test/file.ts',
+      uri: `${filePrefix}/test/file.ts`,
       position: { line: 10, character: 15 },
       target: 'definition' as const,
     };
 
     it('should navigate to definition', async () => {
       const mockLocation = {
-        uri: 'file:///test/other.ts',
+        uri: `${filePrefix}/test/other.ts`,
         range: {
           start: { line: 20, character: 0 },
           end: { line: 20, character: 10 },
@@ -102,14 +107,14 @@ describe('NavigateTool', () => {
       const params = { ...singleParams, target: 'implementation' as const };
       const mockLocations = [
         {
-          uri: 'file:///test/impl1.ts',
+          uri: `${filePrefix}/test/impl1.ts`,
           range: {
             start: { line: 10, character: 0 },
             end: { line: 10, character: 20 },
           },
         },
         {
-          uri: 'file:///test/impl2.ts',
+          uri: `${filePrefix}/test/impl2.ts`,
           range: {
             start: { line: 15, character: 0 },
             end: { line: 15, character: 20 },
@@ -132,7 +137,7 @@ describe('NavigateTool', () => {
       const params = { ...singleParams, target: 'typeDefinition' as const };
 
       mockClient.sendRequest.mockResolvedValueOnce({
-        targetUri: 'file:///test/types.ts',
+        targetUri: `${filePrefix}/test/types.ts`,
         targetRange: {
           start: { line: 5, character: 0 },
           end: { line: 5, character: 30 },
@@ -164,7 +169,7 @@ describe('NavigateTool', () => {
 
     it('should apply maxResults limit', async () => {
       const mockLocations = Array.from({ length: 10 }, (_, i) => ({
-        uri: `file:///test/file${i}.ts`,
+        uri: `${filePrefix}/test/file${i}.ts`,
         range: {
           start: { line: i, character: 0 },
           end: { line: i, character: 10 },
@@ -192,15 +197,19 @@ describe('NavigateTool', () => {
   });
 
   describe('batch navigation', () => {
+    // Use platform-appropriate file URLs
+    const isWindows = process.platform === 'win32';
+    const filePrefix = isWindows ? 'file:///C:' : 'file://';
+
     const batchParams = {
       batch: [
         {
-          uri: 'file:///test/file1.ts',
+          uri: `${filePrefix}/test/file1.ts`,
           position: { line: 10, character: 15 },
           target: 'definition' as const,
         },
         {
-          uri: 'file:///test/file2.ts',
+          uri: `${filePrefix}/test/file2.ts`,
           position: { line: 20, character: 10 },
           target: 'implementation' as const,
         },
@@ -210,12 +219,12 @@ describe('NavigateTool', () => {
     it('should process batch requests in parallel', async () => {
       mockClient.sendRequest
         .mockResolvedValueOnce({
-          uri: 'file:///test/def.ts',
+          uri: `${filePrefix}/test/def.ts`,
           range: { start: { line: 5, character: 0 }, end: { line: 5, character: 10 } },
         })
         .mockResolvedValueOnce([
           {
-            uri: 'file:///test/impl.ts',
+            uri: `${filePrefix}/test/impl.ts`,
             range: { start: { line: 10, character: 0 }, end: { line: 10, character: 20 } },
           },
         ]);
@@ -230,7 +239,7 @@ describe('NavigateTool', () => {
       // Mock two client calls - one success, one failure
       mockClient.sendRequest
         .mockResolvedValueOnce({
-          uri: 'file:///test/def.ts',
+          uri: `${filePrefix}/test/def.ts`,
           range: { start: { line: 5, character: 0 }, end: { line: 5, character: 10 } },
         })
         .mockRejectedValueOnce(new Error('Failed'));
@@ -243,15 +252,19 @@ describe('NavigateTool', () => {
   });
 
   describe('result processing', () => {
+    // Use platform-appropriate file URLs
+    const isWindows = process.platform === 'win32';
+    const filePrefix = isWindows ? 'file:///C:' : 'file://';
+
     it('should sort results by relevance', async () => {
-      const sourceUri = 'file:///project/src/index.ts';
+      const sourceUri = `${filePrefix}/project/src/index.ts`;
       const mockLocations = [
         {
-          uri: 'file:///project/node_modules/lib/index.ts',
+          uri: `${filePrefix}/project/node_modules/lib/index.ts`,
           range: { start: { line: 0, character: 0 }, end: { line: 0, character: 10 } },
         },
         {
-          uri: 'file:///project/src/utils.ts', // Same directory
+          uri: `${filePrefix}/project/src/utils.ts`, // Same directory
           range: { start: { line: 0, character: 0 }, end: { line: 0, character: 10 } },
         },
         {
@@ -270,21 +283,25 @@ describe('NavigateTool', () => {
 
       // Should be sorted: same file, same directory, then others
       expect(result.results[0]?.uri).toBe(sourceUri);
-      expect(result.results[1]?.uri).toBe('file:///project/src/utils.ts');
-      expect(result.results[2]?.uri).toBe('file:///project/node_modules/lib/index.ts');
+      expect(result.results[1]?.uri).toBe(`${filePrefix}/project/src/utils.ts`);
+      expect(result.results[2]?.uri).toBe(`${filePrefix}/project/node_modules/lib/index.ts`);
     });
   });
 
   describe('caching', () => {
+    // Use platform-appropriate file URLs
+    const isWindows = process.platform === 'win32';
+    const filePrefix = isWindows ? 'file:///C:' : 'file://';
+
     it('should return consistent results for multiple calls', async () => {
       const params = {
-        uri: 'file:///test/file.ts',
+        uri: `${filePrefix}/test/file.ts`,
         position: { line: 10, character: 15 },
         target: 'definition' as const,
       };
 
       mockClient.sendRequest.mockResolvedValue({
-        uri: 'file:///test/other.ts',
+        uri: `${filePrefix}/test/other.ts`,
         range: { start: { line: 20, character: 0 }, end: { line: 20, character: 10 } },
       });
 
@@ -304,13 +321,13 @@ describe('NavigateTool', () => {
 
     it('should invalidate cache for modified files', async () => {
       const params = {
-        uri: 'file:///test/file.ts',
+        uri: `${filePrefix}/test/file.ts`,
         position: { line: 10, character: 15 },
         target: 'definition' as const,
       };
 
       mockClient.sendRequest.mockResolvedValue({
-        uri: 'file:///test/other.ts',
+        uri: `${filePrefix}/test/other.ts`,
         range: { start: { line: 20, character: 0 }, end: { line: 20, character: 10 } },
       });
 
