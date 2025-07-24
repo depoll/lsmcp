@@ -7,6 +7,7 @@ import { dirname, join } from 'path';
 import { ConnectionPool } from './lsp/index.js';
 import { CodeIntelligenceTool } from './tools/codeIntelligence.js';
 import { NavigateTool } from './tools/navigate.js';
+import { SymbolSearchTool } from './tools/symbolSearch.js';
 import { ToolRegistry } from './tools/registry.js';
 import { ToolRouter } from './tools/router.js';
 import { z } from 'zod';
@@ -71,6 +72,10 @@ export class LSMCPServer {
     // Register Navigate Tool
     const navigateTool = new NavigateTool(this.clientManager);
     this.toolRegistry.register(navigateTool);
+
+    // Register Symbol Search Tool
+    const symbolSearchTool = new SymbolSearchTool(this.clientManager);
+    this.toolRegistry.register(symbolSearchTool);
 
     // Register all tools with MCP server
     for (const registration of this.toolRegistry.getAll()) {
