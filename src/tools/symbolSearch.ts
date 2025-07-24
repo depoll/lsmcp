@@ -86,6 +86,8 @@ export class SymbolSearchTool extends BatchableTool<SymbolSearchParams, SymbolSe
   readonly name = 'findSymbols';
   readonly description = 'Search for symbols in current file or entire workspace';
   get inputSchema(): z.ZodType<SymbolSearchParams> {
+    // Type assertion needed due to Zod's inference with default values
+    // TODO: Investigate better type alignment between schema and interface
     return symbolSearchParamsSchema as unknown as z.ZodType<SymbolSearchParams>;
   }
 
