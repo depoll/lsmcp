@@ -7,25 +7,30 @@ import {
   MarkupKind,
   CompletionItemKind,
 } from 'vscode-languageserver-protocol';
+import { z } from 'zod';
 // Tool import removed - not needed for this implementation
-import { LSPClientManager } from '../lsp/index.js';
+import { ConnectionPool } from '../lsp/index.js';
 import { logger } from '../utils/logger.js';
 import { FileAwareLRUCache } from '../utils/fileCache.js';
 // Removed unused import
 
-interface CodeIntelligenceParams {
-  uri: string;
-  position: {
-    line: number;
-    character: number;
-  };
-  type: 'hover' | 'signature' | 'completion';
-  completionContext?: {
-    triggerCharacter?: string;
-    triggerKind?: number;
-  };
-  maxResults?: number;
-}
+const CodeIntelligenceParamsSchema = z.object({
+  uri: z.string(),
+  position: z.object({
+    line: z.number(),
+    character: z.number(),
+  }),
+  type: z.enum(['hover', 'signature', 'completion']),
+  completionContext: z
+    .object({
+      triggerCharacter: z.string().optional(),
+      triggerKind: z.number().optional(),
+    })
+    .optional(),
+  maxResults: z.number().optional(),
+});
+
+type CodeIntelligenceParams = z.infer<typeof CodeIntelligenceParamsSchema>;
 
 interface HoverResult {
   type: 'hover';
@@ -118,14 +123,14 @@ export class CodeIntelligenceTool {
   private hoverCache: FileAwareLRUCache<Hover>;
   private signatureCache: FileAwareLRUCache<SignatureHelp>;
 
-  constructor(private clientManager: LSPClientManager) {
+  constructor(private clientManager: ConnectionPool) {
     // 5 minute TTL for hover and signature caches
     this.hoverCache = new FileAwareLRUCache<Hover>(100, 5 * 60 * 1000);
     this.signatureCache = new FileAwareLRUCache<SignatureHelp>(100, 5 * 60 * 1000);
   }
 
   async execute(params: unknown): Promise<CodeIntelligenceResult> {
-    const typedParams = params as CodeIntelligenceParams;
+    const typedParams = CodeIntelligenceParamsSchema.parse(params);
     const { uri, position, type } = typedParams;
     const lspPosition: Position = {
       line: position.line,

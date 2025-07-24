@@ -26,12 +26,19 @@ export class LRUCache<K, V> {
   }
 
   set(key: K, value: V): void {
-    // Remove oldest if at capacity
-    if (this.cache.size >= this.maxSize && !this.cache.has(key)) {
+    // Remove oldest entries if at capacity
+    while (this.cache.size >= this.maxSize && !this.cache.has(key)) {
       const firstKey = this.cache.keys().next().value;
       if (firstKey !== undefined) {
         this.cache.delete(firstKey);
+      } else {
+        break; // Safety valve
       }
+    }
+
+    // If updating existing key, delete it first to move to end
+    if (this.cache.has(key)) {
+      this.cache.delete(key);
     }
 
     this.cache.set(key, { value, timestamp: Date.now() });
