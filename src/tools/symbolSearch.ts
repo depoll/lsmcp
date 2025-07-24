@@ -169,8 +169,8 @@ export class SymbolSearchTool extends BatchableTool<SymbolSearchParams, SymbolSe
   }
 
   private async searchDocument(params: SymbolSearchParams): Promise<SymbolResult[]> {
-    // Extract workspace from URI (simplified - in real implementation would parse properly)
-    const workspace = params.uri!.substring(0, params.uri!.lastIndexOf('/'));
+    // Extract workspace from URI using proper URL parsing
+    const workspace = this.extractWorkspaceFromUri(params.uri!);
     const language = this.detectLanguage(params.uri!);
     const client = await this.clientManager.get(language, workspace);
 
@@ -206,7 +206,7 @@ export class SymbolSearchTool extends BatchableTool<SymbolSearchParams, SymbolSe
     // For workspace search, we need to use a default language/workspace
     // In a real implementation, this would be more sophisticated
     const workspace = process.cwd();
-    const language = 'typescript'; // Default to TypeScript
+    const language = await this.detectWorkspaceLanguage();
     const client = await this.clientManager.get(language, workspace);
 
     const wsParams: WorkspaceSymbolParams = {
@@ -228,7 +228,8 @@ export class SymbolSearchTool extends BatchableTool<SymbolSearchParams, SymbolSe
   private flattenDocumentSymbols(
     symbols: DocumentSymbol[],
     uri: string,
-    container?: string
+    container?: string,
+    depth = 0
   ): SymbolResult[] {
     const results: SymbolResult[] = [];
 
@@ -245,8 +246,8 @@ export class SymbolSearchTool extends BatchableTool<SymbolSearchParams, SymbolSe
         ...(container && { containerName: container }),
       });
 
-      if (symbol.children && symbol.children.length > 0) {
-        results.push(...this.flattenDocumentSymbols(symbol.children, uri, symbol.name));
+      if (symbol.children && symbol.children.length > 0 && depth < 10) {
+        results.push(...this.flattenDocumentSymbols(symbol.children, uri, symbol.name, depth + 1));
       }
     }
 
@@ -287,19 +288,19 @@ export class SymbolSearchTool extends BatchableTool<SymbolSearchParams, SymbolSe
 
     if (pattern.startsWith('*') && pattern.endsWith('*')) {
       // *substring*
-      const substring = pattern.slice(1, -1);
+      const substring = this.escapeRegExp(pattern.slice(1, -1));
       regex = new RegExp(substring, 'i');
     } else if (pattern.endsWith('*')) {
       // prefix*
-      const prefix = pattern.slice(0, -1);
+      const prefix = this.escapeRegExp(pattern.slice(0, -1));
       regex = new RegExp(`^${prefix}`, 'i');
     } else if (pattern.startsWith('*')) {
       // *suffix
-      const suffix = pattern.slice(1);
+      const suffix = this.escapeRegExp(pattern.slice(1));
       regex = new RegExp(`${suffix}$`, 'i');
     } else {
       // Treat as substring
-      regex = new RegExp(pattern.replace(/\*/g, ''), 'i');
+      regex = new RegExp(this.escapeRegExp(pattern.replace(/\*/g, '')), 'i');
     }
 
     return symbols
@@ -432,6 +433,104 @@ export class SymbolSearchTool extends BatchableTool<SymbolSearchParams, SymbolSe
         return 'php';
       default:
         return 'typescript'; // Default fallback
+    }
+  }
+
+  private escapeRegExp(string: string): string {
+    return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }
+
+  private extractWorkspaceFromUri(uri: string): string {
+    try {
+      // Handle file:// URIs
+      if (uri.startsWith('file://')) {
+        const filePath = uri.substring(7); // Remove 'file://'
+        // On Windows, remove leading slash if it's a drive letter
+        const normalizedPath =
+          filePath.startsWith('/') && /^\/[a-zA-Z]:/.test(filePath)
+            ? filePath.substring(1)
+            : filePath;
+
+        const lastSlash = normalizedPath.lastIndexOf('/');
+        const lastBackslash = normalizedPath.lastIndexOf('\\');
+        const lastSeparator = Math.max(lastSlash, lastBackslash);
+
+        return lastSeparator > 0 ? normalizedPath.substring(0, lastSeparator) : process.cwd();
+      }
+
+      // For other URI schemes, attempt basic parsing
+      const lastSlash = uri.lastIndexOf('/');
+      return lastSlash > 0 ? uri.substring(0, lastSlash) : process.cwd();
+    } catch (error) {
+      this.logger?.warn(
+        { error, uri },
+        'Failed to extract workspace from URI, using current directory'
+      );
+      return process.cwd();
+    }
+  }
+
+  private async detectWorkspaceLanguage(): Promise<string> {
+    // Check for common configuration files to detect project language
+    const fs = await import('fs/promises');
+    const path = await import('path');
+    const workspace = process.cwd();
+
+    try {
+      // Check for TypeScript/JavaScript
+      const tsConfigExists = await fs
+        .access(path.join(workspace, 'tsconfig.json'))
+        .then(() => true)
+        .catch(() => false);
+      if (tsConfigExists) return 'typescript';
+
+      const packageJsonExists = await fs
+        .access(path.join(workspace, 'package.json'))
+        .then(() => true)
+        .catch(() => false);
+      if (packageJsonExists) return 'javascript';
+
+      // Check for Python
+      const pyProjectExists = await fs
+        .access(path.join(workspace, 'pyproject.toml'))
+        .then(() => true)
+        .catch(() => false);
+      const setupPyExists = await fs
+        .access(path.join(workspace, 'setup.py'))
+        .then(() => true)
+        .catch(() => false);
+      if (pyProjectExists || setupPyExists) return 'python';
+
+      // Check for Rust
+      const cargoExists = await fs
+        .access(path.join(workspace, 'Cargo.toml'))
+        .then(() => true)
+        .catch(() => false);
+      if (cargoExists) return 'rust';
+
+      // Check for Go
+      const goModExists = await fs
+        .access(path.join(workspace, 'go.mod'))
+        .then(() => true)
+        .catch(() => false);
+      if (goModExists) return 'go';
+
+      // Check for Java
+      const pomExists = await fs
+        .access(path.join(workspace, 'pom.xml'))
+        .then(() => true)
+        .catch(() => false);
+      const gradleExists = await fs
+        .access(path.join(workspace, 'build.gradle'))
+        .then(() => true)
+        .catch(() => false);
+      if (pomExists || gradleExists) return 'java';
+
+      // Default to TypeScript if no specific indicators found
+      return 'typescript';
+    } catch (error) {
+      this.logger?.warn({ error }, 'Failed to detect workspace language, defaulting to TypeScript');
+      return 'typescript';
     }
   }
 }
