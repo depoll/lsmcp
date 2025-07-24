@@ -155,7 +155,7 @@ describe('NavigateTool', () => {
         expect.any(Object)
       );
       expect(result.results).toHaveLength(1);
-      expect(result.results[0]?.uri).toBe('file:///test/types.ts');
+      expect(result.results[0]?.uri).toBe(`${filePrefix}/test/types.ts`);
     });
 
     it('should handle no results with fallback suggestion', async () => {
