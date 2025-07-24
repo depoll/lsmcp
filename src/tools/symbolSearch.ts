@@ -8,12 +8,17 @@ import {
   type DocumentSymbolParams,
   type WorkspaceSymbolParams,
 } from 'vscode-languageserver-protocol';
-// Simple cache implementation to avoid LRU cache typing issues
+// Simple TTL-based cache implementation
+// We use a basic Map with TTL instead of LRU because:
+// 1. Symbol search patterns are often repeated in short bursts
+// 2. TTL eviction is simpler and sufficient for our use case
+// 3. Avoids additional dependencies and their potential typing issues
 interface CacheEntry<T> {
   value: T;
   expires: number;
 }
 import { createHash } from 'crypto';
+import { dirname } from 'path';
 import type { Logger } from 'pino';
 
 // User-friendly symbol kinds
@@ -459,25 +464,25 @@ export class SymbolSearchTool extends BatchableTool<SymbolSearchParams, SymbolSe
 
   private extractWorkspaceFromUri(uri: string): string {
     try {
-      // Handle file:// URIs
-      if (uri.startsWith('file://')) {
-        const filePath = uri.substring(7); // Remove 'file://'
+      const url = new URL(uri);
+      if (url.protocol === 'file:') {
+        // Normalize file paths
+        const filePath = decodeURIComponent(url.pathname);
         // On Windows, remove leading slash if it's a drive letter
         const normalizedPath =
-          filePath.startsWith('/') && /^\/[a-zA-Z]:/.test(filePath)
+          process.platform === 'win32' && filePath.startsWith('/') && /^\/[a-zA-Z]:/.test(filePath)
             ? filePath.substring(1)
             : filePath;
 
-        const lastSlash = normalizedPath.lastIndexOf('/');
-        const lastBackslash = normalizedPath.lastIndexOf('\\');
-        const lastSeparator = Math.max(lastSlash, lastBackslash);
-
-        return lastSeparator > 0 ? normalizedPath.substring(0, lastSeparator) : process.cwd();
+        // Use path module for proper path manipulation
+        const dir = dirname(normalizedPath);
+        return dir || process.cwd();
       }
 
-      // For other URI schemes, attempt basic parsing
-      const lastSlash = uri.lastIndexOf('/');
-      return lastSlash > 0 ? uri.substring(0, lastSlash) : process.cwd();
+      // For other URI schemes, use the pathname
+      const pathname = decodeURIComponent(url.pathname);
+      const lastSlash = pathname.lastIndexOf('/');
+      return lastSlash > 0 ? pathname.substring(0, lastSlash) : process.cwd();
     } catch (error) {
       this.logger?.warn(
         { error, uri },
