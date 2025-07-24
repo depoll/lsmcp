@@ -74,7 +74,10 @@ export class NavigateTool extends BatchableTool<NavigateParams, NavigateResult> 
 
   async execute(params: NavigateParams): Promise<NavigateResult> {
     // Handle batch requests
-    if (params.batch && params.batch.length > 0) {
+    if (params.batch !== undefined) {
+      if (params.batch.length === 0) {
+        throw new Error('Batch navigation requires at least one navigation request');
+      }
       return this.executeBatchNavigation(params.batch, params.maxResults);
     }
 

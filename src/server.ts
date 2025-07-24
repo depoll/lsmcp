@@ -76,12 +76,16 @@ export class LSMCPServer {
     for (const registration of this.toolRegistry.getAll()) {
       const { metadata } = registration;
 
+      // Extract the shape from the Zod schema for MCP SDK compatibility
+      const schema = metadata.inputSchema as z.ZodObject<z.ZodRawShape>;
+      const inputSchema = schema._def.shape ? schema._def.shape() : schema.shape;
+
       this.server.registerTool(
         metadata.name,
         {
           title: metadata.name,
           description: metadata.description,
-          inputSchema: metadata.inputSchema as unknown as z.ZodRawShape,
+          inputSchema,
         },
         (
           params: unknown,
