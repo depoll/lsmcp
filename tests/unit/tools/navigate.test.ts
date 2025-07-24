@@ -84,6 +84,15 @@ describe('NavigateTool', () => {
 
       const result = await tool.execute(singleParams);
 
+      // Debug on failure
+      if (result.results.length === 0) {
+        console.error('Navigation failed:', {
+          mockClientCalls: (mockClientManager.get as jest.Mock).mock.calls,
+          sendRequestCalls: (mockClient.sendRequest as jest.Mock).mock.calls,
+          result,
+        });
+      }
+
       expect(mockClientManager.get).toHaveBeenCalledWith('typescript', singleParams.uri);
       expect(mockClient.sendRequest).toHaveBeenCalledWith('textDocument/definition', {
         textDocument: { uri: singleParams.uri },
