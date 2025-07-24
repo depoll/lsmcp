@@ -25,9 +25,9 @@ export class FileAwareLRUCache<V> {
       const currentMtime = stats.mtimeMs;
 
       if (currentMtime > cached.fileMtime) {
-        // File has been modified, invalidate cache
+        // File has been modified, invalidate cache entries for this file
         logger.debug({ key, fileUri }, 'File modified, invalidating cache entry');
-        this.cache.clear(); // Clear all entries for this file
+        this.invalidateFile(fileUri);
         return undefined;
       }
 

@@ -26,6 +26,9 @@ describe('CodeIntelligenceTool', () => {
 
     // Create tool instance
     tool = new CodeIntelligenceTool(mockClientManager);
+
+    // Clear all mock calls
+    jest.clearAllMocks();
   });
 
   describe('metadata', () => {
@@ -90,9 +93,45 @@ describe('CodeIntelligenceTool', () => {
       });
     });
 
-    // TODO: Add proper tests for file-aware caching once we figure out the mocking issue
-    it.skip('should cache hover results', async () => {
-      // Test temporarily disabled due to fs mocking issues
+    it('should return different results for different positions', async () => {
+      const mockHover1 = {
+        contents: {
+          kind: 'markdown',
+          value: '```typescript\\nfunction first(): void\\n```\\n\\nFirst function docs',
+        },
+      };
+
+      const mockHover2 = {
+        contents: {
+          kind: 'markdown',
+          value: '```typescript\\nfunction second(): void\\n```\\n\\nSecond function docs',
+        },
+      };
+
+      mockClient.sendRequest.mockResolvedValueOnce(mockHover1).mockResolvedValueOnce(mockHover2);
+
+      // First position
+      const result1 = await tool.execute({
+        uri: 'file:///test.ts',
+        position: { line: 10, character: 5 },
+        type: 'hover',
+      });
+
+      // Different position
+      const result2 = await tool.execute({
+        uri: 'file:///test.ts',
+        position: { line: 20, character: 10 },
+        type: 'hover',
+      });
+
+      expect(mockClient.sendRequest).toHaveBeenCalledTimes(2);
+      expect(result1.type).toBe('hover');
+      const hoverResult1 = result1 as { type: 'hover'; content: { documentation?: string } };
+      expect(hoverResult1.content.documentation).toContain('First function docs');
+
+      expect(result2.type).toBe('hover');
+      const hoverResult2 = result2 as { type: 'hover'; content: { documentation?: string } };
+      expect(hoverResult2.content.documentation).toContain('Second function docs');
     });
   });
 
