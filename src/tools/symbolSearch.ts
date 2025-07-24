@@ -92,6 +92,7 @@ export class SymbolSearchTool extends BatchableTool<SymbolSearchParams, SymbolSe
   private cache = new Map<string, CacheEntry<SymbolSearchResult>>();
   private readonly cacheMaxSize = 100;
   private readonly cacheTTL = 1000 * 60 * 10; // 10 minutes
+  private readonly MAX_SYMBOL_DEPTH = 10;
 
   constructor(manager: ConnectionPool, logger?: Logger) {
     super(manager);
@@ -149,7 +150,7 @@ export class SymbolSearchTool extends BatchableTool<SymbolSearchParams, SymbolSe
 
       return {
         symbols: [],
-        error: `Failed to search symbols: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        error: this.formatError(error),
         fallback,
       };
     }
@@ -246,7 +247,7 @@ export class SymbolSearchTool extends BatchableTool<SymbolSearchParams, SymbolSe
         ...(container && { containerName: container }),
       });
 
-      if (symbol.children && symbol.children.length > 0 && depth < 10) {
+      if (symbol.children && symbol.children.length > 0 && depth < this.MAX_SYMBOL_DEPTH) {
         results.push(...this.flattenDocumentSymbols(symbol.children, uri, symbol.name, depth + 1));
       }
     }
@@ -311,6 +312,9 @@ export class SymbolSearchTool extends BatchableTool<SymbolSearchParams, SymbolSe
       }));
   }
 
+  // Cache for computed camelCase patterns
+  private camelCaseCache = new Map<string, { camelAbbrev: string; firstPlusCaps: string }>();
+
   private fuzzyMatch(query: string, symbol: string): number {
     const lowerQuery = query.toLowerCase();
     const lowerSymbol = symbol.toLowerCase();
@@ -321,13 +325,24 @@ export class SymbolSearchTool extends BatchableTool<SymbolSearchParams, SymbolSe
     // Prefix match
     if (lowerSymbol.startsWith(lowerQuery)) return 80;
 
-    // CamelCase match
-    const capitals = symbol.match(/[A-Z]/g) || [];
-    const camelAbbrev = capitals.join('').toLowerCase();
-    const firstPlusCaps = ((symbol[0] || '') + capitals.join('')).toLowerCase();
+    // CamelCase match with caching
+    let camelPatterns = this.camelCaseCache.get(symbol);
+    if (!camelPatterns) {
+      const capitals = symbol.match(/[A-Z]/g) || [];
+      camelPatterns = {
+        camelAbbrev: capitals.join('').toLowerCase(),
+        firstPlusCaps: ((symbol[0] || '') + capitals.join('')).toLowerCase(),
+      };
+      this.camelCaseCache.set(symbol, camelPatterns);
+    }
 
-    if (camelAbbrev === lowerQuery || firstPlusCaps === lowerQuery) return 70;
-    if (camelAbbrev.includes(lowerQuery) || firstPlusCaps.includes(lowerQuery)) return 65;
+    if (camelPatterns.camelAbbrev === lowerQuery || camelPatterns.firstPlusCaps === lowerQuery)
+      return 70;
+    if (
+      camelPatterns.camelAbbrev.includes(lowerQuery) ||
+      camelPatterns.firstPlusCaps.includes(lowerQuery)
+    )
+      return 65;
 
     // Substring match
     if (lowerSymbol.includes(lowerQuery)) return 50;
@@ -532,5 +547,12 @@ export class SymbolSearchTool extends BatchableTool<SymbolSearchParams, SymbolSe
       this.logger?.warn({ error }, 'Failed to detect workspace language, defaulting to TypeScript');
       return 'typescript';
     }
+  }
+
+  private formatError(error: unknown): string {
+    if (error instanceof Error) {
+      return `Failed to search symbols: ${error.message}`;
+    }
+    return 'Failed to search symbols: Unknown error';
   }
 }
