@@ -371,30 +371,30 @@ export class SymbolSearchTool extends BatchableTool<SymbolSearchParams, SymbolSe
 
   private generateFallback(params: SymbolSearchParams): string {
     const commands: string[] = [];
+    // Escape query to prevent command injection
+    const safeQuery = this.escapeShell(params.query);
 
     if (params.scope === 'document' && params.uri) {
-      const path = params.uri.replace('file://', '');
+      const path = this.escapeShell(params.uri.replace('file://', ''));
       if (params.kind === 'class') {
-        commands.push(`grep -n "class.*${params.query}" "${path}"`);
+        commands.push(`grep -n "class.*${safeQuery}" "${path}"`);
       } else if (params.kind === 'function') {
-        commands.push(`grep -n "function.*${params.query}\\|def.*${params.query}" "${path}"`);
+        commands.push(`grep -n "function.*${safeQuery}\\|def.*${safeQuery}" "${path}"`);
       } else {
-        commands.push(`grep -n "${params.query}" "${path}"`);
+        commands.push(`grep -n "${safeQuery}" "${path}"`);
       }
     } else {
       // Workspace search
       if (params.kind === 'class') {
         commands.push(
-          `grep -r "class.*${params.query}" --include="*.ts" --include="*.js" --include="*.py"`
+          `grep -r "class.*${safeQuery}" --include="*.ts" --include="*.js" --include="*.py"`
         );
       } else if (params.kind === 'function') {
         commands.push(
-          `grep -r "function.*${params.query}\\|def.*${params.query}" --include="*.ts" --include="*.js" --include="*.py"`
+          `grep -r "function.*${safeQuery}\\|def.*${safeQuery}" --include="*.ts" --include="*.js" --include="*.py"`
         );
       } else {
-        commands.push(
-          `grep -r "${params.query}" --include="*.ts" --include="*.js" --include="*.py"`
-        );
+        commands.push(`grep -r "${safeQuery}" --include="*.ts" --include="*.js" --include="*.py"`);
       }
     }
 
@@ -420,7 +420,21 @@ export class SymbolSearchTool extends BatchableTool<SymbolSearchParams, SymbolSe
       return undefined;
     }
 
+    // Periodically clean expired entries (every 10th cache access)
+    if (Math.random() < 0.1) {
+      this.cleanExpiredCache();
+    }
+
     return entry.value;
+  }
+
+  private cleanExpiredCache(): void {
+    const now = Date.now();
+    for (const [key, entry] of this.cache.entries()) {
+      if (now > entry.expires) {
+        this.cache.delete(key);
+      }
+    }
   }
 
   private setInCache(key: string, value: SymbolSearchResult): void {
@@ -476,6 +490,11 @@ export class SymbolSearchTool extends BatchableTool<SymbolSearchParams, SymbolSe
 
   private escapeRegExp(string: string): string {
     return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }
+
+  private escapeShell(string: string): string {
+    // Escape shell metacharacters to prevent command injection
+    return string.replace(/["'`\\$]/g, '\\$&');
   }
 
   private extractWorkspaceFromUri(uri: string): string {
