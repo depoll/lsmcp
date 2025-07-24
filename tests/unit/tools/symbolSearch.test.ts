@@ -34,7 +34,7 @@ interface ExecuteParams {
   maxResults?: number;
 }
 
-// Since SymbolSearchTool doesn't exist yet, we'll test the expected behavior
+// Testing the behavior of SymbolSearchTool to ensure it meets expected functionality
 describe('SymbolSearchTool', () => {
   let mockRequest: jest.MockedFunction<
     (uri?: string, method?: string, params?: unknown) => Promise<unknown>
@@ -190,7 +190,7 @@ describe('SymbolSearchTool', () => {
           },
         ];
 
-        // Match 'gui' against camelCase
+        // Match 'gubi' against camelCase
         const filtered = mockSymbols.filter((s) => {
           const capitals = s.name.match(/[A-Z]/g) || [];
           // getUserById => g + UBI => gubi
