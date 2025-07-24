@@ -1,21 +1,24 @@
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
-import { LanguageDetector } from '../../../src/languages/detector.js';
-import { existsSync } from 'fs';
-import { readFile } from 'fs/promises';
+import type { LanguageDetector as LanguageDetectorType } from '../../../src/languages/detector.js';
 
-jest.mock('fs', () => ({
-  existsSync: jest.fn(),
+// Create mocks before importing
+const mockExistsSync = jest.fn<typeof import('fs').existsSync>();
+const mockReadFile = jest.fn<typeof import('fs/promises').readFile>();
+
+// Mock modules
+jest.unstable_mockModule('fs', () => ({
+  existsSync: mockExistsSync,
 }));
 
-jest.mock('fs/promises', () => ({
-  readFile: jest.fn(),
+jest.unstable_mockModule('fs/promises', () => ({
+  readFile: mockReadFile,
 }));
 
-const mockExistsSync = existsSync as jest.MockedFunction<typeof existsSync>;
-const mockReadFile = readFile as jest.MockedFunction<typeof readFile>;
+// Import after mocks are set up
+const { LanguageDetector } = await import('../../../src/languages/detector.js');
 
 describe('LanguageDetector', () => {
-  let detector: LanguageDetector;
+  let detector: LanguageDetectorType;
 
   beforeEach(() => {
     detector = new LanguageDetector();

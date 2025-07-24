@@ -1,5 +1,6 @@
 import { LSPClientV2 as LSPClient } from './client-v2.js';
 import { LanguageServerConfig, HealthStatus, ConnectionPoolOptions } from '../types/lsp.js';
+import { LanguageDetector, createLanguageServerProvider } from '../languages/index.js';
 import pino from 'pino';
 
 const DEFAULT_SERVERS: Record<string, LanguageServerConfig> = {
@@ -61,6 +62,7 @@ export class ConnectionPool {
   private languageServers = new Map<string, LanguageServerConfig>();
   private logger = pino({ level: 'info' });
   private options: Required<ConnectionPoolOptions>;
+  private languageDetector = new LanguageDetector();
 
   constructor(options: ConnectionPoolOptions = {}) {
     this.options = {
@@ -95,8 +97,32 @@ export class ConnectionPool {
       await this.disposeConnection(key);
     }
 
-    // Create new connection
-    const config = this.languageServers.get(language);
+    // Try to get config from registered servers first
+    let config = this.languageServers.get(language);
+
+    // If no config and language is 'auto', detect from workspace
+    if (!config && language === 'auto') {
+      const detected = await this.languageDetector.detectLanguage(workspace);
+      if (detected) {
+        language = detected.id;
+        config = {
+          command: detected.serverCommand[0] || 'typescript-language-server',
+          args: detected.serverCommand.slice(1),
+        };
+
+        // Check if server is available, install if needed
+        const provider = createLanguageServerProvider(detected);
+        if (provider && !(await provider.isAvailable())) {
+          this.logger.info(`Installing language server for ${language}...`);
+          try {
+            await provider.install();
+          } catch (error) {
+            this.logger.warn(`Failed to install ${language} server, continuing anyway`, error);
+          }
+        }
+      }
+    }
+
     if (!config) {
       throw new Error(`No language server registered for: ${language}`);
     }
@@ -241,6 +267,31 @@ export class ConnectionPool {
 
   getDefaultServers(): Record<string, LanguageServerConfig> {
     return { ...DEFAULT_SERVERS };
+  }
+
+  async getForFile(filePath: string, workspace: string): Promise<LSPClient | null> {
+    // Try to detect language from file extension
+    const detected = this.languageDetector.detectLanguageByExtension(filePath);
+    if (!detected) {
+      return null;
+    }
+
+    // Update the detected language with the workspace root
+    const detectedWithRoot = { ...detected, rootPath: workspace };
+
+    // Check if we need to install the language server
+    const provider = createLanguageServerProvider(detectedWithRoot);
+    if (provider && !(await provider.isAvailable())) {
+      this.logger.info(`Installing language server for ${detected.id}...`);
+      try {
+        await provider.install();
+      } catch (error) {
+        this.logger.warn(`Failed to install ${detected.id} server`, error);
+      }
+    }
+
+    // Get or create connection
+    return this.get(detected.id, workspace);
   }
 
   private async handleCrashRecovery(
