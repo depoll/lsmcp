@@ -44,6 +44,16 @@ The project has a comprehensive implementation plan (see PLAN.md) and foundation
      - `manager.ts` - Connection pool with health monitoring
      - `errors.ts` - Custom error types and recovery logic
 
+### ✅ Tool Framework Complete (Week 1, Day 4-5)
+   - **Base tool classes**: Abstract base classes for tools with support for batching and streaming
+     - `base.ts` - BaseTool, BatchableTool, StreamingTool classes
+   - **Tool registry**: Central registry for managing tool instances
+     - `registry.ts` - ToolRegistry for registration and execution
+   - **Request routing**: Intelligent routing with progress tracking and cancellation
+     - `router.ts` - ToolRouter with batch processing and streaming support
+   - **Integration**: Server now uses the tool framework for all tool management
+   - **Code Intelligence Tool**: Updated to use the new framework with proper typing
+
 ### Next dependencies to install (when needed):
    - `p-queue` - Request queuing and batching (for Issue #3)
 
