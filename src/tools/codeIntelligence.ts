@@ -10,7 +10,7 @@ import {
 // Tool import removed - not needed for this implementation
 import { LSPClientManager } from '../lsp/index.js';
 import { logger } from '../utils/logger.js';
-import { LRUCache } from '../utils/cache.js';
+import { FileAwareLRUCache } from '../utils/fileCache.js';
 // Removed unused import
 
 interface CodeIntelligenceParams {
@@ -115,13 +115,13 @@ export class CodeIntelligenceTool {
     required: ['uri', 'position', 'type'],
   };
 
-  private hoverCache: LRUCache<string, Hover>;
-  private signatureCache: LRUCache<string, SignatureHelp>;
+  private hoverCache: FileAwareLRUCache<Hover>;
+  private signatureCache: FileAwareLRUCache<SignatureHelp>;
 
   constructor(private clientManager: LSPClientManager) {
     // 5 minute TTL for hover and signature caches
-    this.hoverCache = new LRUCache<string, Hover>(100, 5 * 60 * 1000);
-    this.signatureCache = new LRUCache<string, SignatureHelp>(100, 5 * 60 * 1000);
+    this.hoverCache = new FileAwareLRUCache<Hover>(100, 5 * 60 * 1000);
+    this.signatureCache = new FileAwareLRUCache<SignatureHelp>(100, 5 * 60 * 1000);
   }
 
   async execute(params: unknown): Promise<CodeIntelligenceResult> {
@@ -154,7 +154,7 @@ export class CodeIntelligenceTool {
   private async getHover(uri: string, position: Position): Promise<HoverResult> {
     const language = this.getLanguageFromUri(uri);
     const cacheKey = `${uri}:${position.line}:${position.character}`;
-    const cached = this.hoverCache.get(cacheKey);
+    const cached = await this.hoverCache.get(cacheKey, uri);
 
     if (cached) {
       logger.debug({ uri, position }, 'Hover cache hit');
@@ -168,7 +168,7 @@ export class CodeIntelligenceTool {
     });
 
     if (hover) {
-      this.hoverCache.set(cacheKey, hover);
+      await this.hoverCache.set(cacheKey, hover, uri);
     }
 
     return this.formatHoverResult(hover);
@@ -233,7 +233,7 @@ export class CodeIntelligenceTool {
   private async getSignatureHelp(uri: string, position: Position): Promise<SignatureResult> {
     const language = this.getLanguageFromUri(uri);
     const cacheKey = `${uri}:${position.line}:${position.character}`;
-    const cached = this.signatureCache.get(cacheKey);
+    const cached = await this.signatureCache.get(cacheKey, uri);
 
     if (cached) {
       logger.debug({ uri, position }, 'Signature cache hit');
@@ -250,7 +250,7 @@ export class CodeIntelligenceTool {
     );
 
     if (signatureHelp) {
-      this.signatureCache.set(cacheKey, signatureHelp);
+      await this.signatureCache.set(cacheKey, signatureHelp, uri);
     }
 
     return this.formatSignatureResult(signatureHelp);
@@ -478,5 +478,24 @@ export class CodeIntelligenceTool {
     };
 
     return extensionMap[ext] || 'plaintext';
+  }
+
+  /**
+   * Invalidate cache entries for a specific file.
+   * This should be called when a file is modified.
+   */
+  invalidateFileCache(fileUri: string): void {
+    this.hoverCache.invalidateFile(fileUri);
+    this.signatureCache.invalidateFile(fileUri);
+    logger.info({ fileUri }, 'Invalidated code intelligence cache for file');
+  }
+
+  /**
+   * Clear all cached entries.
+   */
+  clearCache(): void {
+    this.hoverCache.clear();
+    this.signatureCache.clear();
+    logger.info('Cleared all code intelligence caches');
   }
 }

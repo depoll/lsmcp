@@ -44,4 +44,12 @@ export class LRUCache<K, V> {
   size(): number {
     return this.cache.size;
   }
+
+  keys(): IterableIterator<K> {
+    return this.cache.keys();
+  }
+
+  delete(key: K): boolean {
+    return this.cache.delete(key);
+  }
 }
