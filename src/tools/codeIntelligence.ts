@@ -8,9 +8,11 @@ import {
   CompletionItemKind,
 } from 'vscode-languageserver-protocol';
 import { z } from 'zod';
+import { marked } from 'marked';
 import { ConnectionPool } from '../lsp/index.js';
 import { logger } from '../utils/logger.js';
 import { FileAwareLRUCache } from '../utils/fileCache.js';
+import { getLanguageFromUri } from '../utils/languages.js';
 
 const CodeIntelligenceParamsSchema = z.object({
   uri: z.string(),
@@ -155,7 +157,7 @@ export class CodeIntelligenceTool {
   }
 
   private async getHover(uri: string, position: Position): Promise<HoverResult> {
-    const language = this.getLanguageFromUri(uri);
+    const language = getLanguageFromUri(uri);
     const cacheKey = `${uri}:${position.line}:${position.character}`;
     const cached = await this.hoverCache.get(cacheKey, uri);
 
@@ -193,17 +195,22 @@ export class CodeIntelligenceTool {
     } else if ('kind' in hover.contents) {
       if (hover.contents.kind === MarkupKind.Markdown) {
         const text = hover.contents.value;
-        // Try to extract type information from markdown code blocks
-        const typeMatch = text.match(
-          /```(?:typescript|javascript|python|go|rust|java)?\n([^`]+)\n```/
-        );
-        if (typeMatch && typeMatch[1]) {
-          content.type = typeMatch[1].trim();
+
+        // Parse markdown to extract structured content
+        const tokens = marked.lexer(text);
+
+        // Look for code blocks that contain type information
+        for (const token of tokens) {
+          if (token.type === 'code' && !content.type && 'text' in token) {
+            content.type = (token.text as string).trim();
+          } else if ((token.type === 'paragraph' || token.type === 'text') && 'raw' in token) {
+            content.documentation = (content.documentation || '') + token.raw;
+          }
         }
-        // Extract documentation
-        const docParts = text.split(/```[^`]*```/).filter(Boolean);
-        if (docParts.length > 0) {
-          content.documentation = docParts.join('\n').trim();
+
+        // Clean up documentation
+        if (content.documentation) {
+          content.documentation = content.documentation.trim();
         }
       } else {
         content.documentation = hover.contents.value;
@@ -234,7 +241,7 @@ export class CodeIntelligenceTool {
   }
 
   private async getSignatureHelp(uri: string, position: Position): Promise<SignatureResult> {
-    const language = this.getLanguageFromUri(uri);
+    const language = getLanguageFromUri(uri);
     const cacheKey = `${uri}:${position.line}:${position.character}`;
     const cached = await this.signatureCache.get(cacheKey, uri);
 
@@ -305,7 +312,7 @@ export class CodeIntelligenceTool {
     position: Position,
     params: CodeIntelligenceParams
   ): Promise<CompletionResult> {
-    const language = this.getLanguageFromUri(uri);
+    const language = getLanguageFromUri(uri);
     const client = await this.clientManager.get(language, uri);
 
     const completionParams: {
@@ -441,46 +448,6 @@ export class CodeIntelligenceTool {
     }
 
     return doc.value;
-  }
-
-  private getLanguageFromUri(uri: string): string {
-    const path = uri.replace('file://', '');
-    const ext = path.split('.').pop()?.toLowerCase() || '';
-
-    const extensionMap: Record<string, string> = {
-      ts: 'typescript',
-      tsx: 'typescript',
-      js: 'javascript',
-      jsx: 'javascript',
-      mjs: 'javascript',
-      cjs: 'javascript',
-      py: 'python',
-      pyw: 'python',
-      pyi: 'python',
-      go: 'go',
-      rs: 'rust',
-      java: 'java',
-      c: 'c',
-      cpp: 'cpp',
-      cc: 'cpp',
-      cxx: 'cpp',
-      h: 'c',
-      hpp: 'cpp',
-      cs: 'csharp',
-      rb: 'ruby',
-      php: 'php',
-      swift: 'swift',
-      kt: 'kotlin',
-      kts: 'kotlin',
-      scala: 'scala',
-      r: 'r',
-      lua: 'lua',
-      dart: 'dart',
-      vue: 'vue',
-      svelte: 'svelte',
-    };
-
-    return extensionMap[ext] || 'plaintext';
   }
 
   /**

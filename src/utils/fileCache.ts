@@ -1,4 +1,5 @@
 import { stat } from 'fs/promises';
+import { fileURLToPath } from 'url';
 import { LRUCache } from './cache.js';
 import { logger } from './logger.js';
 
@@ -9,9 +10,11 @@ interface CachedItem<T> {
 
 export class FileAwareLRUCache<V> {
   private cache: LRUCache<string, CachedItem<V>>;
+  private fileToKeys: Map<string, Set<string>>;
 
   constructor(maxSize: number, ttl: number) {
     this.cache = new LRUCache(maxSize, ttl);
+    this.fileToKeys = new Map();
   }
 
   async get(key: string, fileUri: string): Promise<V | undefined> {
@@ -20,7 +23,7 @@ export class FileAwareLRUCache<V> {
 
     // Check if file has been modified
     try {
-      const filePath = fileUri.replace('file://', '');
+      const filePath = fileURLToPath(fileUri);
       const stats = await stat(filePath);
       const currentMtime = stats.mtimeMs;
 
@@ -41,13 +44,19 @@ export class FileAwareLRUCache<V> {
 
   async set(key: string, value: V, fileUri: string): Promise<void> {
     try {
-      const filePath = fileUri.replace('file://', '');
+      const filePath = fileURLToPath(fileUri);
       const stats = await stat(filePath);
 
       this.cache.set(key, {
         value,
         fileMtime: stats.mtimeMs,
       });
+
+      // Update reverse index
+      if (!this.fileToKeys.has(fileUri)) {
+        this.fileToKeys.set(fileUri, new Set());
+      }
+      this.fileToKeys.get(fileUri)!.add(key);
     } catch (error) {
       // If we can't get file stats, don't cache
       logger.debug({ key, fileUri, error }, 'Failed to get file stats, not caching');
@@ -55,23 +64,20 @@ export class FileAwareLRUCache<V> {
   }
 
   invalidateFile(fileUri: string): void {
-    // Clear all cache entries for a specific file
-    const prefix = fileUri + ':';
-    const keysToDelete: string[] = [];
-
-    // Note: This is a simplified approach. In a real implementation,
-    // we might want to track keys by file URI more efficiently
-    for (const key of this.cache.keys()) {
-      if (key.startsWith(prefix)) {
-        keysToDelete.push(key);
-      }
+    // Clear all cache entries for a specific file using reverse index
+    const keys = this.fileToKeys.get(fileUri);
+    if (!keys) {
+      logger.debug({ fileUri }, 'No cache entries to invalidate for file');
+      return;
     }
 
-    keysToDelete.forEach((key) => this.cache.delete(key));
-    logger.debug({ fileUri, count: keysToDelete.length }, 'Invalidated cache entries for file');
+    keys.forEach((key) => this.cache.delete(key));
+    this.fileToKeys.delete(fileUri);
+    logger.debug({ fileUri, count: keys.size }, 'Invalidated cache entries for file');
   }
 
   clear(): void {
     this.cache.clear();
+    this.fileToKeys.clear();
   }
 }
