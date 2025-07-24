@@ -8,7 +8,6 @@ import {
   CompletionItemKind,
 } from 'vscode-languageserver-protocol';
 import { z } from 'zod';
-// Tool import removed - not needed for this implementation
 import { ConnectionPool } from '../lsp/index.js';
 import { logger } from '../utils/logger.js';
 import { FileAwareLRUCache } from '../utils/fileCache.js';
