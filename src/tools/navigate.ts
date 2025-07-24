@@ -97,8 +97,9 @@ export class NavigateTool extends BatchableTool<NavigateParams, NavigateResult> 
         fallbackSuggestion:
           results.length === 0 ? this.getFallbackSuggestion(singleParams) : undefined,
       };
-    } catch {
+    } catch (error) {
       // For single navigation, return empty results with fallback suggestion
+      this.logger.debug({ error, params: singleParams }, 'Single navigation failed');
       return {
         results: [],
         fallbackSuggestion: this.getFallbackSuggestion(singleParams),
@@ -302,8 +303,10 @@ export class NavigateTool extends BatchableTool<NavigateParams, NavigateResult> 
   }
 
   private getFallbackSuggestion(params: SingleNavigateParams): string {
-    // Extract likely symbol name from position (would need file content)
-    const searchTerm = '<symbol>'; // Placeholder
+    // TODO: Extract actual symbol name from file content at position
+    // For now, using placeholder - this would require reading the file
+    // and parsing the symbol at the given position
+    const searchTerm = '<symbol>'; // Placeholder - symbol extraction not yet implemented
 
     const grepSuggestions: Record<string, string> = {
       definition: `Try: grep -n "function ${searchTerm}\\|class ${searchTerm}\\|const ${searchTerm}" **/*.{ts,js,py}`,
