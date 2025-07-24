@@ -82,6 +82,14 @@ describe('NavigateTool', () => {
 
       mockClient.sendRequest.mockResolvedValueOnce(mockLocation);
 
+      // Add debug to track the flow
+      console.log('Test setup:', {
+        mockClientSetup: !!mockClient,
+        sendRequestMocked: !!mockClient.sendRequest,
+        mockClientManagerSetup: !!mockClientManager,
+        getMocked: !!mockClientManager.get,
+      });
+
       const result = await tool.execute(singleParams);
 
       // Debug on failure
