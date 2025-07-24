@@ -18,7 +18,7 @@ interface CacheEntry<T> {
   expires: number;
 }
 import { createHash } from 'crypto';
-import { dirname } from 'path';
+import { dirname, resolve } from 'path';
 import type { Logger } from 'pino';
 
 // User-friendly symbol kinds
@@ -97,9 +97,11 @@ export class SymbolSearchTool extends BatchableTool<SymbolSearchParams, SymbolSe
   }
 
   private cache = new Map<string, CacheEntry<SymbolSearchResult>>();
-  private readonly cacheMaxSize = 100;
-  private readonly cacheTTL = 1000 * 60 * 10; // 10 minutes
+  private readonly CACHE_MAX_SIZE = 100;
+  private readonly CACHE_TTL_MS = 1000 * 60 * 10; // 10 minutes
   private readonly MAX_SYMBOL_DEPTH = 10;
+  private readonly MAX_QUERY_LENGTH = 200;
+  private readonly MAX_PATTERN_LENGTH = 100;
 
   constructor(manager: ConnectionPool, logger?: Logger) {
     super(manager);
@@ -112,6 +114,11 @@ export class SymbolSearchTool extends BatchableTool<SymbolSearchParams, SymbolSe
     // Validate params
     if (params.scope === 'document' && !params.uri) {
       throw new Error('uri is required for document scope');
+    }
+
+    // Input validation to prevent DoS
+    if (params.query.length > this.MAX_QUERY_LENGTH) {
+      throw new Error(`Query too long (max ${this.MAX_QUERY_LENGTH} characters)`);
     }
 
     // Check cache
@@ -291,6 +298,11 @@ export class SymbolSearchTool extends BatchableTool<SymbolSearchParams, SymbolSe
   }
 
   private patternMatch(symbols: SymbolResult[], pattern: string): SymbolResult[] {
+    // Input validation to prevent regex DoS
+    if (pattern.length > this.MAX_PATTERN_LENGTH) {
+      throw new Error(`Pattern too long (max ${this.MAX_PATTERN_LENGTH} characters)`);
+    }
+
     // Convert pattern to regex
     let regex: RegExp;
 
@@ -413,16 +425,20 @@ export class SymbolSearchTool extends BatchableTool<SymbolSearchParams, SymbolSe
 
   private setInCache(key: string, value: SymbolSearchResult): void {
     // Enforce max size
-    if (this.cache.size >= this.cacheMaxSize) {
+    if (this.cache.size >= this.CACHE_MAX_SIZE) {
       const firstKey = this.cache.keys().next().value;
-      if (firstKey) {
+      if (firstKey !== undefined) {
         this.cache.delete(firstKey);
+      } else {
+        // This should never happen, but clear cache if it does
+        this.logger?.warn('Cache size limit reached but no keys found');
+        this.cache.clear();
       }
     }
 
     this.cache.set(key, {
       value,
-      expires: Date.now() + this.cacheTTL,
+      expires: Date.now() + this.CACHE_TTL_MS,
     });
   }
 
@@ -476,7 +492,20 @@ export class SymbolSearchTool extends BatchableTool<SymbolSearchParams, SymbolSe
 
         // Use path module for proper path manipulation
         const dir = dirname(normalizedPath);
-        return dir || process.cwd();
+
+        // Security: Validate that the resolved path is within allowed boundaries
+        const resolvedPath = resolve(dir);
+        const cwd = process.cwd();
+
+        // Allow access to parent directories but log a warning
+        if (!resolvedPath.startsWith(cwd)) {
+          this.logger?.warn(
+            { resolvedPath, cwd },
+            'Workspace path is outside current working directory'
+          );
+        }
+
+        return resolvedPath;
       }
 
       // For other URI schemes, use the pathname
