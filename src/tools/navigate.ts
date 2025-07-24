@@ -12,7 +12,6 @@ import { relative, dirname } from 'path';
 const CACHE_SIZE = 200;
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 const DEFAULT_MAX_RESULTS = 100;
-// const PREVIEW_CONTEXT_LINES = 0; // Just the target line (reserved for future use)
 
 // Schema definitions
 const PositionSchema = z.object({

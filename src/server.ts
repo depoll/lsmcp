@@ -9,7 +9,7 @@ import { CodeIntelligenceTool } from './tools/codeIntelligence.js';
 import { NavigateTool } from './tools/navigate.js';
 import { ToolRegistry } from './tools/registry.js';
 import { ToolRouter } from './tools/router.js';
-import type { z } from 'zod';
+import { z } from 'zod';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -77,8 +77,20 @@ export class LSMCPServer {
       const { metadata } = registration;
 
       // Extract the shape from the Zod schema for MCP SDK compatibility
-      const schema = metadata.inputSchema as z.ZodObject<z.ZodRawShape>;
-      const inputSchema = schema._def.shape ? schema._def.shape() : schema.shape;
+      let inputSchema: z.ZodRawShape;
+
+      if (metadata.inputSchema instanceof z.ZodObject) {
+        // For ZodObject schemas, extract the shape
+        const zodObject = metadata.inputSchema as z.ZodObject<z.ZodRawShape>;
+        inputSchema = zodObject.shape;
+      } else {
+        // For other schema types, we need to handle them appropriately
+        // For now, log a warning and use an empty shape
+        this.logger.warn(
+          `Tool ${metadata.name} has a non-ZodObject schema type. Using empty shape.`
+        );
+        inputSchema = {};
+      }
 
       this.server.registerTool(
         metadata.name,
