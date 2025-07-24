@@ -54,6 +54,18 @@ The project has a comprehensive implementation plan (see PLAN.md) and foundation
    - **Integration**: Server now uses the tool framework for all tool management
    - **Code Intelligence Tool**: Updated to use the new framework with proper typing
 
+### ✅ Issue #4 Complete - TypeScript/JavaScript Language Support
+   - **Language Detection**: Automatic detection of project language
+     - `detector.ts` - Detects language from tsconfig.json, jsconfig.json, package.json
+     - Support for file extension-based detection
+   - **TypeScript Language Server Provider**: Auto-installation and management
+     - `typescript-provider.ts` - Handles typescript-language-server lifecycle
+     - Automatic installation via npm/yarn when missing
+   - **ConnectionPool Integration**: 
+     - Support for `'auto'` language parameter for automatic detection
+     - `getForFile()` method for file-based language detection
+   - **Comprehensive Testing**: Unit and integration tests with mocking
+
 ### Next dependencies to install (when needed):
    - `p-queue` - Request queuing and batching (for Issue #3)
 
