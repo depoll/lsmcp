@@ -10,7 +10,9 @@ jest.mock('../../../src/lsp/index.js');
 jest.mock('../../../src/utils/languages.js', () => ({
   getLanguageFromUri: jest.fn(() => 'typescript'),
 }));
-jest.mock('fs/promises');
+jest.mock('fs/promises', () => ({
+  readFile: jest.fn(() => Promise.resolve('// Mock file content\nconst mockLine = "test";\n')),
+}));
 jest.mock('../../../src/utils/logger.js');
 
 // Mock FileAwareLRUCache to just pass through (no caching)
@@ -82,24 +84,7 @@ describe('NavigateTool', () => {
 
       mockClient.sendRequest.mockResolvedValueOnce(mockLocation);
 
-      // Add debug to track the flow
-      console.log('Test setup:', {
-        mockClientSetup: !!mockClient,
-        sendRequestMocked: !!mockClient.sendRequest,
-        mockClientManagerSetup: !!mockClientManager,
-        getMocked: !!mockClientManager.get,
-      });
-
       const result = await tool.execute(singleParams);
-
-      // Debug on failure
-      if (result.results.length === 0) {
-        console.error('Navigation failed:', {
-          mockClientCalls: (mockClientManager.get as jest.Mock).mock.calls,
-          sendRequestCalls: (mockClient.sendRequest as jest.Mock).mock.calls,
-          result,
-        });
-      }
 
       expect(mockClientManager.get).toHaveBeenCalledWith('typescript', singleParams.uri);
       expect(mockClient.sendRequest).toHaveBeenCalledWith('textDocument/definition', {
