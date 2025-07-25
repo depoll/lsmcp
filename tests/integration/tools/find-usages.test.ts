@@ -342,8 +342,8 @@ export function ackermann(m: number, n: number): number {
       }
 
       // Should have progress message
-      expect(results[0].type).toBe('progress');
-      expect(results[0].progress?.message).toContain('Finding references');
+      expect(results[0]?.type).toBe('progress');
+      expect(results[0]?.progress?.message).toContain('Finding references');
 
       // Should have at least one batch of results or complete message
       const hasPartialOrComplete = results.some(
@@ -352,7 +352,7 @@ export function ackermann(m: number, n: number): number {
       expect(hasPartialOrComplete).toBe(true);
 
       // Last message should be complete
-      expect(results[results.length - 1].type).toBe('complete');
+      expect(results[results.length - 1]?.type).toBe('complete');
     }, 30000);
 
     it('should stream call hierarchy results', async () => {
@@ -369,8 +369,8 @@ export function ackermann(m: number, n: number): number {
       }
 
       // Should have progress message
-      expect(results[0].type).toBe('progress');
-      expect(results[0].progress?.message).toContain('outgoing calls');
+      expect(results[0]?.type).toBe('progress');
+      expect(results[0]?.progress?.message).toContain('outgoing calls');
 
       // Should have complete message with data
       const completeResult = results.find((r) => r.type === 'complete');

@@ -16,7 +16,7 @@ import type {
 describe('FindUsagesTool', () => {
   let tool: FindUsagesTool;
   let mockPool: jest.Mocked<ConnectionPool>;
-  let mockConnection: { sendRequest: jest.Mock };
+  let mockConnection: any;
 
   const createFindUsagesParams = (overrides: Partial<FindUsagesParams> = {}): FindUsagesParams => ({
     uri: 'file:///test.ts',
@@ -34,11 +34,16 @@ describe('FindUsagesTool', () => {
     };
 
     mockPool = {
-      getForFile: jest.fn().mockResolvedValue(mockConnection),
+      getForFile: jest.fn<any, any>().mockResolvedValue(mockConnection),
       disposeConnection: jest.fn(),
       disposeAll: jest.fn(),
       getActiveConnections: jest.fn().mockReturnValue([]),
       healthCheck: jest.fn(),
+      registerLanguageServer: jest.fn(),
+      get: jest.fn(),
+      dispose: jest.fn(),
+      getHealth: jest.fn(),
+      getDefaultServers: jest.fn(),
     } as unknown as jest.Mocked<ConnectionPool>;
 
     tool = new FindUsagesTool(mockPool);
