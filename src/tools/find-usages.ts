@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { BatchableTool, StreamingTool } from './base.js';
+import { BatchableTool } from './base.js';
 import { ConnectionPool } from '../lsp/index.js';
 import {
   Location,
@@ -76,20 +76,16 @@ export interface StreamingFindUsagesResult {
   error?: string;
 }
 
-export class FindUsagesTool
-  extends BatchableTool<FindUsagesParams, FindUsagesResult>
-  implements StreamingTool<FindUsagesParams, StreamingFindUsagesResult>
-{
+export class FindUsagesTool extends BatchableTool<FindUsagesParams, FindUsagesResult> {
   name = 'findUsages';
   description = 'Find all references or call hierarchy for a symbol';
   inputSchema = findUsagesParamsSchema;
 
-  constructor(private connectionPool: ConnectionPool) {
-    super(findUsagesParamsSchema);
+  constructor(connectionPool: ConnectionPool) {
+    super(connectionPool);
   }
 
   async execute(params: FindUsagesParams): Promise<FindUsagesResult> {
-
     if (params.batch) {
       return this.executeBatch(params);
     }
@@ -112,7 +108,7 @@ export class FindUsagesTool
   }
 
   private async findReferences(params: FindUsagesParams): Promise<ReferenceResult[]> {
-    const connection = await this.connectionPool.getForFile(params.uri);
+    const connection = await this.clientManager.getForFile(params.uri, 'auto');
 
     const referenceParams: ReferenceParams = {
       textDocument: { uri: params.uri },
@@ -121,6 +117,10 @@ export class FindUsagesTool
     };
 
     logger.info('Finding references', { uri: params.uri, position: params.position });
+
+    if (!connection) {
+      throw new Error(`No language server available for ${params.uri}`);
+    }
 
     try {
       const locations = await connection.sendRequest<Location[]>(
@@ -154,7 +154,7 @@ export class FindUsagesTool
   private async findCallHierarchy(
     params: FindUsagesParams
   ): Promise<CallHierarchyResult | undefined> {
-    const connection = await this.connectionPool.getForFile(params.uri);
+    const connection = await this.clientManager.getForFile(params.uri, 'auto');
 
     const prepareParams: CallHierarchyPrepareParams = {
       textDocument: { uri: params.uri },
@@ -162,6 +162,10 @@ export class FindUsagesTool
     };
 
     logger.info('Preparing call hierarchy', { uri: params.uri, position: params.position });
+
+    if (!connection) {
+      throw new Error(`No language server available for ${params.uri}`);
+    }
 
     try {
       // First, prepare the call hierarchy
@@ -176,6 +180,10 @@ export class FindUsagesTool
       }
 
       const item = items[0]; // Use the first item
+      if (!item) {
+        return undefined;
+      }
+
       const result: CallHierarchyResult = {
         name: item.name,
         kind: item.kind,
@@ -201,7 +209,7 @@ export class FindUsagesTool
   }
 
   private async getIncomingCalls(
-    connection: any,
+    connection: { sendRequest: (method: string, params: unknown) => Promise<unknown> },
     item: CallHierarchyItem,
     maxDepth: number,
     currentDepth = 0,
@@ -220,14 +228,14 @@ export class FindUsagesTool
     const params: CallHierarchyIncomingCallsParams = { item };
 
     try {
-      const incomingCalls = await connection.sendRequest<CallHierarchyIncomingCall[]>(
+      const incomingCalls = (await connection.sendRequest(
         'callHierarchy/incomingCalls',
         params
-      );
+      )) as CallHierarchyIncomingCall[];
 
       const results: CallHierarchyResult[] = [];
 
-      for (const call of incomingCalls) {
+      for (const call of incomingCalls || []) {
         const result: CallHierarchyResult = {
           name: call.from.name,
           kind: call.from.kind,
@@ -258,7 +266,7 @@ export class FindUsagesTool
   }
 
   private async getOutgoingCalls(
-    connection: any,
+    connection: { sendRequest: (method: string, params: unknown) => Promise<unknown> },
     item: CallHierarchyItem,
     maxDepth: number,
     currentDepth = 0,
@@ -277,14 +285,14 @@ export class FindUsagesTool
     const params: CallHierarchyOutgoingCallsParams = { item };
 
     try {
-      const outgoingCalls = await connection.sendRequest<CallHierarchyOutgoingCall[]>(
+      const outgoingCalls = (await connection.sendRequest(
         'callHierarchy/outgoingCalls',
         params
-      );
+      )) as CallHierarchyOutgoingCall[];
 
       const results: CallHierarchyResult[] = [];
 
-      for (const call of outgoingCalls) {
+      for (const call of outgoingCalls || []) {
         const result: CallHierarchyResult = {
           name: call.to.name,
           kind: call.to.kind,
@@ -323,7 +331,15 @@ export class FindUsagesTool
     };
 
     try {
-      const connection = await this.connectionPool.getForFile(params.uri);
+      const connection = await this.clientManager.getForFile(params.uri, 'auto');
+
+      if (!connection) {
+        yield {
+          type: 'complete',
+          error: `No language server available for ${params.uri}`,
+        };
+        return;
+      }
 
       const referenceParams: ReferenceParams = {
         textDocument: { uri: params.uri },
@@ -331,10 +347,10 @@ export class FindUsagesTool
         context: { includeDeclaration: params.includeDeclaration },
       };
 
-      const locations = await connection.sendRequest<Location[]>(
+      const locations = (await connection.sendRequest(
         'textDocument/references',
         referenceParams
-      );
+      )) as Location[] | null;
 
       if (!locations || locations.length === 0) {
         yield {
