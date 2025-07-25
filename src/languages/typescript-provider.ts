@@ -15,6 +15,20 @@ export class TypeScriptLanguageServerProvider implements LanguageServerProvider 
   constructor(public readonly language: DetectedLanguage) {}
 
   async isAvailable(): Promise<boolean> {
+    // In CI environments, skip the availability check if the binary is in PATH
+    if (process.env.CI === 'true' || process.env.GITHUB_ACTIONS === 'true') {
+      try {
+        // Just check if the command exists in PATH using 'which' or 'where'
+        const whichCmd = process.platform === 'win32' ? 'where' : 'which';
+        await this.executeCommand([whichCmd, 'typescript-language-server']);
+        logger.info('TypeScript language server found in PATH (CI environment)');
+        return true;
+      } catch (error) {
+        logger.debug({ error }, 'TypeScript language server not in PATH');
+        return false;
+      }
+    }
+
     try {
       // Check if typescript-language-server is available
       const result = await this.executeCommand(['typescript-language-server', '--version']);
