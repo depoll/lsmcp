@@ -16,7 +16,7 @@ export class TypeScriptLanguageServerProvider implements LanguageServerProvider 
 
   async isAvailable(): Promise<boolean> {
     // In CI environments, skip the availability check if the binary is in PATH
-    if (process.env.CI === 'true' || process.env.GITHUB_ACTIONS === 'true') {
+    if (process.env['CI'] === 'true' || process.env['GITHUB_ACTIONS'] === 'true') {
       try {
         // Just check if the command exists in PATH using 'which' or 'where'
         const whichCmd = process.platform === 'win32' ? 'where' : 'which';
