@@ -19,6 +19,16 @@ describe('FindUsagesTool Integration', () => {
   let testDir: string;
   let tsProvider: TypeScriptLanguageProvider;
 
+  const createFindUsagesParams = (overrides: Partial<FindUsagesParams> = {}): FindUsagesParams => ({
+    uri: `file://${testDir}/test.ts`,
+    position: { line: 0, character: 0 },
+    type: 'references' as const,
+    maxResults: 1000,
+    maxDepth: 3,
+    includeDeclaration: true,
+    ...overrides,
+  });
+
   beforeAll(async () => {
     // Create test directory
     testDir = join(__dirname, '../../fixtures/find-usages-test');
@@ -132,7 +142,7 @@ export function ackermann(m: number, n: number): number {
 
     // Pre-initialize TypeScript language server
     const fileUri = `file://${join(testDir, 'math.ts')}`;
-    await connectionPool.getConnection(fileUri, 'typescript');
+    await connectionPool.getForFile(fileUri, 'typescript');
 
     // Initialize tool
     tool = new FindUsagesTool(connectionPool);
@@ -145,12 +155,12 @@ export function ackermann(m: number, n: number): number {
 
   describe('find references', () => {
     it('should find all references to add function', async () => {
-      const params: FindUsagesParams = {
+      const params = createFindUsagesParams({
         uri: `file://${join(testDir, 'math.ts')}`,
         position: { line: 0, character: 17 }, // Position of 'add' function name
         type: 'references',
         includeDeclaration: true,
-      };
+      });
 
       const result = await tool.execute(params);
 
@@ -171,12 +181,12 @@ export function ackermann(m: number, n: number): number {
     }, 30000);
 
     it('should find references without declaration', async () => {
-      const params: FindUsagesParams = {
+      const params = createFindUsagesParams({
         uri: `file://${join(testDir, 'math.ts')}`,
         position: { line: 0, character: 17 }, // Position of 'add' function
         type: 'references',
         includeDeclaration: false,
-      };
+      });
 
       const result = await tool.execute(params);
 
@@ -188,12 +198,12 @@ export function ackermann(m: number, n: number): number {
     }, 30000);
 
     it('should find class instantiations', async () => {
-      const params: FindUsagesParams = {
+      const params = createFindUsagesParams({
         uri: `file://${join(testDir, 'math.ts')}`,
         position: { line: 14, character: 13 }, // Position of 'Calculator' class name
         type: 'references',
         includeDeclaration: true,
-      };
+      });
 
       const result = await tool.execute(params);
 
@@ -207,12 +217,12 @@ export function ackermann(m: number, n: number): number {
     }, 30000);
 
     it('should respect maxResults limit', async () => {
-      const params: FindUsagesParams = {
+      const params = createFindUsagesParams({
         uri: `file://${join(testDir, 'math.ts')}`,
         position: { line: 0, character: 17 }, // Position of 'add' function
         type: 'references',
         maxResults: 3,
-      };
+      });
 
       const result = await tool.execute(params);
 
@@ -223,13 +233,13 @@ export function ackermann(m: number, n: number): number {
 
   describe('call hierarchy', () => {
     it('should find incoming calls', async () => {
-      const params: FindUsagesParams = {
+      const params = createFindUsagesParams({
         uri: `file://${join(testDir, 'math.ts')}`,
         position: { line: 0, character: 17 }, // Position of 'add' function
         type: 'callHierarchy',
         direction: 'incoming',
         maxDepth: 2,
-      };
+      });
 
       const result = await tool.execute(params);
 
@@ -244,13 +254,13 @@ export function ackermann(m: number, n: number): number {
     }, 30000);
 
     it('should find outgoing calls', async () => {
-      const params: FindUsagesParams = {
+      const params = createFindUsagesParams({
         uri: `file://${join(testDir, 'math.ts')}`,
         position: { line: 8, character: 17 }, // Position of 'calculate' function
         type: 'callHierarchy',
         direction: 'outgoing',
         maxDepth: 1,
-      };
+      });
 
       const result = await tool.execute(params);
 
@@ -265,13 +275,13 @@ export function ackermann(m: number, n: number): number {
     }, 30000);
 
     it('should handle recursive calls', async () => {
-      const params: FindUsagesParams = {
+      const params = createFindUsagesParams({
         uri: `file://${join(testDir, 'recursive.ts')}`,
         position: { line: 0, character: 17 }, // Position of 'factorial' function
         type: 'callHierarchy',
         direction: 'outgoing',
         maxDepth: 3,
-      };
+      });
 
       const result = await tool.execute(params);
 
@@ -289,7 +299,7 @@ export function ackermann(m: number, n: number): number {
 
   describe('batch processing', () => {
     it('should process multiple symbols in batch', async () => {
-      const params: FindUsagesParams = {
+      const params = createFindUsagesParams({
         uri: `file://${join(testDir, 'math.ts')}`,
         position: { line: 0, character: 0 }, // Dummy position
         type: 'references',
@@ -303,7 +313,7 @@ export function ackermann(m: number, n: number): number {
             position: { line: 4, character: 17 }, // 'multiply' function
           },
         ],
-      };
+      });
 
       const result = await tool.execute(params);
 
@@ -324,11 +334,11 @@ export function ackermann(m: number, n: number): number {
 
   describe('streaming', () => {
     it('should stream reference results', async () => {
-      const params: FindUsagesParams = {
+      const params = createFindUsagesParams({
         uri: `file://${join(testDir, 'math.ts')}`,
         position: { line: 0, character: 17 }, // 'add' function
         type: 'references',
-      };
+      });
 
       const results: StreamingFindUsagesResult[] = [];
       for await (const result of tool.stream(params)) {
@@ -350,12 +360,12 @@ export function ackermann(m: number, n: number): number {
     }, 30000);
 
     it('should stream call hierarchy results', async () => {
-      const params: FindUsagesParams = {
+      const params = createFindUsagesParams({
         uri: `file://${join(testDir, 'math.ts')}`,
         position: { line: 8, character: 17 }, // 'calculate' function
         type: 'callHierarchy',
         direction: 'outgoing',
-      };
+      });
 
       const results: StreamingFindUsagesResult[] = [];
       for await (const result of tool.stream(params)) {
@@ -375,11 +385,11 @@ export function ackermann(m: number, n: number): number {
 
   describe('error scenarios', () => {
     it('should handle invalid file URI gracefully', async () => {
-      const params: FindUsagesParams = {
+      const params = createFindUsagesParams({
         uri: 'file:///non-existent-file.ts',
         position: { line: 0, character: 0 },
         type: 'references',
-      };
+      });
 
       // Should either return empty results or throw a meaningful error
       try {
@@ -391,11 +401,11 @@ export function ackermann(m: number, n: number): number {
     }, 30000);
 
     it('should handle position outside of file bounds', async () => {
-      const params: FindUsagesParams = {
+      const params = createFindUsagesParams({
         uri: `file://${join(testDir, 'math.ts')}`,
         position: { line: 9999, character: 9999 },
         type: 'references',
-      };
+      });
 
       const result = await tool.execute(params);
       expect(result.references).toHaveLength(0);

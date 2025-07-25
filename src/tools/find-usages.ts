@@ -33,9 +33,9 @@ export const findUsagesParamsSchema = z.object({
   batch: z.array(batchItemSchema).optional(),
   type: z.enum(['references', 'callHierarchy']),
   direction: z.enum(['incoming', 'outgoing']).optional().describe('For call hierarchy only'),
-  maxResults: z.number().positive().default(1000),
-  maxDepth: z.number().positive().max(10).default(3).describe('For call hierarchy only'),
-  includeDeclaration: z.boolean().default(true),
+  maxResults: z.number().positive(),
+  maxDepth: z.number().positive().max(10),
+  includeDeclaration: z.boolean(),
 });
 
 export type FindUsagesParams = z.infer<typeof findUsagesParamsSchema>;
@@ -86,10 +86,6 @@ export class FindUsagesTool extends BatchableTool<FindUsagesParams, FindUsagesRe
   }
 
   async execute(params: FindUsagesParams): Promise<FindUsagesResult> {
-    if (params.batch) {
-      return this.executeBatch(params);
-    }
-
     if (params.type === 'references') {
       const references = await this.findReferences(params);
       return { references, total: references.length };
@@ -350,7 +346,7 @@ export class FindUsagesTool extends BatchableTool<FindUsagesParams, FindUsagesRe
       const locations = (await connection.sendRequest(
         'textDocument/references',
         referenceParams
-      )) as Location[] | null;
+      )) as Location[];
 
       if (!locations || locations.length === 0) {
         yield {
@@ -446,57 +442,21 @@ export class FindUsagesTool extends BatchableTool<FindUsagesParams, FindUsagesRe
     return 'read';
   }
 
-  protected async executeBatch(params: FindUsagesParams): Promise<FindUsagesResult> {
-    if (!params.batch) {
-      throw new Error('Batch parameter required for batch execution');
-    }
+  async executeBatch(items: FindUsagesParams[]): Promise<FindUsagesResult[]> {
+    this.logger.info({ count: items.length }, 'Executing find usages batch operation');
 
-    const allReferences: ReferenceResult[] = [];
+    const results = await Promise.allSettled(items.map((item) => this.execute(item)));
 
-    // Process batch items in parallel
-    const promises = params.batch.map(async (item) => {
-      const singleParams: FindUsagesParams = {
-        ...params,
-        uri: item.uri,
-        position: item.position,
-        batch: undefined,
-      };
-
-      const result = await this.execute(singleParams);
-      return result.references || [];
-    });
-
-    const results = await Promise.all(promises);
-
-    // Flatten and deduplicate
-    for (const refs of results) {
-      allReferences.push(...refs);
-    }
-
-    // Deduplicate by uri and range
-    const seen = new Set<string>();
-    const unique = allReferences.filter((ref) => {
-      const key = `${ref.uri}:${ref.range.start.line}:${ref.range.start.character}:${ref.range.end.line}:${ref.range.end.character}`;
-      if (seen.has(key)) {
-        return false;
+    return results.map((result, index) => {
+      if (result.status === 'fulfilled') {
+        return result.value;
+      } else {
+        this.logger.error(
+          { error: result.reason as Error, item: items[index] },
+          'Find usages batch item failed'
+        );
+        throw result.reason as Error;
       }
-      seen.add(key);
-      return true;
     });
-
-    // Sort by relevance
-    unique.sort((a, b) => {
-      // Same file first
-      if (a.uri === params.uri && b.uri !== params.uri) return -1;
-      if (a.uri !== params.uri && b.uri === params.uri) return 1;
-
-      // Then by line number
-      return a.range.start.line - b.range.start.line;
-    });
-
-    return {
-      references: unique.slice(0, params.maxResults),
-      total: unique.length,
-    };
   }
 }

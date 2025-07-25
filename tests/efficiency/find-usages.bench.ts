@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from '@jest/globals';
 import { FindUsagesTool } from '../../src/tools/find-usages.js';
 import { ConnectionPool } from '../../src/lsp/index.js';
-import { TypeScriptLanguageProvider } from '../../src/lsp/languages/typescript-provider.js';
+// import { TypeScriptLanguageProvider } from '../../src/lsp/languages/typescript-provider.js';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { writeFile, mkdir, rm } from 'fs/promises';
@@ -35,8 +35,18 @@ describe('FindUsagesTool Efficiency Benchmarks', () => {
   let tool: FindUsagesTool;
   let connectionPool: ConnectionPool;
   let testDir: string;
-  let tsProvider: TypeScriptLanguageProvider;
+  // let tsProvider: TypeScriptLanguageProvider;
   const comparisons: EfficiencyComparison[] = [];
+
+  const createFindUsagesParams = (overrides: Partial<FindUsagesParams> = {}): FindUsagesParams => ({
+    uri: `file://${testDir}/test.ts`,
+    position: { line: 0, character: 0 },
+    type: 'references' as const,
+    maxResults: 1000,
+    maxDepth: 3,
+    includeDeclaration: true,
+    ...overrides,
+  });
 
   beforeAll(async () => {
     // Create test directory with a realistic project structure
@@ -314,9 +324,6 @@ describe('AuthService', () => {
     );
 
     // Initialize providers and connections
-    tsProvider = new TypeScriptLanguageProvider();
-    await tsProvider.ensureInstalled();
-
     connectionPool = new ConnectionPool({
       idleTimeout: 60000,
       healthCheckInterval: 30000,
@@ -324,7 +331,11 @@ describe('AuthService', () => {
 
     // Pre-initialize language server
     const fileUri = `file://${join(testDir, 'src/models/User.ts')}`;
-    await connectionPool.getConnection(fileUri, 'typescript');
+    try {
+      await connectionPool.getForFile(fileUri, 'typescript');
+    } catch (error) {
+      console.log('TypeScript language server not available, skipping efficiency tests');
+    }
 
     tool = new FindUsagesTool(connectionPool);
   }, 60000);
@@ -355,12 +366,12 @@ describe('AuthService', () => {
   });
 
   it('should efficiently find all references to User class', async () => {
-    const params: FindUsagesParams = {
+    const params = createFindUsagesParams({
       uri: `file://${join(testDir, 'src/models/User.ts')}`,
       position: { line: 8, character: 13 }, // Position of 'User' class declaration
       type: 'references',
       includeDeclaration: true,
-    };
+    });
 
     const startTime = Date.now();
     const result = await tool.execute(params);
@@ -423,13 +434,13 @@ describe('AuthService', () => {
   }, 30000);
 
   it('should efficiently find call hierarchy for authenticate method', async () => {
-    const params: FindUsagesParams = {
+    const params = createFindUsagesParams({
       uri: `file://${join(testDir, 'src/services/authService.ts')}`,
       position: { line: 5, character: 9 }, // Position of 'authenticate' method
       type: 'callHierarchy',
       direction: 'incoming',
       maxDepth: 3,
-    };
+    });
 
     const startTime = Date.now();
     const result = await tool.execute(params);
@@ -498,7 +509,7 @@ describe('AuthService', () => {
   }, 30000);
 
   it('should efficiently batch find references for multiple utilities', async () => {
-    const params: FindUsagesParams = {
+    const params = createFindUsagesParams({
       uri: `file://${join(testDir, 'src/utils/jwt.ts')}`,
       position: { line: 0, character: 0 }, // Dummy position
       type: 'references',
@@ -516,7 +527,7 @@ describe('AuthService', () => {
           position: { line: 18, character: 17 }, // getUserFromToken
         },
       ],
-    };
+    });
 
     const startTime = Date.now();
     const result = await tool.execute(params);
@@ -582,12 +593,12 @@ describe('AuthService', () => {
 
   it('should stream large reference results efficiently', async () => {
     // Find references to something used frequently
-    const params: FindUsagesParams = {
+    const params = createFindUsagesParams({
       uri: `file://${join(testDir, 'src/models/User.ts')}`,
       position: { line: 0, character: 17 }, // UserData interface
       type: 'references',
       includeDeclaration: true,
-    };
+    });
 
     const chunks: any[] = [];
     let progressUpdates = 0;

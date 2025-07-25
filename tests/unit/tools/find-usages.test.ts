@@ -10,14 +10,13 @@ import {
 } from 'vscode-languageserver-protocol';
 import type {
   FindUsagesParams,
-  FindUsagesResult,
   StreamingFindUsagesResult,
 } from '../../../src/tools/find-usages.js';
 
 describe('FindUsagesTool', () => {
   let tool: FindUsagesTool;
   let mockPool: jest.Mocked<ConnectionPool>;
-  let mockConnection: any;
+  let mockConnection: { sendRequest: jest.Mock };
 
   const createFindUsagesParams = (overrides: Partial<FindUsagesParams> = {}): FindUsagesParams => ({
     uri: 'file:///test.ts',
@@ -35,13 +34,12 @@ describe('FindUsagesTool', () => {
     };
 
     mockPool = {
-      getConnection: jest.fn().mockResolvedValue(mockConnection),
       getForFile: jest.fn().mockResolvedValue(mockConnection),
       disposeConnection: jest.fn(),
       disposeAll: jest.fn(),
       getActiveConnections: jest.fn().mockReturnValue([]),
       healthCheck: jest.fn(),
-    } as unknown as jest.Mocked<ConnectionPool>;
+    } as jest.Mocked<ConnectionPool>;
 
     tool = new FindUsagesTool(mockPool);
   });
