@@ -1,5 +1,6 @@
 import { LSPClientV2 as LSPClient } from './client-v2.js';
 import { LanguageServerConfig, HealthStatus, ConnectionPoolOptions } from '../types/lsp.js';
+import { LanguageDetector, createLanguageServerProvider } from '../languages/index.js';
 import pino from 'pino';
 
 const DEFAULT_SERVERS: Record<string, LanguageServerConfig> = {
@@ -61,6 +62,7 @@ export class ConnectionPool {
   private languageServers = new Map<string, LanguageServerConfig>();
   private logger = pino({ level: 'info' });
   private options: Required<ConnectionPoolOptions>;
+  private languageDetector = new LanguageDetector();
 
   constructor(options: ConnectionPoolOptions = {}) {
     this.options = {
@@ -81,6 +83,11 @@ export class ConnectionPool {
     this.logger.info(`Registered language server for ${language}`);
   }
 
+  /**
+   * Gets an LSP client for the specified language and workspace.
+   * Throws an error if the language server is not registered or not available.
+   * For a more lenient method that returns null instead of throwing, use getForFile().
+   */
   async get(language: string, workspace: string): Promise<LSPClient> {
     const key = `${language}:${workspace}`;
     const existing = this.connections.get(key);
@@ -95,8 +102,45 @@ export class ConnectionPool {
       await this.disposeConnection(key);
     }
 
-    // Create new connection
-    const config = this.languageServers.get(language);
+    // Try to get config from registered servers first
+    let config = this.languageServers.get(language);
+
+    // If no config and language is 'auto', detect from workspace
+    if (!config && language === 'auto') {
+      const detected = await this.languageDetector.detectLanguage(workspace);
+      if (detected) {
+        language = detected.id;
+
+        // Validate serverCommand array before accessing
+        if (!detected.serverCommand || detected.serverCommand.length === 0) {
+          throw new Error(`No server command configured for language: ${language}`);
+        }
+
+        config = {
+          command: detected.serverCommand[0]!,
+          args: detected.serverCommand.slice(1),
+        };
+
+        // Check if server is available
+        const provider = createLanguageServerProvider(detected);
+        if (provider && !(await provider.isAvailable())) {
+          const installCmd = this.getInstallCommand(language);
+          this.logger.warn(
+            `Language server for ${language} is not installed. ` +
+              (installCmd
+                ? `Please install it manually: ${installCmd}`
+                : 'Please install it manually.')
+          );
+          throw new Error(
+            `Language server for ${language} is not available. ` +
+              (installCmd
+                ? `Please install it manually: ${installCmd}`
+                : 'Please install the language server manually.')
+          );
+        }
+      }
+    }
+
     if (!config) {
       throw new Error(`No language server registered for: ${language}`);
     }
@@ -243,6 +287,36 @@ export class ConnectionPool {
     return { ...DEFAULT_SERVERS };
   }
 
+  /**
+   * Gets an LSP client for a specific file path by detecting its language.
+   * Returns null if the language cannot be detected or if the server is not available.
+   * This method is more lenient than get() and will not throw errors.
+   */
+  async getForFile(filePath: string, workspace: string): Promise<LSPClient | null> {
+    // Try to detect language from file extension
+    const detected = this.languageDetector.detectLanguageByExtension(filePath);
+    if (!detected) {
+      return null;
+    }
+
+    // Update the detected language with the workspace root
+    const detectedWithRoot = { ...detected, rootPath: workspace };
+
+    // Check if language server is available
+    const provider = createLanguageServerProvider(detectedWithRoot);
+    if (provider && !(await provider.isAvailable())) {
+      const installCmd = this.getInstallCommand(detected.id);
+      this.logger.warn(
+        `Language server for ${detected.id} is not installed. ` +
+          (installCmd ? `Please install it manually: ${installCmd}` : 'Please install it manually.')
+      );
+      return null; // Return null if server is not available
+    }
+
+    // Get or create connection
+    return this.get(detected.id, workspace);
+  }
+
   private async handleCrashRecovery(
     language: string,
     workspace: string,
@@ -267,5 +341,19 @@ export class ConnectionPool {
         throw error;
       }
     }
+  }
+
+  private getInstallCommand(language: string): string | null {
+    const config = this.languageServers.get(language);
+    if (!config) return null;
+
+    if (config.npm) {
+      return `npm install -g ${config.npm}`;
+    } else if (config.pip) {
+      return `pip install ${config.pip}`;
+    }
+
+    // Return null if no package manager info is available
+    return null;
   }
 }

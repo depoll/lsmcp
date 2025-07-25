@@ -1,8 +1,28 @@
 {
   "hooks": {
-    "PostToolUse": [
+    "Stop": [
       {
-        "matcher": "Write|Edit|MultiEdit|Update|Bash(sed:*)|Bash(awk:*)",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "npm run post-edit-check"
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "npm run post-edit-check"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash(git commit*)",
         "hooks": [
           {
             "type": "command",
