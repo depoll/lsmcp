@@ -39,6 +39,11 @@ jobs:
       run: |
         npm install -g typescript-language-server typescript
         npm install -g pyright
+        echo "Verifying installation:"
+        which typescript-language-server || echo "typescript-language-server not found in PATH"
+        typescript-language-server --version || echo "typescript-language-server --version failed"
+        echo "PATH: $PATH"
+        echo "npm global prefix: $(npm config get prefix)"
     
     - name: Run type checking
       run: npm run type-check
