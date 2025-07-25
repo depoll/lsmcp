@@ -1,9 +1,8 @@
-import { exec } from 'child_process';
-import { promisify } from 'util';
+import { spawn } from 'child_process';
+import type { ChildProcessByStdio } from 'child_process';
+import type { Readable } from 'stream';
 import { DetectedLanguage } from './detector.js';
 import { logger } from '../utils/logger.js';
-
-const execAsync = promisify(exec);
 
 export interface LanguageServerProvider {
   language: DetectedLanguage;
@@ -84,52 +83,77 @@ export class TypeScriptLanguageServerProvider implements LanguageServerProvider 
     }
   }
 
-  private async executeCommand(command: string[], timeout = 30000): Promise<string> {
-    if (command.length === 0) {
-      throw new Error('Command array is empty');
-    }
-
-    // Join command and args with proper escaping
-    const fullCommand = command
-      .map((arg) => {
-        // Simple escaping for common cases
-        if (arg.includes(' ') && !arg.includes('"')) {
-          return `"${arg}"`;
-        }
-        return arg;
-      })
-      .join(' ');
-
-    try {
-      const { stdout } = await execAsync(fullCommand, {
-        cwd: this.language.rootPath || process.cwd(),
-        env: process.env,
-        timeout,
-      });
-
-      return stdout.trim();
-    } catch (error) {
-      // Type guard for Node.js errors with exec-specific properties
-      if (error instanceof Error) {
-        // Check for timeout
-        if ('code' in error && (error as NodeJS.ErrnoException).code === 'ETIMEDOUT') {
-          throw new Error(`Command timed out after ${timeout}ms: ${command.join(' ')}`);
-        }
-
-        // Handle other errors with stderr if available
-        let message = error.message;
-        if ('stderr' in error) {
-          const stderr = (error as Error & { stderr?: string }).stderr;
-          if (stderr && typeof stderr === 'string') {
-            message = `${message}: ${stderr}`;
-          }
-        }
-        throw new Error(message);
+  private executeCommand(command: string[], timeout = 30000): Promise<string> {
+    return new Promise((resolve, reject) => {
+      if (command.length === 0) {
+        reject(new Error('Command array is empty'));
+        return;
       }
 
-      // Fallback for unknown error types
-      throw new Error(`Command failed: ${String(error)}`);
-    }
+      const [cmd, ...args] = command;
+      if (!cmd) {
+        reject(new Error('Command is undefined'));
+        return;
+      }
+
+      // Use spawn for security - no shell interpretation
+      let child: ChildProcessByStdio<null, Readable, Readable>;
+      try {
+        child = spawn(cmd, args, {
+          cwd: this.language.rootPath || process.cwd(),
+          env: process.env,
+          stdio: ['ignore', 'pipe', 'pipe'],
+        });
+      } catch (error) {
+        reject(
+          new Error(
+            `Failed to spawn ${cmd}: ${error instanceof Error ? error.message : String(error)}`
+          )
+        );
+        return;
+      }
+
+      let stdout = '';
+      let stderr = '';
+      let timedOut = false;
+
+      // Set timeout
+      const timer = setTimeout(() => {
+        timedOut = true;
+        child.kill('SIGTERM');
+        // Force kill after grace period
+        setTimeout(() => {
+          if (!child.killed) {
+            child.kill('SIGKILL');
+          }
+        }, 5000);
+      }, timeout);
+
+      child.stdout.on('data', (data: Buffer) => {
+        stdout += data.toString();
+      });
+
+      child.stderr.on('data', (data: Buffer) => {
+        stderr += data.toString();
+      });
+
+      child.on('close', (code: number | null) => {
+        clearTimeout(timer);
+        if (timedOut) {
+          reject(new Error(`Command timed out after ${timeout}ms: ${command.join(' ')}`));
+        } else if (code === 0) {
+          resolve(stdout.trim());
+        } else {
+          const errorMessage = stderr || `Command failed with code ${code}`;
+          reject(new Error(`${cmd} failed: ${errorMessage}`));
+        }
+      });
+
+      child.on('error', (error: Error) => {
+        clearTimeout(timer);
+        reject(new Error(`Failed to execute ${cmd}: ${error.message}`));
+      });
+    });
   }
 }
 

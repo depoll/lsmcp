@@ -106,20 +106,29 @@ export class ConnectionPool {
       if (detected) {
         language = detected.id;
         config = {
-          command: detected.serverCommand[0] || 'typescript-language-server',
+          command: detected.serverCommand[0] || '',
           args: detected.serverCommand.slice(1),
         };
+
+        if (!config.command) {
+          throw new Error(`No server command configured for language: ${language}`);
+        }
 
         // Check if server is available
         const provider = createLanguageServerProvider(detected);
         if (provider && !(await provider.isAvailable())) {
+          const installCmd = this.getInstallCommand(language);
           this.logger.warn(
             `Language server for ${language} is not installed. ` +
-              `Please install it manually: npm install -g typescript-language-server`
+              (installCmd
+                ? `Please install it manually: ${installCmd}`
+                : 'Please install it manually.')
           );
           throw new Error(
             `Language server for ${language} is not available. ` +
-              `Please install typescript-language-server manually.`
+              (installCmd
+                ? `Please install it manually: ${installCmd}`
+                : 'Please install the language server manually.')
           );
         }
       }
@@ -284,9 +293,10 @@ export class ConnectionPool {
     // Check if language server is available
     const provider = createLanguageServerProvider(detectedWithRoot);
     if (provider && !(await provider.isAvailable())) {
+      const installCmd = this.getInstallCommand(detected.id);
       this.logger.warn(
         `Language server for ${detected.id} is not installed. ` +
-          `Please install it manually: npm install -g typescript-language-server`
+          (installCmd ? `Please install it manually: ${installCmd}` : 'Please install it manually.')
       );
       return null; // Return null if server is not available
     }
@@ -319,5 +329,19 @@ export class ConnectionPool {
         throw error;
       }
     }
+  }
+
+  private getInstallCommand(language: string): string | null {
+    const config = this.languageServers.get(language);
+    if (!config) return null;
+
+    if (config.npm) {
+      return `npm install -g ${config.npm}`;
+    } else if (config.pip) {
+      return `pip install ${config.pip}`;
+    }
+
+    // Return null if no package manager info is available
+    return null;
   }
 }

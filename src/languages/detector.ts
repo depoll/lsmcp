@@ -113,7 +113,12 @@ export class LanguageDetector {
   }
 
   detectLanguageByExtension(filePath: string): DetectedLanguage | null {
-    const extension = filePath.substring(filePath.lastIndexOf('.'));
+    // Extract file extension, handling both regular files and dotfiles
+    const basename = filePath.split('/').pop() || filePath;
+    const lastDotIndex = basename.lastIndexOf('.');
+
+    // If no dot or the dot is at the start (dotfile without extension), treat the whole basename as extension
+    const extension = lastDotIndex <= 0 ? basename : basename.substring(lastDotIndex);
 
     for (const [, config] of this.languageConfigs) {
       if (config.fileExtensions.includes(extension)) {

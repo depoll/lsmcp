@@ -171,6 +171,30 @@ describe('LanguageDetector', () => {
 
       expect(result?.rootPath).toBe('');
     });
+
+    it('should handle dotfiles without extensions correctly', () => {
+      // Dotfiles like .gitignore should be treated as having the whole filename as extension
+      const result = detector.detectLanguageByExtension('/test/.gitignore');
+
+      // Since .gitignore is not in our language configs, it should return null
+      expect(result).toBeNull();
+    });
+
+    it('should handle dotfiles with extensions correctly', () => {
+      // Files like .eslintrc.js should detect the .js extension
+      const result = detector.detectLanguageByExtension('/test/.eslintrc.js');
+
+      expect(result).not.toBeNull();
+      expect(result?.id).toBe('javascript');
+    });
+
+    it('should handle files with multiple dots correctly', () => {
+      // Files like file.test.ts should detect the .ts extension
+      const result = detector.detectLanguageByExtension('/test/file.test.ts');
+
+      expect(result).not.toBeNull();
+      expect(result?.id).toBe('typescript');
+    });
   });
 
   describe('getSupportedLanguages', () => {
