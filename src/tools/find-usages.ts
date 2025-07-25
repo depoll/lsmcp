@@ -15,6 +15,9 @@ import {
 } from 'vscode-languageserver-protocol';
 import { logger as rootLogger } from '../utils/logger.js';
 
+// Configuration constant for streaming batch size
+const DEFAULT_STREAM_BATCH_SIZE = 20;
+
 const logger = rootLogger.child({ module: 'find-usages-tool' });
 
 const positionSchema = z.object({
@@ -76,6 +79,11 @@ export interface StreamingFindUsagesResult {
   error?: string;
 }
 
+// Type-safe LSP connection interface
+export interface LSPConnection {
+  sendRequest<TResult = unknown>(method: string, params?: unknown): Promise<TResult>;
+}
+
 export class FindUsagesTool extends BatchableTool<FindUsagesParams, FindUsagesResult> {
   name = 'findUsages';
   description = 'Find all references or call hierarchy for a symbol';
@@ -86,11 +94,39 @@ export class FindUsagesTool extends BatchableTool<FindUsagesParams, FindUsagesRe
   }
 
   async execute(params: FindUsagesParams): Promise<FindUsagesResult> {
-    if (params.type === 'references') {
-      const references = await this.findReferences(params);
-      return { references, total: references.length };
+    // Validate parameters
+    const validatedParams = this.validateParams(params);
+
+    if (validatedParams.type === 'references') {
+      if (validatedParams.batch && validatedParams.batch.length > 0) {
+        // Process batch requests and deduplicate results
+        const allReferences: ReferenceResult[] = [];
+        const seen = new Set<string>();
+
+        for (const batchItem of validatedParams.batch) {
+          const batchParams = {
+            ...validatedParams,
+            uri: batchItem.uri,
+            position: batchItem.position,
+          };
+          const references = await this.findReferences(batchParams);
+
+          for (const ref of references) {
+            const key = `${ref.uri}:${ref.range.start.line}:${ref.range.start.character}`;
+            if (!seen.has(key)) {
+              seen.add(key);
+              allReferences.push(ref);
+            }
+          }
+        }
+
+        return { references: allReferences, total: allReferences.length };
+      } else {
+        const references = await this.findReferences(validatedParams);
+        return { references, total: references.length };
+      }
     } else {
-      const hierarchy = await this.findCallHierarchy(params);
+      const hierarchy = await this.findCallHierarchy(validatedParams);
       return { hierarchy };
     }
   }
@@ -106,6 +142,10 @@ export class FindUsagesTool extends BatchableTool<FindUsagesParams, FindUsagesRe
   private async findReferences(params: FindUsagesParams): Promise<ReferenceResult[]> {
     const connection = await this.clientManager.getForFile(params.uri, 'auto');
 
+    if (!connection) {
+      throw new Error(`No language server available for ${params.uri}`);
+    }
+
     const referenceParams: ReferenceParams = {
       textDocument: { uri: params.uri },
       position: params.position,
@@ -113,10 +153,6 @@ export class FindUsagesTool extends BatchableTool<FindUsagesParams, FindUsagesRe
     };
 
     logger.info('Finding references', { uri: params.uri, position: params.position });
-
-    if (!connection) {
-      throw new Error(`No language server available for ${params.uri}`);
-    }
 
     try {
       const locations = await connection.sendRequest<Location[]>(
@@ -152,16 +188,16 @@ export class FindUsagesTool extends BatchableTool<FindUsagesParams, FindUsagesRe
   ): Promise<CallHierarchyResult | undefined> {
     const connection = await this.clientManager.getForFile(params.uri, 'auto');
 
+    if (!connection) {
+      throw new Error(`No language server available for ${params.uri}`);
+    }
+
     const prepareParams: CallHierarchyPrepareParams = {
       textDocument: { uri: params.uri },
       position: params.position,
     };
 
     logger.info('Preparing call hierarchy', { uri: params.uri, position: params.position });
-
-    if (!connection) {
-      throw new Error(`No language server available for ${params.uri}`);
-    }
 
     try {
       // First, prepare the call hierarchy
@@ -205,7 +241,7 @@ export class FindUsagesTool extends BatchableTool<FindUsagesParams, FindUsagesRe
   }
 
   private async getIncomingCalls(
-    connection: { sendRequest: (method: string, params: unknown) => Promise<unknown> },
+    connection: LSPConnection,
     item: CallHierarchyItem,
     maxDepth: number,
     currentDepth = 0,
@@ -224,10 +260,10 @@ export class FindUsagesTool extends BatchableTool<FindUsagesParams, FindUsagesRe
     const params: CallHierarchyIncomingCallsParams = { item };
 
     try {
-      const incomingCalls = (await connection.sendRequest(
+      const incomingCalls = await connection.sendRequest<CallHierarchyIncomingCall[]>(
         'callHierarchy/incomingCalls',
         params
-      )) as CallHierarchyIncomingCall[];
+      );
 
       const results: CallHierarchyResult[] = [];
 
@@ -262,7 +298,7 @@ export class FindUsagesTool extends BatchableTool<FindUsagesParams, FindUsagesRe
   }
 
   private async getOutgoingCalls(
-    connection: { sendRequest: (method: string, params: unknown) => Promise<unknown> },
+    connection: LSPConnection,
     item: CallHierarchyItem,
     maxDepth: number,
     currentDepth = 0,
@@ -281,10 +317,10 @@ export class FindUsagesTool extends BatchableTool<FindUsagesParams, FindUsagesRe
     const params: CallHierarchyOutgoingCallsParams = { item };
 
     try {
-      const outgoingCalls = (await connection.sendRequest(
+      const outgoingCalls = await connection.sendRequest<CallHierarchyOutgoingCall[]>(
         'callHierarchy/outgoingCalls',
         params
-      )) as CallHierarchyOutgoingCall[];
+      );
 
       const results: CallHierarchyResult[] = [];
 
@@ -343,11 +379,10 @@ export class FindUsagesTool extends BatchableTool<FindUsagesParams, FindUsagesRe
         context: { includeDeclaration: params.includeDeclaration },
       };
 
-      // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
-      const locations = (await connection.sendRequest(
+      const locations = await connection.sendRequest<Location[]>(
         'textDocument/references',
         referenceParams
-      )) as Location[];
+      );
 
       if (!locations || locations.length === 0) {
         yield {
@@ -359,7 +394,7 @@ export class FindUsagesTool extends BatchableTool<FindUsagesParams, FindUsagesRe
       }
 
       const total = Math.min(locations.length, params.maxResults);
-      const BATCH_SIZE = 20;
+      const BATCH_SIZE = DEFAULT_STREAM_BATCH_SIZE;
 
       for (let i = 0; i < total; i += BATCH_SIZE) {
         const batch = locations.slice(i, Math.min(i + BATCH_SIZE, total));
@@ -430,8 +465,27 @@ export class FindUsagesTool extends BatchableTool<FindUsagesParams, FindUsagesRe
     }
   }
 
+  /**
+   * Classify the usage type of a reference location.
+   *
+   * Current implementation provides basic classification:
+   * - 'declaration': If the location matches the original query position
+   * - 'read': Default for all other references
+   *
+   * Limitations:
+   * - Does not distinguish between read/write operations
+   * - Does not identify function calls vs variable references
+   * - More sophisticated classification would require:
+   *   - Parsing the code at each location
+   *   - Using LSP semantic tokens (if available)
+   *   - Analyzing the surrounding context
+   *
+   * @param params The original find usages parameters
+   * @param location The reference location to classify
+   * @returns The usage classification
+   */
   private classifyUsage(params: FindUsagesParams, location: Location): ReferenceResult['kind'] {
-    // Simple classification based on location
+    // Check if this is the original declaration/definition position
     if (
       location.uri === params.uri &&
       location.range.start.line === params.position.line &&
@@ -439,25 +493,9 @@ export class FindUsagesTool extends BatchableTool<FindUsagesParams, FindUsagesRe
     ) {
       return 'declaration';
     }
-    // More sophisticated classification would require parsing the code
+
+    // Default to 'read' for all other references
+    // This is a conservative choice that works for most use cases
     return 'read';
-  }
-
-  async executeBatch(items: FindUsagesParams[]): Promise<FindUsagesResult[]> {
-    this.logger.info({ count: items.length }, 'Executing find usages batch operation');
-
-    const results = await Promise.allSettled(items.map((item) => this.execute(item)));
-
-    return results.map((result, index) => {
-      if (result.status === 'fulfilled') {
-        return result.value;
-      } else {
-        this.logger.error(
-          { error: result.reason as Error, item: items[index] },
-          'Find usages batch item failed'
-        );
-        throw result.reason as Error;
-      }
-    });
   }
 }
