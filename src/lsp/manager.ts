@@ -83,6 +83,11 @@ export class ConnectionPool {
     this.logger.info(`Registered language server for ${language}`);
   }
 
+  /**
+   * Gets an LSP client for the specified language and workspace.
+   * Throws an error if the language server is not registered or not available.
+   * For a more lenient method that returns null instead of throwing, use getForFile().
+   */
   async get(language: string, workspace: string): Promise<LSPClient> {
     const key = `${language}:${workspace}`;
     const existing = this.connections.get(key);
@@ -105,14 +110,16 @@ export class ConnectionPool {
       const detected = await this.languageDetector.detectLanguage(workspace);
       if (detected) {
         language = detected.id;
-        config = {
-          command: detected.serverCommand[0] || '',
-          args: detected.serverCommand.slice(1),
-        };
 
-        if (!config.command) {
+        // Validate serverCommand array before accessing
+        if (!detected.serverCommand || detected.serverCommand.length === 0) {
           throw new Error(`No server command configured for language: ${language}`);
         }
+
+        config = {
+          command: detected.serverCommand[0]!,
+          args: detected.serverCommand.slice(1),
+        };
 
         // Check if server is available
         const provider = createLanguageServerProvider(detected);
@@ -280,6 +287,11 @@ export class ConnectionPool {
     return { ...DEFAULT_SERVERS };
   }
 
+  /**
+   * Gets an LSP client for a specific file path by detecting its language.
+   * Returns null if the language cannot be detected or if the server is not available.
+   * This method is more lenient than get() and will not throw errors.
+   */
   async getForFile(filePath: string, workspace: string): Promise<LSPClient | null> {
     // Try to detect language from file extension
     const detected = this.languageDetector.detectLanguageByExtension(filePath);

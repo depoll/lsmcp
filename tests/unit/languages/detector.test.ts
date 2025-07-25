@@ -107,6 +107,44 @@ describe('LanguageDetector', () => {
       expect(result?.id).toBe('javascript');
     });
 
+    it('should detect TypeScript project by @types packages', async () => {
+      mockExistsSync.mockImplementation((path) => {
+        return path.toString().endsWith('package.json');
+      });
+      mockReadFile.mockResolvedValue(
+        JSON.stringify({
+          devDependencies: {
+            '@types/express': '^4.0.0',
+            '@types/jest': '^29.0.0',
+          },
+        })
+      );
+
+      const result = await detector.detectLanguage('/test/project');
+
+      expect(result).not.toBeNull();
+      expect(result?.id).toBe('typescript');
+    });
+
+    it('should detect TypeScript project by TypeScript tools', async () => {
+      mockExistsSync.mockImplementation((path) => {
+        return path.toString().endsWith('package.json');
+      });
+      mockReadFile.mockResolvedValue(
+        JSON.stringify({
+          devDependencies: {
+            'ts-node': '^10.0.0',
+            'ts-jest': '^29.0.0',
+          },
+        })
+      );
+
+      const result = await detector.detectLanguage('/test/project');
+
+      expect(result).not.toBeNull();
+      expect(result?.id).toBe('typescript');
+    });
+
     it('should return null when no language is detected', async () => {
       mockExistsSync.mockReturnValue(false);
 
@@ -173,10 +211,9 @@ describe('LanguageDetector', () => {
     });
 
     it('should handle dotfiles without extensions correctly', () => {
-      // Dotfiles like .gitignore should be treated as having the whole filename as extension
+      // Dotfiles like .gitignore have no extension and should return null
       const result = detector.detectLanguageByExtension('/test/.gitignore');
 
-      // Since .gitignore is not in our language configs, it should return null
       expect(result).toBeNull();
     });
 

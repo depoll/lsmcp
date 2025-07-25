@@ -1,6 +1,6 @@
 import { existsSync } from 'fs';
 import { readFile } from 'fs/promises';
-import { join } from 'path';
+import { join, extname } from 'path';
 import { logger } from '../utils/logger.js';
 
 export interface DetectedLanguage {
@@ -93,8 +93,18 @@ export class LanguageDetector {
           ...(packageJson.devDependencies || {}),
         };
 
-        if ('typescript' in allDeps || '@types/node' in allDeps) {
-          logger.info({ rootPath }, 'Detected TypeScript project (TypeScript in package.json)');
+        // Check for TypeScript indicators
+        const hasTypeScriptDep = 'typescript' in allDeps;
+        const hasTypesPackages = Object.keys(allDeps).some((dep) => dep.startsWith('@types/'));
+        const hasTsRelatedTools = ['ts-node', 'tsx', 'ts-jest', '@swc/core', 'esbuild'].some(
+          (tool) => tool in allDeps
+        );
+
+        if (hasTypeScriptDep || hasTypesPackages || hasTsRelatedTools) {
+          logger.info(
+            { rootPath },
+            'Detected TypeScript project (TypeScript indicators in package.json)'
+          );
           const config = this.languageConfigs.get('typescript')!;
           return { ...config, rootPath };
         }
@@ -113,12 +123,13 @@ export class LanguageDetector {
   }
 
   detectLanguageByExtension(filePath: string): DetectedLanguage | null {
-    // Extract file extension, handling both regular files and dotfiles
-    const basename = filePath.split('/').pop() || filePath;
-    const lastDotIndex = basename.lastIndexOf('.');
+    // Use Node's path.extname for consistent extension extraction
+    const extension = extname(filePath);
 
-    // If no dot or the dot is at the start (dotfile without extension), treat the whole basename as extension
-    const extension = lastDotIndex <= 0 ? basename : basename.substring(lastDotIndex);
+    // No extension found (includes dotfiles without extensions like .gitignore)
+    if (!extension) {
+      return null;
+    }
 
     for (const [, config] of this.languageConfigs) {
       if (config.fileExtensions.includes(extension)) {
