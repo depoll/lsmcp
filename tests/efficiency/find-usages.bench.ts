@@ -5,7 +5,7 @@ import { ConnectionPool } from '../../src/lsp/index.js';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { writeFile, mkdir, rm } from 'fs/promises';
-import type { FindUsagesParams } from '../../src/tools/find-usages.js';
+import type { FindUsagesParams, StreamingFindUsagesResult } from '../../src/tools/find-usages.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -333,7 +333,7 @@ describe('AuthService', () => {
     const fileUri = `file://${join(testDir, 'src/models/User.ts')}`;
     try {
       await connectionPool.getForFile(fileUri, 'typescript');
-    } catch (error) {
+    } catch {
       console.log('TypeScript language server not available, skipping efficiency tests');
     }
 
@@ -449,7 +449,7 @@ describe('AuthService', () => {
     expect(result.hierarchy).toBeDefined();
 
     // Count total calls in hierarchy
-    const countCalls = (hierarchy: any): number => {
+    const countCalls = (hierarchy: { calls?: { calls?: unknown }[] }): number => {
       let count = 1;
       if (hierarchy.calls) {
         for (const call of hierarchy.calls) {
@@ -600,7 +600,7 @@ describe('AuthService', () => {
       includeDeclaration: true,
     });
 
-    const chunks: any[] = [];
+    const chunks: StreamingFindUsagesResult[] = [];
     let progressUpdates = 0;
 
     for await (const chunk of tool.stream(params)) {

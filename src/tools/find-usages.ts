@@ -343,10 +343,10 @@ export class FindUsagesTool extends BatchableTool<FindUsagesParams, FindUsagesRe
         context: { includeDeclaration: params.includeDeclaration },
       };
 
-      const locations = (await connection.sendRequest(
+      const locations = await connection.sendRequest(
         'textDocument/references',
         referenceParams
-      )) as Location[];
+      ) as Location[];
 
       if (!locations || locations.length === 0) {
         yield {

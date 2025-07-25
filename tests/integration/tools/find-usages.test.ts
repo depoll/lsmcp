@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from '@jest/globals';
 import { FindUsagesTool } from '../../../src/tools/find-usages.js';
 import { ConnectionPool } from '../../../src/lsp/index.js';
-import { TypeScriptLanguageProvider } from '../../../src/lsp/languages/typescript-provider.js';
+// import { TypeScriptLanguageProvider } from '../../../src/lsp/languages/typescript-provider.js';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { writeFile, mkdir, rm } from 'fs/promises';
@@ -17,7 +17,7 @@ describe('FindUsagesTool Integration', () => {
   let tool: FindUsagesTool;
   let connectionPool: ConnectionPool;
   let testDir: string;
-  let tsProvider: TypeScriptLanguageProvider;
+  // let tsProvider: TypeScriptLanguageProvider;
 
   const createFindUsagesParams = (overrides: Partial<FindUsagesParams> = {}): FindUsagesParams => ({
     uri: `file://${testDir}/test.ts`,
@@ -129,10 +129,6 @@ export function ackermann(m: number, n: number): number {
         2
       )
     );
-
-    // Initialize TypeScript provider
-    tsProvider = new TypeScriptLanguageProvider();
-    await tsProvider.ensureInstalled();
 
     // Initialize connection pool
     connectionPool = new ConnectionPool({

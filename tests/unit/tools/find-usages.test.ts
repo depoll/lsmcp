@@ -39,7 +39,7 @@ describe('FindUsagesTool', () => {
       disposeAll: jest.fn(),
       getActiveConnections: jest.fn().mockReturnValue([]),
       healthCheck: jest.fn(),
-    } as jest.Mocked<ConnectionPool>;
+    } as unknown as jest.Mocked<ConnectionPool>;
 
     tool = new FindUsagesTool(mockPool);
   });
@@ -84,7 +84,7 @@ describe('FindUsagesTool', () => {
 
       const result = await tool.execute(params);
 
-      expect(mockPool.getConnection).toHaveBeenCalledWith('file:///test.ts');
+      expect(mockPool.getForFile).toHaveBeenCalledWith('file:///test.ts', 'auto');
       expect(mockConnection.sendRequest).toHaveBeenCalledWith('textDocument/references', {
         textDocument: { uri: 'file:///test.ts' },
         position: { line: 10, character: 5 },
@@ -368,7 +368,7 @@ describe('FindUsagesTool', () => {
 
       const result = await tool.execute(params);
 
-      expect(mockPool.getConnection).toHaveBeenCalledTimes(2);
+      expect(mockPool.getForFile).toHaveBeenCalledTimes(2);
       expect(result.references).toHaveLength(2);
       expect(result.total).toBe(2);
     });
@@ -526,7 +526,7 @@ describe('FindUsagesTool', () => {
         type: 'references',
       });
 
-      mockPool.getConnection.mockRejectedValueOnce(new Error('Connection failed'));
+      mockPool.getForFile.mockRejectedValueOnce(new Error('Connection failed'));
 
       await expect(tool.execute(params)).rejects.toThrow('Connection failed');
     });
