@@ -11,4 +11,8 @@ export type { BatchToolRequest, StreamingToolResponse } from './base.js';
 export type { NavigateParams, NavigateResult } from './navigate.js';
 export type { CodeIntelligenceParams, CodeIntelligenceResult } from './codeIntelligence.js';
 export type { SymbolSearchParams, SymbolSearchResult } from './symbolSearch.js';
-export type { FindUsagesParams, FindUsagesResult, StreamingFindUsagesResult } from './find-usages.js';
+export type {
+  FindUsagesParams,
+  FindUsagesResult,
+  StreamingFindUsagesResult,
+} from './find-usages.js';

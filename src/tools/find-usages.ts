@@ -1,9 +1,8 @@
 import { z } from 'zod';
 import { BatchableTool, StreamingTool } from './base.js';
-import { ConnectionPool } from '../lsp/connection-pool.js';
+import { ConnectionPool } from '../lsp/index.js';
 import {
   Location,
-  Position,
   Range,
   CallHierarchyItem,
   CallHierarchyIncomingCall,
@@ -14,7 +13,6 @@ import {
   CallHierarchyOutgoingCallsParams,
   SymbolKind,
 } from 'vscode-languageserver-protocol';
-import { TextDocumentPositionParams } from 'vscode-languageserver-protocol';
 import { logger as rootLogger } from '../utils/logger.js';
 
 const logger = rootLogger.child({ module: 'find-usages-tool' });
@@ -33,7 +31,7 @@ export const findUsagesParamsSchema = z.object({
   uri: z.string().url(),
   position: positionSchema,
   batch: z.array(batchItemSchema).optional(),
-  type: z.enum(['references', 'callHierarchy']).default('references'),
+  type: z.enum(['references', 'callHierarchy']),
   direction: z.enum(['incoming', 'outgoing']).optional().describe('For call hierarchy only'),
   maxResults: z.number().positive().default(1000),
   maxDepth: z.number().positive().max(10).default(3).describe('For call hierarchy only'),
@@ -78,28 +76,29 @@ export interface StreamingFindUsagesResult {
   error?: string;
 }
 
-export class FindUsagesTool extends BatchableTool<FindUsagesParams, FindUsagesResult> implements StreamingTool<FindUsagesParams, StreamingFindUsagesResult> {
+export class FindUsagesTool
+  extends BatchableTool<FindUsagesParams, FindUsagesResult>
+  implements StreamingTool<FindUsagesParams, StreamingFindUsagesResult>
+{
   name = 'findUsages';
   description = 'Find all references or call hierarchy for a symbol';
   inputSchema = findUsagesParamsSchema;
-  
+
   constructor(private connectionPool: ConnectionPool) {
-    super();
+    super(findUsagesParamsSchema);
   }
 
   async execute(params: FindUsagesParams): Promise<FindUsagesResult> {
-    // Validate parameters first
-    const validated = this.validateParams(params);
-    
-    if (validated.batch) {
-      return this.executeBatch(validated);
+
+    if (params.batch) {
+      return this.executeBatch(params);
     }
 
-    if (validated.type === 'references') {
-      const references = await this.findReferences(validated);
+    if (params.type === 'references') {
+      const references = await this.findReferences(params);
       return { references, total: references.length };
     } else {
-      const hierarchy = await this.findCallHierarchy(validated);
+      const hierarchy = await this.findCallHierarchy(params);
       return { hierarchy };
     }
   }
@@ -113,8 +112,8 @@ export class FindUsagesTool extends BatchableTool<FindUsagesParams, FindUsagesRe
   }
 
   private async findReferences(params: FindUsagesParams): Promise<ReferenceResult[]> {
-    const connection = await this.connectionPool.getConnection(params.uri);
-    
+    const connection = await this.connectionPool.getForFile(params.uri);
+
     const referenceParams: ReferenceParams = {
       textDocument: { uri: params.uri },
       position: params.position,
@@ -134,25 +133,15 @@ export class FindUsagesTool extends BatchableTool<FindUsagesParams, FindUsagesRe
         return [];
       }
 
-      // Group by file and get preview text
+      // Convert locations to references
       const references: ReferenceResult[] = [];
-      const fileGroups = new Map<string, Location[]>();
 
       for (const location of locations.slice(0, params.maxResults)) {
-        const existing = fileGroups.get(location.uri) || [];
-        existing.push(location);
-        fileGroups.set(location.uri, existing);
-      }
-
-      // Process each file
-      for (const [uri, locs] of fileGroups) {
-        for (const loc of locs) {
-          references.push({
-            uri: loc.uri,
-            range: loc.range,
-            kind: this.classifyUsage(params, loc),
-          });
-        }
+        references.push({
+          uri: location.uri,
+          range: location.range,
+          kind: this.classifyUsage(params, location),
+        });
       }
 
       return references;
@@ -162,9 +151,11 @@ export class FindUsagesTool extends BatchableTool<FindUsagesParams, FindUsagesRe
     }
   }
 
-  private async findCallHierarchy(params: FindUsagesParams): Promise<CallHierarchyResult | undefined> {
-    const connection = await this.connectionPool.getConnection(params.uri);
-    
+  private async findCallHierarchy(
+    params: FindUsagesParams
+  ): Promise<CallHierarchyResult | undefined> {
+    const connection = await this.connectionPool.getForFile(params.uri);
+
     const prepareParams: CallHierarchyPrepareParams = {
       textDocument: { uri: params.uri },
       position: params.position,
@@ -213,8 +204,8 @@ export class FindUsagesTool extends BatchableTool<FindUsagesParams, FindUsagesRe
     connection: any,
     item: CallHierarchyItem,
     maxDepth: number,
-    currentDepth: number = 0,
-    visited: Set<string> = new Set()
+    currentDepth = 0,
+    visited = new Set<string>()
   ): Promise<CallHierarchyResult[]> {
     if (currentDepth >= maxDepth) {
       return [];
@@ -270,8 +261,8 @@ export class FindUsagesTool extends BatchableTool<FindUsagesParams, FindUsagesRe
     connection: any,
     item: CallHierarchyItem,
     maxDepth: number,
-    currentDepth: number = 0,
-    visited: Set<string> = new Set()
+    currentDepth = 0,
+    visited = new Set<string>()
   ): Promise<CallHierarchyResult[]> {
     if (currentDepth >= maxDepth) {
       return [];
@@ -323,15 +314,17 @@ export class FindUsagesTool extends BatchableTool<FindUsagesParams, FindUsagesRe
     }
   }
 
-  private async *streamReferences(params: FindUsagesParams): AsyncGenerator<StreamingFindUsagesResult> {
+  private async *streamReferences(
+    params: FindUsagesParams
+  ): AsyncGenerator<StreamingFindUsagesResult> {
     yield {
       type: 'progress',
       progress: { message: 'Finding references...' },
     };
 
     try {
-      const connection = await this.connectionPool.getConnection(params.uri);
-      
+      const connection = await this.connectionPool.getForFile(params.uri);
+
       const referenceParams: ReferenceParams = {
         textDocument: { uri: params.uri },
         position: params.position,
@@ -373,13 +366,13 @@ export class FindUsagesTool extends BatchableTool<FindUsagesParams, FindUsagesRe
           progress: {
             current: Math.min(i + BATCH_SIZE, total),
             total,
-            percentage: Math.round(((Math.min(i + BATCH_SIZE, total)) / total) * 100),
+            percentage: Math.round((Math.min(i + BATCH_SIZE, total) / total) * 100),
             message: `Found ${Math.min(i + BATCH_SIZE, total)} of ${total} references`,
           },
         };
 
         // Allow other operations
-        await new Promise(resolve => setImmediate(resolve));
+        await new Promise((resolve) => setImmediate(resolve));
       }
 
       yield {
@@ -394,7 +387,9 @@ export class FindUsagesTool extends BatchableTool<FindUsagesParams, FindUsagesRe
     }
   }
 
-  private async *streamCallHierarchy(params: FindUsagesParams): AsyncGenerator<StreamingFindUsagesResult> {
+  private async *streamCallHierarchy(
+    params: FindUsagesParams
+  ): AsyncGenerator<StreamingFindUsagesResult> {
     yield {
       type: 'progress',
       progress: { message: `Finding ${params.direction} calls...` },
@@ -402,7 +397,7 @@ export class FindUsagesTool extends BatchableTool<FindUsagesParams, FindUsagesRe
 
     try {
       const hierarchy = await this.findCallHierarchy(params);
-      
+
       if (hierarchy) {
         yield {
           type: 'complete',
@@ -441,7 +436,7 @@ export class FindUsagesTool extends BatchableTool<FindUsagesParams, FindUsagesRe
     }
 
     const allReferences: ReferenceResult[] = [];
-    
+
     // Process batch items in parallel
     const promises = params.batch.map(async (item) => {
       const singleParams: FindUsagesParams = {
@@ -450,13 +445,13 @@ export class FindUsagesTool extends BatchableTool<FindUsagesParams, FindUsagesRe
         position: item.position,
         batch: undefined,
       };
-      
+
       const result = await this.execute(singleParams);
       return result.references || [];
     });
 
     const results = await Promise.all(promises);
-    
+
     // Flatten and deduplicate
     for (const refs of results) {
       allReferences.push(...refs);
@@ -464,7 +459,7 @@ export class FindUsagesTool extends BatchableTool<FindUsagesParams, FindUsagesRe
 
     // Deduplicate by uri and range
     const seen = new Set<string>();
-    const unique = allReferences.filter(ref => {
+    const unique = allReferences.filter((ref) => {
       const key = `${ref.uri}:${ref.range.start.line}:${ref.range.start.character}:${ref.range.end.line}:${ref.range.end.character}`;
       if (seen.has(key)) {
         return false;
@@ -478,7 +473,7 @@ export class FindUsagesTool extends BatchableTool<FindUsagesParams, FindUsagesRe
       // Same file first
       if (a.uri === params.uri && b.uri !== params.uri) return -1;
       if (a.uri !== params.uri && b.uri === params.uri) return 1;
-      
+
       // Then by line number
       return a.range.start.line - b.range.start.line;
     });

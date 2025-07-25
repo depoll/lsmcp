@@ -1,13 +1,33 @@
 import { describe, it, expect, jest, beforeEach, afterEach } from '@jest/globals';
 import { FindUsagesTool } from '../../../src/tools/find-usages.js';
-import { ConnectionPool } from '../../../src/lsp/connection-pool.js';
-import { Location, CallHierarchyItem, CallHierarchyIncomingCall, CallHierarchyOutgoingCall, SymbolKind } from 'vscode-languageserver-protocol';
-import type { FindUsagesParams, FindUsagesResult, StreamingFindUsagesResult } from '../../../src/tools/find-usages.js';
+import { ConnectionPool } from '../../../src/lsp/index.js';
+import {
+  Location,
+  CallHierarchyItem,
+  CallHierarchyIncomingCall,
+  CallHierarchyOutgoingCall,
+  SymbolKind,
+} from 'vscode-languageserver-protocol';
+import type {
+  FindUsagesParams,
+  FindUsagesResult,
+  StreamingFindUsagesResult,
+} from '../../../src/tools/find-usages.js';
 
 describe('FindUsagesTool', () => {
   let tool: FindUsagesTool;
   let mockPool: jest.Mocked<ConnectionPool>;
   let mockConnection: any;
+
+  const createFindUsagesParams = (overrides: Partial<FindUsagesParams> = {}): FindUsagesParams => ({
+    uri: 'file:///test.ts',
+    position: { line: 0, character: 0 },
+    type: 'references' as const,
+    maxResults: 1000,
+    maxDepth: 3,
+    includeDeclaration: true,
+    ...overrides,
+  });
 
   beforeEach(() => {
     mockConnection = {
@@ -39,12 +59,11 @@ describe('FindUsagesTool', () => {
 
   describe('findReferences', () => {
     it('should find references for a symbol', async () => {
-      const params: FindUsagesParams = {
-        uri: 'file:///test.ts',
+      const params = createFindUsagesParams({
         position: { line: 10, character: 5 },
         type: 'references',
         includeDeclaration: true,
-      };
+      });
 
       const mockLocations: Location[] = [
         {
@@ -68,14 +87,11 @@ describe('FindUsagesTool', () => {
       const result = await tool.execute(params);
 
       expect(mockPool.getConnection).toHaveBeenCalledWith('file:///test.ts');
-      expect(mockConnection.sendRequest).toHaveBeenCalledWith(
-        'textDocument/references',
-        {
-          textDocument: { uri: 'file:///test.ts' },
-          position: { line: 10, character: 5 },
-          context: { includeDeclaration: true },
-        }
-      );
+      expect(mockConnection.sendRequest).toHaveBeenCalledWith('textDocument/references', {
+        textDocument: { uri: 'file:///test.ts' },
+        position: { line: 10, character: 5 },
+        context: { includeDeclaration: true },
+      });
 
       expect(result.references).toHaveLength(2);
       expect(result.total).toBe(2);
@@ -87,11 +103,10 @@ describe('FindUsagesTool', () => {
     });
 
     it('should handle empty references', async () => {
-      const params: FindUsagesParams = {
-        uri: 'file:///test.ts',
+      const params = createFindUsagesParams({
         position: { line: 10, character: 5 },
         type: 'references',
-      };
+      });
 
       mockConnection.sendRequest.mockResolvedValueOnce([]);
 
@@ -102,12 +117,11 @@ describe('FindUsagesTool', () => {
     });
 
     it('should respect maxResults limit', async () => {
-      const params: FindUsagesParams = {
-        uri: 'file:///test.ts',
+      const params = createFindUsagesParams({
         position: { line: 10, character: 5 },
         type: 'references',
         maxResults: 2,
-      };
+      });
 
       const mockLocations: Location[] = Array.from({ length: 5 }, (_, i) => ({
         uri: `file:///file${i}.ts`,
@@ -128,13 +142,12 @@ describe('FindUsagesTool', () => {
 
   describe('callHierarchy', () => {
     it('should find incoming calls', async () => {
-      const params: FindUsagesParams = {
-        uri: 'file:///test.ts',
+      const params = createFindUsagesParams({
         position: { line: 10, character: 5 },
         type: 'callHierarchy',
         direction: 'incoming',
         maxDepth: 2,
-      };
+      });
 
       const mockItem: CallHierarchyItem = {
         name: 'myFunction',
@@ -181,18 +194,14 @@ describe('FindUsagesTool', () => {
 
       const result = await tool.execute(params);
 
-      expect(mockConnection.sendRequest).toHaveBeenCalledWith(
-        'textDocument/prepareCallHierarchy',
-        {
-          textDocument: { uri: 'file:///test.ts' },
-          position: { line: 10, character: 5 },
-        }
-      );
+      expect(mockConnection.sendRequest).toHaveBeenCalledWith('textDocument/prepareCallHierarchy', {
+        textDocument: { uri: 'file:///test.ts' },
+        position: { line: 10, character: 5 },
+      });
 
-      expect(mockConnection.sendRequest).toHaveBeenCalledWith(
-        'callHierarchy/incomingCalls',
-        { item: mockItem }
-      );
+      expect(mockConnection.sendRequest).toHaveBeenCalledWith('callHierarchy/incomingCalls', {
+        item: mockItem,
+      });
 
       expect(result.hierarchy).toBeDefined();
       expect(result.hierarchy?.name).toBe('myFunction');
@@ -201,13 +210,12 @@ describe('FindUsagesTool', () => {
     });
 
     it('should find outgoing calls', async () => {
-      const params: FindUsagesParams = {
-        uri: 'file:///test.ts',
+      const params = createFindUsagesParams({
         position: { line: 10, character: 5 },
         type: 'callHierarchy',
         direction: 'outgoing',
         maxDepth: 1,
-      };
+      });
 
       const mockItem: CallHierarchyItem = {
         name: 'myFunction',
@@ -253,10 +261,9 @@ describe('FindUsagesTool', () => {
 
       const result = await tool.execute(params);
 
-      expect(mockConnection.sendRequest).toHaveBeenCalledWith(
-        'callHierarchy/outgoingCalls',
-        { item: mockItem }
-      );
+      expect(mockConnection.sendRequest).toHaveBeenCalledWith('callHierarchy/outgoingCalls', {
+        item: mockItem,
+      });
 
       expect(result.hierarchy).toBeDefined();
       expect(result.hierarchy?.calls).toHaveLength(1);
@@ -264,12 +271,11 @@ describe('FindUsagesTool', () => {
     });
 
     it('should handle no call hierarchy items', async () => {
-      const params: FindUsagesParams = {
-        uri: 'file:///test.ts',
+      const params = createFindUsagesParams({
         position: { line: 10, character: 5 },
         type: 'callHierarchy',
         direction: 'incoming',
-      };
+      });
 
       mockConnection.sendRequest.mockResolvedValueOnce([]); // prepareCallHierarchy
 
@@ -279,13 +285,12 @@ describe('FindUsagesTool', () => {
     });
 
     it('should avoid infinite recursion in call hierarchy', async () => {
-      const params: FindUsagesParams = {
-        uri: 'file:///test.ts',
+      const params = createFindUsagesParams({
         position: { line: 10, character: 5 },
         type: 'callHierarchy',
         direction: 'incoming',
         maxDepth: 5,
-      };
+      });
 
       const mockItem: CallHierarchyItem = {
         name: 'recursiveFunction',
@@ -330,15 +335,14 @@ describe('FindUsagesTool', () => {
 
   describe('batch processing', () => {
     it('should process batch requests', async () => {
-      const params: FindUsagesParams = {
-        uri: 'file:///test.ts',
+      const params = createFindUsagesParams({
         position: { line: 0, character: 0 },
         type: 'references',
         batch: [
           { uri: 'file:///test1.ts', position: { line: 10, character: 5 } },
           { uri: 'file:///test2.ts', position: { line: 20, character: 10 } },
         ],
-      };
+      });
 
       const mockLocations1: Location[] = [
         {
@@ -372,15 +376,14 @@ describe('FindUsagesTool', () => {
     });
 
     it('should deduplicate batch results', async () => {
-      const params: FindUsagesParams = {
-        uri: 'file:///test.ts',
+      const params = createFindUsagesParams({
         position: { line: 0, character: 0 },
         type: 'references',
         batch: [
           { uri: 'file:///test1.ts', position: { line: 10, character: 5 } },
           { uri: 'file:///test2.ts', position: { line: 20, character: 10 } },
         ],
-      };
+      });
 
       // Both return the same location
       const duplicateLocation: Location = {
@@ -404,11 +407,10 @@ describe('FindUsagesTool', () => {
 
   describe('streaming', () => {
     it('should stream references', async () => {
-      const params: FindUsagesParams = {
-        uri: 'file:///test.ts',
+      const params = createFindUsagesParams({
         position: { line: 10, character: 5 },
         type: 'references',
-      };
+      });
 
       const mockLocations: Location[] = Array.from({ length: 50 }, (_, i) => ({
         uri: `file:///file${i}.ts`,
@@ -430,9 +432,9 @@ describe('FindUsagesTool', () => {
       expect(results[0].progress?.message).toBe('Finding references...');
 
       // Should have batched partial results or just complete if results are small
-      const partialResults = results.filter(r => r.type === 'partial');
+      const partialResults = results.filter((r) => r.type === 'partial');
       const completeResult = results[results.length - 1];
-      
+
       // Either we have partial results or we went straight to complete
       if (partialResults.length === 0) {
         // Small result set, went straight to complete
@@ -446,12 +448,11 @@ describe('FindUsagesTool', () => {
     });
 
     it('should stream call hierarchy', async () => {
-      const params: FindUsagesParams = {
-        uri: 'file:///test.ts',
+      const params = createFindUsagesParams({
         position: { line: 10, character: 5 },
         type: 'callHierarchy',
         direction: 'incoming',
-      };
+      });
 
       const mockItem: CallHierarchyItem = {
         name: 'myFunction',
@@ -467,9 +468,7 @@ describe('FindUsagesTool', () => {
         },
       };
 
-      mockConnection.sendRequest
-        .mockResolvedValueOnce([mockItem])
-        .mockResolvedValueOnce([]); // No incoming calls
+      mockConnection.sendRequest.mockResolvedValueOnce([mockItem]).mockResolvedValueOnce([]); // No incoming calls
 
       const results: StreamingFindUsagesResult[] = [];
       for await (const result of tool.stream(params)) {
@@ -484,11 +483,10 @@ describe('FindUsagesTool', () => {
     });
 
     it('should handle streaming errors', async () => {
-      const params: FindUsagesParams = {
-        uri: 'file:///test.ts',
+      const params = createFindUsagesParams({
         position: { line: 10, character: 5 },
         type: 'references',
-      };
+      });
 
       mockConnection.sendRequest.mockRejectedValueOnce(new Error('LSP request failed'));
 
@@ -514,11 +512,10 @@ describe('FindUsagesTool', () => {
     });
 
     it('should handle LSP errors gracefully', async () => {
-      const params: FindUsagesParams = {
-        uri: 'file:///test.ts',
+      const params = createFindUsagesParams({
         position: { line: 10, character: 5 },
         type: 'references',
-      };
+      });
 
       mockConnection.sendRequest.mockRejectedValueOnce(new Error('LSP server error'));
 
@@ -526,11 +523,10 @@ describe('FindUsagesTool', () => {
     });
 
     it('should handle connection pool errors', async () => {
-      const params: FindUsagesParams = {
-        uri: 'file:///test.ts',
+      const params = createFindUsagesParams({
         position: { line: 10, character: 5 },
         type: 'references',
-      };
+      });
 
       mockPool.getConnection.mockRejectedValueOnce(new Error('Connection failed'));
 

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from '@jest/globals';
 import { FindUsagesTool } from '../../src/tools/find-usages.js';
-import { ConnectionPool } from '../../src/lsp/connection-pool.js';
+import { ConnectionPool } from '../../src/lsp/index.js';
 import { TypeScriptLanguageProvider } from '../../src/lsp/languages/typescript-provider.js';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
@@ -335,7 +335,7 @@ describe('AuthService', () => {
 
     // Print efficiency summary
     console.log('\n=== Find Usages Tool Efficiency Summary ===\n');
-    
+
     for (const comparison of comparisons) {
       console.log(`Scenario: ${comparison.scenario}`);
       console.log(`Context Reduction: ${comparison.improvement.contextReduction}%`);
@@ -344,9 +344,12 @@ describe('AuthService', () => {
       console.log('---');
     }
 
-    const avgContextReduction = comparisons.reduce((sum, c) => sum + c.improvement.contextReduction, 0) / comparisons.length;
-    const avgOperationReduction = comparisons.reduce((sum, c) => sum + c.improvement.operationReduction, 0) / comparisons.length;
-    
+    const avgContextReduction =
+      comparisons.reduce((sum, c) => sum + c.improvement.contextReduction, 0) / comparisons.length;
+    const avgOperationReduction =
+      comparisons.reduce((sum, c) => sum + c.improvement.operationReduction, 0) /
+      comparisons.length;
+
     console.log(`\nAverage Context Reduction: ${avgContextReduction.toFixed(1)}%`);
     console.log(`Average Operation Reduction: ${avgOperationReduction.toFixed(1)}%`);
   });
@@ -413,7 +416,9 @@ describe('AuthService', () => {
     comparisons.push(comparison);
 
     // Verify results include various types of references
-    const fileTypes = new Set(result.references!.map(ref => ref.uri.split('/').pop()!.split('.')[0]));
+    const fileTypes = new Set(
+      result.references!.map((ref) => ref.uri.split('/').pop()!.split('.')[0])
+    );
     expect(fileTypes.size).toBeGreaterThan(1); // References in multiple files
   }, 30000);
 
@@ -569,7 +574,7 @@ describe('AuthService', () => {
     // Verify deduplication worked
     const uniqueLocations = new Set(
       result.references!.map(
-        ref => `${ref.uri}:${ref.range.start.line}:${ref.range.start.character}`
+        (ref) => `${ref.uri}:${ref.range.start.line}:${ref.range.start.character}`
       )
     );
     expect(uniqueLocations.size).toBe(result.references!.length);
@@ -628,15 +633,18 @@ describe('AuthService', () => {
 
   it('should verify context reduction targets are met', () => {
     // Calculate average improvements
-    const avgContextReduction = comparisons.reduce((sum, c) => sum + c.improvement.contextReduction, 0) / comparisons.length;
-    const avgOperationReduction = comparisons.reduce((sum, c) => sum + c.improvement.operationReduction, 0) / comparisons.length;
-    
+    const avgContextReduction =
+      comparisons.reduce((sum, c) => sum + c.improvement.contextReduction, 0) / comparisons.length;
+    const avgOperationReduction =
+      comparisons.reduce((sum, c) => sum + c.improvement.operationReduction, 0) /
+      comparisons.length;
+
     // Verify we meet the 90% context reduction target from the issue
     expect(avgContextReduction).toBeGreaterThanOrEqual(90);
-    
+
     // Verify significant operation reduction
     expect(avgOperationReduction).toBeGreaterThanOrEqual(80);
-    
+
     // All scenarios should have perfect accuracy
     for (const comparison of comparisons) {
       expect(comparison.lspApproach.accuracy).toBe(1.0);

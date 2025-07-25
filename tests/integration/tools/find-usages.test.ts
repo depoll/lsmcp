@@ -1,11 +1,14 @@
 import { describe, it, expect, beforeAll, afterAll } from '@jest/globals';
 import { FindUsagesTool } from '../../../src/tools/find-usages.js';
-import { ConnectionPool } from '../../../src/lsp/connection-pool.js';
+import { ConnectionPool } from '../../../src/lsp/index.js';
 import { TypeScriptLanguageProvider } from '../../../src/lsp/languages/typescript-provider.js';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { writeFile, mkdir, rm } from 'fs/promises';
-import type { FindUsagesParams, StreamingFindUsagesResult } from '../../../src/tools/find-usages.js';
+import type {
+  FindUsagesParams,
+  StreamingFindUsagesResult,
+} from '../../../src/tools/find-usages.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -155,19 +158,15 @@ export function ackermann(m: number, n: number): number {
       expect(result.references!.length).toBeGreaterThan(0);
 
       // Should find references in both math.ts and app.ts
-      const fileUris = new Set(result.references!.map(ref => ref.uri));
+      const fileUris = new Set(result.references!.map((ref) => ref.uri));
       expect(fileUris.size).toBe(2);
 
       // Verify we found the declaration
-      const declaration = result.references!.find(
-        ref => ref.kind === 'declaration'
-      );
+      const declaration = result.references!.find((ref) => ref.kind === 'declaration');
       expect(declaration).toBeDefined();
 
       // Verify we found usage in app.ts
-      const appUsages = result.references!.filter(ref =>
-        ref.uri.endsWith('app.ts')
-      );
+      const appUsages = result.references!.filter((ref) => ref.uri.endsWith('app.ts'));
       expect(appUsages.length).toBeGreaterThan(0);
     }, 30000);
 
@@ -182,8 +181,8 @@ export function ackermann(m: number, n: number): number {
       const result = await tool.execute(params);
 
       // Should not include the declaration itself
-      const declaration = result.references!.find(ref =>
-        ref.uri.endsWith('math.ts') && ref.range.start.line === 0
+      const declaration = result.references!.find(
+        (ref) => ref.uri.endsWith('math.ts') && ref.range.start.line === 0
       );
       expect(declaration).toBeUndefined();
     }, 30000);
@@ -199,10 +198,10 @@ export function ackermann(m: number, n: number): number {
       const result = await tool.execute(params);
 
       expect(result.references).toBeDefined();
-      
+
       // Should find the class instantiation in app.ts
-      const instantiation = result.references!.find(ref =>
-        ref.uri.endsWith('app.ts') && ref.preview?.includes('new Calculator')
+      const instantiation = result.references!.find(
+        (ref) => ref.uri.endsWith('app.ts') && ref.preview?.includes('new Calculator')
       );
       expect(instantiation).toBeDefined();
     }, 30000);
@@ -240,7 +239,7 @@ export function ackermann(m: number, n: number): number {
       expect(result.hierarchy!.calls!.length).toBeGreaterThan(0);
 
       // Should find calls from calculate function and Calculator.add method
-      const callerNames = result.hierarchy!.calls!.map(call => call.name);
+      const callerNames = result.hierarchy!.calls!.map((call) => call.name);
       expect(callerNames).toContain('calculate');
     }, 30000);
 
@@ -260,7 +259,7 @@ export function ackermann(m: number, n: number): number {
       expect(result.hierarchy!.calls).toBeDefined();
 
       // Should find calls to add and multiply
-      const calleeNames = result.hierarchy!.calls!.map(call => call.name);
+      const calleeNames = result.hierarchy!.calls!.map((call) => call.name);
       expect(calleeNames).toContain('add');
       expect(calleeNames).toContain('multiply');
     }, 30000);
@@ -280,9 +279,7 @@ export function ackermann(m: number, n: number): number {
       expect(result.hierarchy!.name).toBe('factorial');
 
       // Should find the recursive call but not infinitely recurse
-      const recursiveCall = result.hierarchy!.calls!.find(
-        call => call.name === 'factorial'
-      );
+      const recursiveCall = result.hierarchy!.calls!.find((call) => call.name === 'factorial');
       expect(recursiveCall).toBeDefined();
 
       // The recursive call should not have more recursive calls (cycle detection)
@@ -313,12 +310,12 @@ export function ackermann(m: number, n: number): number {
       expect(result.references).toBeDefined();
 
       // Should find references for both functions
-      const uniqueUris = new Set(result.references!.map(ref => ref.uri));
+      const uniqueUris = new Set(result.references!.map((ref) => ref.uri));
       expect(uniqueUris.size).toBeGreaterThanOrEqual(2);
 
       // Should deduplicate if same location appears for both
       const locationKeys = result.references!.map(
-        ref => `${ref.uri}:${ref.range.start.line}:${ref.range.start.character}`
+        (ref) => `${ref.uri}:${ref.range.start.line}:${ref.range.start.character}`
       );
       const uniqueLocations = new Set(locationKeys);
       expect(uniqueLocations.size).toBe(locationKeys.length);
@@ -344,7 +341,7 @@ export function ackermann(m: number, n: number): number {
 
       // Should have at least one batch of results or complete message
       const hasPartialOrComplete = results.some(
-        r => r.type === 'partial' || r.type === 'complete'
+        (r) => r.type === 'partial' || r.type === 'complete'
       );
       expect(hasPartialOrComplete).toBe(true);
 
@@ -370,7 +367,7 @@ export function ackermann(m: number, n: number): number {
       expect(results[0].progress?.message).toContain('outgoing calls');
 
       // Should have complete message with data
-      const completeResult = results.find(r => r.type === 'complete');
+      const completeResult = results.find((r) => r.type === 'complete');
       expect(completeResult).toBeDefined();
       expect(completeResult!.data).toBeDefined();
     }, 30000);

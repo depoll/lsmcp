@@ -154,3 +154,7 @@ Every PR must include:
 
 - **Asynchronous Programming**:
   - async is better than sync in virtually any case that's got blocking I/O, etc.
+
+## Version Control and Branching Strategy
+
+- **New work that will ultimately become a PR should happen in a branch**
