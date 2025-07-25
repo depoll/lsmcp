@@ -449,11 +449,11 @@ describe('AuthService', () => {
     expect(result.hierarchy).toBeDefined();
 
     // Count total calls in hierarchy
-    const countCalls = (hierarchy: any): number => {
+    const countCalls = (hierarchy: { calls?: unknown[] }): number => {
       let count = 1;
       if (hierarchy.calls && Array.isArray(hierarchy.calls)) {
         for (const call of hierarchy.calls) {
-          count += countCalls(call);
+          count += countCalls(call as { calls?: unknown[] });
         }
       }
       return count;

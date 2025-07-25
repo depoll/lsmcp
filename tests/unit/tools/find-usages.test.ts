@@ -13,10 +13,14 @@ import type {
   StreamingFindUsagesResult,
 } from '../../../src/tools/find-usages.js';
 
+interface MockLSPClient {
+  sendRequest: jest.MockedFunction<(method: string, params?: unknown) => Promise<unknown>>;
+}
+
 describe('FindUsagesTool', () => {
   let tool: FindUsagesTool;
   let mockPool: jest.Mocked<ConnectionPool>;
-  let mockConnection: any;
+  let mockConnection: MockLSPClient;
 
   const createFindUsagesParams = (overrides: Partial<FindUsagesParams> = {}): FindUsagesParams => ({
     uri: 'file:///test.ts',
@@ -34,7 +38,7 @@ describe('FindUsagesTool', () => {
     };
 
     mockPool = {
-      getForFile: jest.fn<any, any>().mockResolvedValue(mockConnection),
+      getForFile: jest.fn().mockImplementation(() => Promise.resolve(mockConnection)),
       disposeConnection: jest.fn(),
       disposeAll: jest.fn(),
       getActiveConnections: jest.fn().mockReturnValue([]),
@@ -89,7 +93,9 @@ describe('FindUsagesTool', () => {
 
       const result = await tool.execute(params);
 
-      expect(mockPool.getForFile).toHaveBeenCalledWith('file:///test.ts', 'auto');
+      // eslint-disable-next-line @typescript-eslint/unbound-method
+      const getForFileMock = jest.mocked(mockPool.getForFile);
+      expect(getForFileMock).toHaveBeenCalledWith('file:///test.ts', 'auto');
       expect(mockConnection.sendRequest).toHaveBeenCalledWith('textDocument/references', {
         textDocument: { uri: 'file:///test.ts' },
         position: { line: 10, character: 5 },
@@ -98,9 +104,10 @@ describe('FindUsagesTool', () => {
 
       expect(result.references).toHaveLength(2);
       expect(result.total).toBe(2);
-      expect(result.references?.[0]).toMatchObject({
+      expect(result.references).toBeDefined();
+      expect(result.references![0]).toMatchObject({
         uri: 'file:///test.ts',
-        range: mockLocations[0].range,
+        range: mockLocations[0]!.range,
         kind: 'declaration',
       });
     });
@@ -207,9 +214,10 @@ describe('FindUsagesTool', () => {
       });
 
       expect(result.hierarchy).toBeDefined();
-      expect(result.hierarchy?.name).toBe('myFunction');
-      expect(result.hierarchy?.calls).toHaveLength(1);
-      expect(result.hierarchy?.calls?.[0].name).toBe('callerFunction');
+      expect(result.hierarchy).toBeDefined();
+      expect(result.hierarchy!.name).toBe('myFunction');
+      expect(result.hierarchy!.calls).toHaveLength(1);
+      expect(result.hierarchy!.calls![0]!.name).toBe('callerFunction');
     });
 
     it('should find outgoing calls', async () => {
@@ -269,8 +277,8 @@ describe('FindUsagesTool', () => {
       });
 
       expect(result.hierarchy).toBeDefined();
-      expect(result.hierarchy?.calls).toHaveLength(1);
-      expect(result.hierarchy?.calls?.[0].name).toBe('calledFunction');
+      expect(result.hierarchy!.calls).toHaveLength(1);
+      expect(result.hierarchy!.calls![0]!.name).toBe('calledFunction');
     });
 
     it('should handle no call hierarchy items', async () => {
@@ -330,9 +338,9 @@ describe('FindUsagesTool', () => {
 
       // Should not result in infinite recursion
       expect(result.hierarchy).toBeDefined();
-      expect(result.hierarchy?.calls).toHaveLength(1);
+      expect(result.hierarchy!.calls).toHaveLength(1);
       // The recursive call should be caught and not expanded further
-      expect(result.hierarchy?.calls?.[0].calls).toHaveLength(0);
+      expect(result.hierarchy!.calls![0]!.calls).toHaveLength(0);
     });
   });
 
@@ -373,7 +381,9 @@ describe('FindUsagesTool', () => {
 
       const result = await tool.execute(params);
 
-      expect(mockPool.getForFile).toHaveBeenCalledTimes(2);
+      // eslint-disable-next-line @typescript-eslint/unbound-method
+      const getForFileMock = jest.mocked(mockPool.getForFile);
+      expect(getForFileMock).toHaveBeenCalledTimes(2);
       expect(result.references).toHaveLength(2);
       expect(result.total).toBe(2);
     });
@@ -431,8 +441,8 @@ describe('FindUsagesTool', () => {
       }
 
       // Should have progress, partial results, and complete
-      expect(results[0].type).toBe('progress');
-      expect(results[0].progress?.message).toBe('Finding references...');
+      expect(results[0]!.type).toBe('progress');
+      expect(results[0]!.progress?.message).toBe('Finding references...');
 
       // Should have batched partial results or just complete if results are small
       const partialResults = results.filter((r) => r.type === 'partial');
@@ -441,12 +451,12 @@ describe('FindUsagesTool', () => {
       // Either we have partial results or we went straight to complete
       if (partialResults.length === 0) {
         // Small result set, went straight to complete
-        expect(completeResult.type).toBe('complete');
+        expect(completeResult!.type).toBe('complete');
       } else {
         // Large result set, had partial results
         expect(partialResults.length).toBeGreaterThan(0);
-        expect(completeResult.type).toBe('complete');
-        expect(completeResult.progress?.total).toBe(50);
+        expect(completeResult!.type).toBe('complete');
+        expect(completeResult!.progress?.total).toBe(50);
       }
     });
 
@@ -478,11 +488,11 @@ describe('FindUsagesTool', () => {
         results.push(result);
       }
 
-      expect(results[0].type).toBe('progress');
-      expect(results[0].progress?.message).toBe('Finding incoming calls...');
+      expect(results[0]!.type).toBe('progress');
+      expect(results[0]!.progress?.message).toBe('Finding incoming calls...');
 
-      expect(results[1].type).toBe('complete');
-      expect(results[1].data).toBeDefined();
+      expect(results[1]!.type).toBe('complete');
+      expect(results[1]!.data).toBeDefined();
     });
 
     it('should handle streaming errors', async () => {
@@ -499,8 +509,8 @@ describe('FindUsagesTool', () => {
       }
 
       const lastResult = results[results.length - 1];
-      expect(lastResult.type).toBe('complete');
-      expect(lastResult.error).toBe('LSP request failed');
+      expect(lastResult!.type).toBe('complete');
+      expect(lastResult!.error).toBe('LSP request failed');
     });
   });
 
