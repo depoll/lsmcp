@@ -15,7 +15,9 @@
     "lint": "eslint src tests --ext .ts",
     "type-check": "tsc --noEmit",
     "format": "prettier --write \"src/**/*.ts\" \"tests/**/*.ts\"",
-    "post-edit-check": "node scripts/hooks/post-edit-check.js"
+    "validate-setup": "node scripts/validate-setup.js",
+    "post-edit-check": "node scripts/hooks/post-edit-check.js",
+    "postinstall": "npm run validate-setup"
   },
   "repository": {
     "type": "git",
