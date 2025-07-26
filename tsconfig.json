@@ -1,9 +1,8 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "module": "ESNext",
+    "module": "ESNext", 
     "lib": ["ES2022"],
-    "types": ["node", "jest"],
     "moduleResolution": "node",
     "outDir": "./dist",
     "rootDir": "./",
