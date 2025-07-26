@@ -15,18 +15,23 @@ export class TypeScriptLanguageServerProvider implements LanguageServerProvider 
   constructor(public readonly language: DetectedLanguage) {}
 
   async isAvailable(): Promise<boolean> {
-    // Debug CI environment detection
-    logger.debug({
+    // Always check CI environment variables first
+    const isCI = process.env['CI'] === 'true' || process.env['GITHUB_ACTIONS'] === 'true';
+    
+    // Debug environment detection
+    logger.info({
       CI: process.env['CI'],
       GITHUB_ACTIONS: process.env['GITHUB_ACTIONS'],
-      NODE_ENV: process.env['NODE_ENV']
-    }, 'Environment variables check');
+      NODE_ENV: process.env['NODE_ENV'],
+      isCI,
+      platform: process.platform
+    }, 'TypeScript provider availability check');
 
-    // In CI environments, skip the availability check if the binary is in PATH
-    if (process.env['CI'] === 'true' || process.env['GITHUB_ACTIONS']) {
+    // In CI environments, use simplified availability check
+    if (isCI) {
       logger.info('Running in CI environment, using simplified availability check');
       try {
-        // Just check if the command exists in PATH using 'which' or 'where'
+        // Check if the command exists in PATH using 'which' or 'where'
         const whichCmd = process.platform === 'win32' ? 'where' : 'which';
         await this.executeCommand([whichCmd, 'typescript-language-server']);
         logger.info('TypeScript language server found in PATH (CI environment)');
