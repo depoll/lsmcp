@@ -39,18 +39,19 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.16.0",
     "@types/marked": "^5.0.2",
-    "@types/node": "^24.1.0",
     "marked": "^16.1.1",
     "pino": "^9.7.0",
     "tsx": "^4.20.3",
     "typescript": "^5.8.3",
     "vscode-languageclient": "^9.0.1",
-    "vscode-languageserver-protocol": "^3.17.5"
+    "vscode-languageserver-protocol": "^3.17.5",
+    "zod": "^3.23.8"
   },
   "devDependencies": {
     "@eslint/js": "^9.31.0",
     "@jest/globals": "^30.0.5",
     "@types/jest": "^30.0.0",
+    "@types/node": "^24.1.0",
     "@typescript-eslint/eslint-plugin": "^8.38.0",
     "@typescript-eslint/parser": "^8.38.0",
     "cross-env": "^7.0.3",
