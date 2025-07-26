@@ -103,10 +103,10 @@ export class FindUsagesTool extends BatchableTool<FindUsagesParams, FindUsagesRe
 
   /**
    * Execute find usages operation for a symbol at the given position.
-   * 
+   *
    * @param params - The find usages parameters including URI, position, and type
    * @returns Promise resolving to references or call hierarchy results
-   * 
+   *
    * @example
    * ```typescript
    * const result = await tool.execute({
@@ -496,16 +496,16 @@ export class FindUsagesTool extends BatchableTool<FindUsagesParams, FindUsagesRe
 
   /**
    * Extract workspace directory from a file URI with cross-platform support.
-   * 
+   *
    * @param uri - The file URI (e.g., 'file:///path/to/file.ts')
    * @returns The workspace directory path
-   * 
+   *
    * @example
    * ```typescript
    * extractWorkspaceDir('file:///home/user/project/src/file.ts')
    * // Returns: '/home/user/project/src'
-   * 
-   * extractWorkspaceDir('file:///C:/Users/user/project/src/file.ts')  
+   *
+   * extractWorkspaceDir('file:///C:/Users/user/project/src/file.ts')
    * // Returns: 'C:/Users/user/project/src'
    * ```
    */
@@ -513,25 +513,29 @@ export class FindUsagesTool extends BatchableTool<FindUsagesParams, FindUsagesRe
     try {
       // Parse the URI to handle encoded characters and validate format
       const parsed = new URL(uri);
-      
+
       if (parsed.protocol !== 'file:') {
         throw new Error(`Unsupported protocol: ${parsed.protocol}`);
       }
-      
+
       let filePath = parsed.pathname;
-      
+
       // Handle Windows paths (remove leading slash on Windows)
-      if (process.platform === 'win32' && filePath.startsWith('/') && filePath.match(/^\/[A-Za-z]:/)) {
+      if (
+        process.platform === 'win32' &&
+        filePath.startsWith('/') &&
+        filePath.match(/^\/[A-Za-z]:/)
+      ) {
         filePath = filePath.slice(1);
       }
-      
+
       // Extract directory (everything before the last slash)
       const lastSlash = filePath.lastIndexOf('/');
       if (lastSlash <= 0) {
         // If no slash or at root, return a sensible default
         return process.platform === 'win32' ? 'C:/' : '/';
       }
-      
+
       return filePath.substring(0, lastSlash);
     } catch (error) {
       logger.error({ uri, error }, 'Failed to extract workspace directory from URI');
