@@ -15,7 +15,7 @@ import {
 } from 'vscode-languageserver-protocol';
 import { logger as rootLogger } from '../utils/logger.js';
 
-// Configuration constant for streaming batch size
+// Configuration constants
 const DEFAULT_STREAM_BATCH_SIZE = 20;
 
 const logger = rootLogger.child({ module: 'find-usages-tool' });
@@ -79,6 +79,10 @@ export interface StreamingFindUsagesResult {
   error?: string;
 }
 
+export interface FindUsagesConfig {
+  streamBatchSize?: number;
+}
+
 // Type-safe LSP connection interface
 export interface LSPConnection {
   sendRequest<TResult = unknown>(method: string, params?: unknown): Promise<TResult>;
@@ -88,11 +92,33 @@ export class FindUsagesTool extends BatchableTool<FindUsagesParams, FindUsagesRe
   name = 'findUsages';
   description = 'Find all references or call hierarchy for a symbol';
   inputSchema = findUsagesParamsSchema;
+  private config: FindUsagesConfig;
 
-  constructor(connectionPool: ConnectionPool) {
+  constructor(connectionPool: ConnectionPool, config: FindUsagesConfig = {}) {
     super(connectionPool);
+    this.config = {
+      streamBatchSize: config.streamBatchSize ?? DEFAULT_STREAM_BATCH_SIZE,
+    };
   }
 
+  /**
+   * Execute find usages operation for a symbol at the given position.
+   * 
+   * @param params - The find usages parameters including URI, position, and type
+   * @returns Promise resolving to references or call hierarchy results
+   * 
+   * @example
+   * ```typescript
+   * const result = await tool.execute({
+   *   uri: 'file:///path/to/file.ts',
+   *   position: { line: 10, character: 5 },
+   *   type: 'references',
+   *   maxResults: 100,
+   *   maxDepth: 3,
+   *   includeDeclaration: true
+   * });
+   * ```
+   */
   async execute(params: FindUsagesParams): Promise<FindUsagesResult> {
     // Validate parameters
     const validatedParams = this.validateParams(params);
@@ -140,10 +166,7 @@ export class FindUsagesTool extends BatchableTool<FindUsagesParams, FindUsagesRe
   }
 
   private async findReferences(params: FindUsagesParams): Promise<ReferenceResult[]> {
-    // Extract workspace directory from file URI
-    const filePath = params.uri.startsWith('file://') ? params.uri.slice(7) : params.uri;
-    const workspaceDir = filePath.substring(0, filePath.lastIndexOf('/'));
-    
+    const workspaceDir = this.extractWorkspaceDir(params.uri);
     const connection = await this.clientManager.getForFile(params.uri, workspaceDir);
 
     if (!connection) {
@@ -190,10 +213,7 @@ export class FindUsagesTool extends BatchableTool<FindUsagesParams, FindUsagesRe
   private async findCallHierarchy(
     params: FindUsagesParams
   ): Promise<CallHierarchyResult | undefined> {
-    // Extract workspace directory from file URI
-    const filePath = params.uri.startsWith('file://') ? params.uri.slice(7) : params.uri;
-    const workspaceDir = filePath.substring(0, filePath.lastIndexOf('/'));
-    
+    const workspaceDir = this.extractWorkspaceDir(params.uri);
     const connection = await this.clientManager.getForFile(params.uri, workspaceDir);
 
     if (!connection) {
@@ -371,10 +391,7 @@ export class FindUsagesTool extends BatchableTool<FindUsagesParams, FindUsagesRe
     };
 
     try {
-      // Extract workspace directory from file URI
-      const filePath = params.uri.startsWith('file://') ? params.uri.slice(7) : params.uri;
-      const workspaceDir = filePath.substring(0, filePath.lastIndexOf('/'));
-      
+      const workspaceDir = this.extractWorkspaceDir(params.uri);
       const connection = await this.clientManager.getForFile(params.uri, workspaceDir);
 
       if (!connection) {
@@ -406,7 +423,7 @@ export class FindUsagesTool extends BatchableTool<FindUsagesParams, FindUsagesRe
       }
 
       const total = Math.min(locations.length, params.maxResults);
-      const BATCH_SIZE = DEFAULT_STREAM_BATCH_SIZE;
+      const BATCH_SIZE = this.config.streamBatchSize!;
 
       for (let i = 0; i < total; i += BATCH_SIZE) {
         const batch = locations.slice(i, Math.min(i + BATCH_SIZE, total));
@@ -474,6 +491,51 @@ export class FindUsagesTool extends BatchableTool<FindUsagesParams, FindUsagesRe
         type: 'complete',
         error: error instanceof Error ? error.message : 'Unknown error',
       };
+    }
+  }
+
+  /**
+   * Extract workspace directory from a file URI with cross-platform support.
+   * 
+   * @param uri - The file URI (e.g., 'file:///path/to/file.ts')
+   * @returns The workspace directory path
+   * 
+   * @example
+   * ```typescript
+   * extractWorkspaceDir('file:///home/user/project/src/file.ts')
+   * // Returns: '/home/user/project/src'
+   * 
+   * extractWorkspaceDir('file:///C:/Users/user/project/src/file.ts')  
+   * // Returns: 'C:/Users/user/project/src'
+   * ```
+   */
+  private extractWorkspaceDir(uri: string): string {
+    try {
+      // Parse the URI to handle encoded characters and validate format
+      const parsed = new URL(uri);
+      
+      if (parsed.protocol !== 'file:') {
+        throw new Error(`Unsupported protocol: ${parsed.protocol}`);
+      }
+      
+      let filePath = parsed.pathname;
+      
+      // Handle Windows paths (remove leading slash on Windows)
+      if (process.platform === 'win32' && filePath.startsWith('/') && filePath.match(/^\/[A-Za-z]:/)) {
+        filePath = filePath.slice(1);
+      }
+      
+      // Extract directory (everything before the last slash)
+      const lastSlash = filePath.lastIndexOf('/');
+      if (lastSlash <= 0) {
+        // If no slash or at root, return a sensible default
+        return process.platform === 'win32' ? 'C:/' : '/';
+      }
+      
+      return filePath.substring(0, lastSlash);
+    } catch (error) {
+      logger.error({ uri, error }, 'Failed to extract workspace directory from URI');
+      throw new Error(`Invalid URI format: ${uri}`);
     }
   }
 

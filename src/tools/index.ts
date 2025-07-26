@@ -11,4 +11,5 @@ export type {
   FindUsagesParams,
   FindUsagesResult,
   StreamingFindUsagesResult,
+  FindUsagesConfig,
 } from './find-usages.js';

@@ -17,15 +17,18 @@ export class TypeScriptLanguageServerProvider implements LanguageServerProvider 
   async isAvailable(): Promise<boolean> {
     // Always check CI environment variables first
     const isCI = process.env['CI'] === 'true' || process.env['GITHUB_ACTIONS'] === 'true';
-    
+
     // Debug environment detection
-    logger.info({
-      CI: process.env['CI'],
-      GITHUB_ACTIONS: process.env['GITHUB_ACTIONS'],
-      NODE_ENV: process.env['NODE_ENV'],
-      isCI,
-      platform: process.platform
-    }, 'TypeScript provider availability check');
+    logger.info(
+      {
+        CI: process.env['CI'],
+        GITHUB_ACTIONS: process.env['GITHUB_ACTIONS'],
+        NODE_ENV: process.env['NODE_ENV'],
+        isCI,
+        platform: process.platform,
+      },
+      'TypeScript provider availability check'
+    );
 
     // In CI environments, use simplified availability check
     if (isCI) {
@@ -38,7 +41,7 @@ export class TypeScriptLanguageServerProvider implements LanguageServerProvider 
         return true;
       } catch (error) {
         logger.warn({ error }, 'TypeScript language server not in PATH, trying direct execution');
-        
+
         // If which fails, try direct execution as final check
         try {
           await this.executeCommand(['npm', 'list', '-g', 'typescript-language-server']);

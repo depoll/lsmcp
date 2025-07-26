@@ -95,7 +95,7 @@ describe('FindUsagesTool', () => {
 
       // eslint-disable-next-line @typescript-eslint/unbound-method
       const getForFileMock = jest.mocked(mockPool.getForFile);
-      expect(getForFileMock).toHaveBeenCalledWith('file:///test.ts', 'auto');
+      expect(getForFileMock).toHaveBeenCalledWith('file:///test.ts', '/');
       expect(mockConnection.sendRequest).toHaveBeenCalledWith('textDocument/references', {
         textDocument: { uri: 'file:///test.ts' },
         position: { line: 10, character: 5 },
