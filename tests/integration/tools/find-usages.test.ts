@@ -136,9 +136,9 @@ export function ackermann(m: number, n: number): number {
       healthCheckInterval: 30000,
     });
 
-    // Pre-initialize TypeScript language server
+    // Pre-initialize TypeScript language server  
     const fileUri = `file://${join(testDir, 'math.ts')}`;
-    await connectionPool.getForFile(fileUri, 'typescript');
+    await connectionPool.getForFile(fileUri, testDir);
 
     // Initialize tool
     tool = new FindUsagesTool(connectionPool);

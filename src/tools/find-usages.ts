@@ -140,7 +140,11 @@ export class FindUsagesTool extends BatchableTool<FindUsagesParams, FindUsagesRe
   }
 
   private async findReferences(params: FindUsagesParams): Promise<ReferenceResult[]> {
-    const connection = await this.clientManager.getForFile(params.uri, 'auto');
+    // Extract workspace directory from file URI
+    const filePath = params.uri.startsWith('file://') ? params.uri.slice(7) : params.uri;
+    const workspaceDir = filePath.substring(0, filePath.lastIndexOf('/'));
+    
+    const connection = await this.clientManager.getForFile(params.uri, workspaceDir);
 
     if (!connection) {
       throw new Error(`No language server available for ${params.uri}`);
@@ -186,7 +190,11 @@ export class FindUsagesTool extends BatchableTool<FindUsagesParams, FindUsagesRe
   private async findCallHierarchy(
     params: FindUsagesParams
   ): Promise<CallHierarchyResult | undefined> {
-    const connection = await this.clientManager.getForFile(params.uri, 'auto');
+    // Extract workspace directory from file URI
+    const filePath = params.uri.startsWith('file://') ? params.uri.slice(7) : params.uri;
+    const workspaceDir = filePath.substring(0, filePath.lastIndexOf('/'));
+    
+    const connection = await this.clientManager.getForFile(params.uri, workspaceDir);
 
     if (!connection) {
       throw new Error(`No language server available for ${params.uri}`);
@@ -363,7 +371,11 @@ export class FindUsagesTool extends BatchableTool<FindUsagesParams, FindUsagesRe
     };
 
     try {
-      const connection = await this.clientManager.getForFile(params.uri, 'auto');
+      // Extract workspace directory from file URI
+      const filePath = params.uri.startsWith('file://') ? params.uri.slice(7) : params.uri;
+      const workspaceDir = filePath.substring(0, filePath.lastIndexOf('/'));
+      
+      const connection = await this.clientManager.getForFile(params.uri, workspaceDir);
 
       if (!connection) {
         yield {
