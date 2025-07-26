@@ -111,7 +111,7 @@ Development commands:
 ## Key Technologies
 
 - **Language**: TypeScript with strict mode
-- **Runtime**: Node.js 18+
+- **Runtime**: Node.js 20+
 - **Protocols**: 
   - MCP (Model Context Protocol) for AI agent communication
   - LSP (Language Server Protocol) for code intelligence
@@ -154,3 +154,7 @@ Every PR must include:
 
 - **Asynchronous Programming**:
   - async is better than sync in virtually any case that's got blocking I/O, etc.
+
+## Version Control and Branching Strategy
+
+- **New work that will ultimately become a PR should happen in a branch**

@@ -14,7 +14,7 @@ This project aims to create an MCP implementation that can communicate with LSP 
 
 ### Prerequisites
 
-- Node.js 18+ (tested on 18.x, 20.x, and 22.x)
+- Node.js 20+ (tested on 20.x and 22.x)
 - npm or yarn
 
 ### Installation
@@ -70,7 +70,7 @@ lsmcp/
 
 The project uses GitHub Actions for continuous integration with:
 
-- Matrix testing across Node.js 18, 20, and 22
+- Matrix testing across Node.js 20 and 22
 - Cross-platform testing on Ubuntu, macOS, and Windows
 - Automated linting and type checking
 - Test coverage reporting with >90% threshold
