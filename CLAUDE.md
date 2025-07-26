@@ -111,7 +111,7 @@ Development commands:
 ## Key Technologies
 
 - **Language**: TypeScript with strict mode
-- **Runtime**: Node.js 18+
+- **Runtime**: Node.js 20+
 - **Protocols**: 
   - MCP (Model Context Protocol) for AI agent communication
   - LSP (Language Server Protocol) for code intelligence
