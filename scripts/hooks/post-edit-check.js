@@ -1,8 +1,18 @@
 #!/usr/bin/env node
 
 import { execSync } from 'child_process';
+import { existsSync } from 'fs';
+import { join } from 'path';
 
 console.log('🔍 Running code quality checks...');
+
+// Check if dependencies are installed
+const nodeModulesPath = join(process.cwd(), 'node_modules');
+if (!existsSync(nodeModulesPath)) {
+  console.log('⚠️  Dependencies not installed. Run "npm install" first.');
+  console.log('✅ Skipping quality checks until dependencies are available.');
+  process.exit(0);
+}
 
 let lintExitCode = 0;
 let lintOutput = '';
