@@ -32,11 +32,15 @@ export class ProcessManager extends EventEmitter {
           new ConnectionError(`Language server failed to start within ${this.startTimeout}ms`)
         );
       }, this.startTimeout);
+      timeout.unref();
 
-      this.process = spawn(this.config.command, this.config.args, {
-        stdio: 'pipe',
-        shell: false,
-      });
+      // On Windows, we may need shell to resolve .cmd files
+      const spawnOptions = {
+        stdio: 'pipe' as const,
+        shell: process.platform === 'win32',
+      };
+
+      this.process = spawn(this.config.command, this.config.args, spawnOptions);
 
       this.process.once('spawn', () => {
         clearTimeout(timeout);
@@ -55,8 +59,20 @@ export class ProcessManager extends EventEmitter {
 
       this.process.once('error', (error) => {
         clearTimeout(timeout);
-        this.logger.error('Process spawn error:', error);
-        reject(new ConnectionError(`Failed to spawn process: ${error.message}`));
+        this.logger.error(
+          {
+            error,
+            command: this.config.command,
+            args: this.config.args,
+            platform: process.platform,
+          },
+          'Process spawn error'
+        );
+        reject(
+          new ConnectionError(
+            `Failed to spawn process "${this.config.command}": ${error.message}`
+          )
+        );
       });
 
       this.process.on('exit', (code, signal) => {
@@ -102,6 +118,7 @@ export class ProcessManager extends EventEmitter {
         }
         resolve();
       }, 5000);
+      timeout.unref();
 
       process.once('exit', () => {
         clearTimeout(timeout);

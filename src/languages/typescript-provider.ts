@@ -118,13 +118,14 @@ export class TypeScriptLanguageServerProvider implements LanguageServerProvider 
         return;
       }
 
-      // Use spawn for security - no shell interpretation
+      // Use spawn for security - no shell interpretation on Unix, shell on Windows for .cmd resolution
       let child: ChildProcessByStdio<null, Readable, Readable> | undefined;
       try {
         child = spawn(cmd, args, {
           cwd: this.language.rootPath || process.cwd(),
           env: process.env,
           stdio: ['ignore', 'pipe', 'pipe'],
+          shell: process.platform === 'win32',
         });
       } catch (error) {
         reject(
@@ -145,13 +146,15 @@ export class TypeScriptLanguageServerProvider implements LanguageServerProvider 
         if (child) {
           child.kill('SIGTERM');
           // Force kill after grace period
-          setTimeout(() => {
+          const killTimer = setTimeout(() => {
             if (child && !child.killed) {
               child.kill('SIGKILL');
             }
           }, 5000);
+          killTimer.unref();
         }
       }, timeout);
+      timer.unref();
 
       if (!child) {
         reject(new Error('Failed to create child process'));

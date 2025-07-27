@@ -144,7 +144,10 @@ export function ackermann(m: number, n: number): number {
 
     // Wait for language server to index files
     console.log('Waiting for language server to index files...');
-    await new Promise((resolve) => setTimeout(resolve, 3000)); // 3 second delay
+    await new Promise((resolve) => {
+      const timeout = setTimeout(resolve, 3000);
+      timeout.unref();
+    }); // 3 second delay
 
     // Initialize tool
     tool = new FindUsagesTool(connectionPool);

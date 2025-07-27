@@ -23,7 +23,8 @@ describe('Navigate Tool Integration Tests', () => {
     }
 
     pool = new ConnectionPool({
-      healthCheckInterval: 1000,
+      healthCheckInterval: 10000, // Increase interval to reduce CI noise
+      maxRetries: 2, // Reduce retries in test environment
     });
 
     navigateTool = new NavigateTool(pool);
@@ -125,7 +126,10 @@ manager.addUser(testUser);
     }
 
     // Wait a bit for the language server to initialize
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+    await new Promise((resolve) => {
+      const timeout = setTimeout(resolve, 1000);
+      timeout.unref();
+    });
 
     // Navigate to formatUser function definition
     const result = await navigateTool.execute({
@@ -145,7 +149,10 @@ manager.addUser(testUser);
       pending('TypeScript language server not installed');
     }
 
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+    await new Promise((resolve) => {
+      const timeout = setTimeout(resolve, 1000);
+      timeout.unref();
+    });
 
     // Navigate to User type definition
     const result = await navigateTool.execute({
@@ -165,7 +172,10 @@ manager.addUser(testUser);
       pending('TypeScript language server not installed');
     }
 
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+    await new Promise((resolve) => {
+      const timeout = setTimeout(resolve, 1000);
+      timeout.unref();
+    });
 
     // Navigate to UserManager class definition from import statement
     const result = await navigateTool.execute({
@@ -185,7 +195,10 @@ manager.addUser(testUser);
       pending('TypeScript language server not installed');
     }
 
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+    await new Promise((resolve) => {
+      const timeout = setTimeout(resolve, 1000);
+      timeout.unref();
+    });
 
     // Try to navigate from a position with no navigation target
     const result = await navigateTool.execute({
@@ -204,7 +217,10 @@ manager.addUser(testUser);
       pending('TypeScript language server not installed');
     }
 
-    await new Promise((resolve) => setTimeout(resolve, 2000));
+    await new Promise((resolve) => {
+      const timeout = setTimeout(resolve, 2000);
+      timeout.unref();
+    });
 
     // Batch navigation to multiple targets
     const result = await navigateTool.execute({
@@ -239,7 +255,10 @@ manager.addUser(testUser);
       pending('TypeScript language server not installed');
     }
 
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+    await new Promise((resolve) => {
+      const timeout = setTimeout(resolve, 1000);
+      timeout.unref();
+    });
 
     // Create a file with multiple import targets
     const importsFile = join(testDir, 'imports.ts');
@@ -273,7 +292,10 @@ const role: UserRole = 'admin';
       pending('TypeScript language server not installed');
     }
 
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+    await new Promise((resolve) => {
+      const timeout = setTimeout(resolve, 1000);
+      timeout.unref();
+    });
 
     const params = {
       uri: testFileUri,
@@ -300,7 +322,10 @@ const role: UserRole = 'admin';
       pending('TypeScript language server not installed');
     }
 
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+    await new Promise((resolve) => {
+      const timeout = setTimeout(resolve, 1000);
+      timeout.unref();
+    });
 
     // Create a more complex scenario with multiple files
     const libDir = join(testDir, 'lib');

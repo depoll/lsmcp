@@ -20,14 +20,21 @@ export class ProtocolHandler {
   async initialize(params: InitializeParams): Promise<InitializeResult> {
     this.logger.info('Sending initialize request');
 
+    let timeoutId: NodeJS.Timeout | undefined;
     const timeoutPromise = new Promise<never>((_, reject) => {
-      setTimeout(() => {
+      timeoutId = setTimeout(() => {
         reject(new TimeoutError(`Initialize request timed out after 30000ms`));
       }, 30000);
+      timeoutId.unref();
     });
 
     const requestPromise = this.connection.sendRequest(InitializeRequest.type, params);
     const result = await Promise.race([requestPromise, timeoutPromise]);
+
+    // Clean up timeout
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
 
     // Send initialized notification
     await this.connection.sendNotification('initialized', {});

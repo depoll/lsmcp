@@ -284,7 +284,10 @@ describe('TypeScriptLanguageServerProvider', () => {
       const resultPromise = provider.isAvailable();
 
       // Wait a bit and then emit an error (simulating timeout handling)
-      await new Promise((resolve) => setTimeout(resolve, 100));
+      await new Promise((resolve) => {
+        const timeout = setTimeout(resolve, 100);
+        timeout.unref();
+      });
       mockChild.emit('error', new Error('Command not found'));
 
       // The command should fail due to the error

@@ -163,6 +163,8 @@ export class ConnectionPool {
       info.healthCheckInterval = setInterval(() => {
         void this.checkHealth(key);
       }, this.options.healthCheckInterval);
+      // Unref the interval so it doesn't keep the process alive during tests
+      info.healthCheckInterval.unref();
     }
 
     this.connections.set(key, info);
@@ -193,7 +195,10 @@ export class ConnectionPool {
         this.logger.warn(
           `Failed to start ${language} server, retrying (${retryCount + 1}/${this.options.maxRetries})...`
         );
-        await new Promise((resolve) => setTimeout(resolve, this.options.retryDelay));
+        await new Promise((resolve) => {
+          const timeout = setTimeout(resolve, this.options.retryDelay);
+          timeout.unref();
+        });
         return this.createConnection(language, workspace, config, retryCount + 1);
       }
       throw error;
@@ -225,6 +230,8 @@ export class ConnectionPool {
       info.healthCheckInterval = setInterval(() => {
         void this.checkHealth(key);
       }, this.options.healthCheckInterval);
+      // Unref the interval so it doesn't keep the process alive during tests
+      info.healthCheckInterval.unref();
     }
 
     this.connections.set(key, info);
