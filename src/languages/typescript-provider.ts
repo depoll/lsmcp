@@ -119,7 +119,7 @@ export class TypeScriptLanguageServerProvider implements LanguageServerProvider 
       }
 
       // Use spawn for security - no shell interpretation
-      let child: ChildProcessByStdio<null, Readable, Readable>;
+      let child: ChildProcessByStdio<null, Readable, Readable> | undefined;
       try {
         child = spawn(cmd, args, {
           cwd: this.language.rootPath || process.cwd(),
@@ -139,17 +139,24 @@ export class TypeScriptLanguageServerProvider implements LanguageServerProvider 
       let stderr = '';
       let timedOut = false;
 
-      // Set timeout
+      // Set timeout after successful spawn
       const timer = setTimeout(() => {
         timedOut = true;
-        child.kill('SIGTERM');
-        // Force kill after grace period
-        setTimeout(() => {
-          if (!child.killed) {
-            child.kill('SIGKILL');
-          }
-        }, 5000);
+        if (child) {
+          child.kill('SIGTERM');
+          // Force kill after grace period
+          setTimeout(() => {
+            if (child && !child.killed) {
+              child.kill('SIGKILL');
+            }
+          }, 5000);
+        }
       }, timeout);
+
+      if (!child) {
+        reject(new Error('Failed to create child process'));
+        return;
+      }
 
       child.stdout.on('data', (data: Buffer) => {
         stdout += data.toString();
