@@ -39,14 +39,18 @@ export class ProtocolHandler {
     this.logger.info('Sending shutdown request');
 
     try {
+      let timeoutId: NodeJS.Timeout;
       const timeoutPromise = new Promise<never>((_, reject) => {
-        setTimeout(() => {
+        timeoutId = setTimeout(() => {
           reject(new TimeoutError(`Shutdown request timed out after 5000ms`));
         }, 5000);
       });
 
       const requestPromise = this.connection.sendRequest(ShutdownRequest.type);
       await Promise.race([requestPromise, timeoutPromise]);
+      
+      // Clear the timeout since the request completed successfully
+      clearTimeout(timeoutId);
 
       await this.connection.sendNotification(ExitNotification.type);
     } catch (error) {
@@ -58,14 +62,18 @@ export class ProtocolHandler {
 
   async ping(): Promise<boolean> {
     try {
+      let timeoutId: NodeJS.Timeout;
       const timeoutPromise = new Promise<never>((_, reject) => {
-        setTimeout(() => {
+        timeoutId = setTimeout(() => {
           reject(new TimeoutError(`Ping request timed out after ${this.requestTimeout}ms`));
         }, this.requestTimeout);
       });
 
       const requestPromise = this.connection.sendRequest('$/ping', {});
       await Promise.race([requestPromise, timeoutPromise]);
+      
+      // Clear the timeout since the request completed successfully
+      clearTimeout(timeoutId);
       return true;
     } catch (error) {
       this.logger.debug('Ping failed:', error);
@@ -80,15 +88,20 @@ export class ProtocolHandler {
   ): Promise<R> {
     const timeout = options?.timeout || this.requestTimeout;
 
+    let timeoutId: NodeJS.Timeout;
     const timeoutPromise = new Promise<never>((_, reject) => {
-      setTimeout(() => {
+      timeoutId = setTimeout(() => {
         reject(new TimeoutError(`Request ${method} timed out after ${timeout}ms`));
       }, timeout);
     });
 
     // Use the untyped string-based sendRequest overload
     const requestPromise: Promise<R> = this.connection.sendRequest(method, params);
-    return Promise.race([requestPromise, timeoutPromise]);
+    const result = await Promise.race([requestPromise, timeoutPromise]);
+    
+    // Clear the timeout since the request completed successfully
+    clearTimeout(timeoutId);
+    return result;
   }
 
   dispose(): void {
