@@ -40,6 +40,7 @@ export class ProcessManager extends EventEmitter {
 
       this.process.once('spawn', () => {
         clearTimeout(timeout);
+        this.logger.info(`Process spawned successfully: PID=${this.process!.pid}`);
 
         if (!this.process!.stdin || !this.process!.stdout) {
           reject(new ConnectionError('Process streams not available'));
@@ -59,10 +60,14 @@ export class ProcessManager extends EventEmitter {
       });
 
       this.process.on('exit', (code, signal) => {
-        this.logger.warn(`Process exited: code=${code}, signal=${signal}`);
+        this.logger.warn(
+          `Process exited: code=${code}, signal=${signal}, PID=${this.process?.pid}`
+        );
         this.emit('exit', code, signal);
 
-        if (code !== 0 || signal) {
+        // Only emit crash if it's an unexpected termination
+        // SIGTERM during shutdown is expected, not a crash
+        if ((code !== 0 && code !== null) || (signal && signal !== 'SIGTERM')) {
           this.emit('crash', new ServerCrashError('Language server crashed', code, signal));
         }
       });

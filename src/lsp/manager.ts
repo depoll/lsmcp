@@ -293,28 +293,48 @@ export class ConnectionPool {
    * This method is more lenient than get() and will not throw errors.
    */
   async getForFile(filePath: string, workspace: string): Promise<LSPClient | null> {
-    // Try to detect language from file extension
-    const detected = this.languageDetector.detectLanguageByExtension(filePath);
-    if (!detected) {
+    try {
+      // Try to detect language from file extension
+      const detected = this.languageDetector.detectLanguageByExtension(filePath);
+      if (!detected) {
+        this.logger.debug(`Could not detect language for file: ${filePath}`);
+        return null;
+      }
+
+      // Check if we already have a working connection for this language and workspace
+      const key = `${detected.id}:${workspace}`;
+      const existing = this.connections.get(key);
+      if (existing && existing.client.isConnected()) {
+        this.logger.debug(`Reusing existing connection for ${detected.id} in ${workspace}`);
+        existing.lastUsed = new Date();
+        return existing.client;
+      }
+
+      // Update the detected language with the workspace root
+      const detectedWithRoot = { ...detected, rootPath: workspace };
+
+      // Only check availability if we don't have an existing connection
+      // This avoids unnecessary availability checks for servers we've already started
+      if (!existing) {
+        const provider = createLanguageServerProvider(detectedWithRoot);
+        if (provider && !(await provider.isAvailable())) {
+          const installCmd = this.getInstallCommand(detected.id);
+          this.logger.warn(
+            `Language server for ${detected.id} is not installed. ` +
+              (installCmd
+                ? `Please install it manually: ${installCmd}`
+                : 'Please install it manually.')
+          );
+          return null; // Return null if server is not available
+        }
+      }
+
+      // Get or create connection
+      return this.get(detected.id, workspace);
+    } catch (error) {
+      this.logger.error({ error, filePath, workspace }, 'Error in getForFile');
       return null;
     }
-
-    // Update the detected language with the workspace root
-    const detectedWithRoot = { ...detected, rootPath: workspace };
-
-    // Check if language server is available
-    const provider = createLanguageServerProvider(detectedWithRoot);
-    if (provider && !(await provider.isAvailable())) {
-      const installCmd = this.getInstallCommand(detected.id);
-      this.logger.warn(
-        `Language server for ${detected.id} is not installed. ` +
-          (installCmd ? `Please install it manually: ${installCmd}` : 'Please install it manually.')
-      );
-      return null; // Return null if server is not available
-    }
-
-    // Get or create connection
-    return this.get(detected.id, workspace);
   }
 
   private async handleCrashRecovery(

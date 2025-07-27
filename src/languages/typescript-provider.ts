@@ -15,53 +15,36 @@ export class TypeScriptLanguageServerProvider implements LanguageServerProvider 
   constructor(public readonly language: DetectedLanguage) {}
 
   async isAvailable(): Promise<boolean> {
-    // Always check CI environment variables first
-    const isCI = process.env['CI'] === 'true' || process.env['GITHUB_ACTIONS'] === 'true';
+    try {
+      // First try simple which/where check
+      const whichCmd = process.platform === 'win32' ? 'where' : 'which';
+      await this.executeCommand([whichCmd, 'typescript-language-server']);
+      logger.info('TypeScript language server found in PATH');
+      return true;
+    } catch (whichError) {
+      logger.debug(
+        { whichError },
+        'TypeScript language server not found via which, trying version check'
+      );
 
-    // Debug environment detection
-    logger.info(
-      {
-        CI: process.env['CI'],
-        GITHUB_ACTIONS: process.env['GITHUB_ACTIONS'],
-        NODE_ENV: process.env['NODE_ENV'],
-        isCI,
-        platform: process.platform,
-      },
-      'TypeScript provider availability check'
-    );
-
-    // In CI environments, use simplified availability check
-    if (isCI) {
-      logger.info('Running in CI environment, using simplified availability check');
       try {
-        // First try to check if the command exists in PATH using 'which' or 'where'
-        const whichCmd = process.platform === 'win32' ? 'where' : 'which';
-        await this.executeCommand([whichCmd, 'typescript-language-server']);
-        logger.info('TypeScript language server found in PATH (CI environment)');
+        // Try direct version check
+        const result = await this.executeCommand(['typescript-language-server', '--version']);
+        logger.info({ version: result }, 'TypeScript language server is available');
         return true;
-      } catch (error) {
-        logger.warn({ error }, 'TypeScript language server not in PATH, trying direct execution');
+      } catch (versionError) {
+        logger.warn({ versionError }, 'TypeScript language server version check failed');
 
-        // If which fails, try direct execution as final check
+        // Last resort: check if it's installed globally via npm
         try {
           await this.executeCommand(['npm', 'list', '-g', 'typescript-language-server']);
-          logger.info('TypeScript language server found via npm list (CI environment)');
+          logger.info('TypeScript language server found via npm list');
           return true;
         } catch (npmError) {
-          logger.warn({ npmError }, 'TypeScript language server not found via npm list either');
+          logger.error({ npmError }, 'TypeScript language server not found via any method');
           return false;
         }
       }
-    }
-
-    try {
-      // Check if typescript-language-server is available
-      const result = await this.executeCommand(['typescript-language-server', '--version']);
-      logger.info({ version: result }, 'TypeScript language server is available');
-      return true;
-    } catch (error) {
-      logger.debug({ error }, 'TypeScript language server not found');
-      return false;
     }
   }
 

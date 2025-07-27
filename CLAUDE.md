@@ -154,6 +154,8 @@ Every PR must include:
 
 - **Asynchronous Programming**:
   - async is better than sync in virtually any case that's got blocking I/O, etc.
+- **Testing**:
+  - Never silently skip tests. If a test needs to be skipped, it should do so visibly. But also, this should be an extremely rare occurrence -- prioritize fixing the underlying reason for skipping the test over skipping it
 
 ## Version Control and Branching Strategy
 

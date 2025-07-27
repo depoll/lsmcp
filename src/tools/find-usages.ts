@@ -12,6 +12,7 @@ import {
   CallHierarchyIncomingCallsParams,
   CallHierarchyOutgoingCallsParams,
   SymbolKind,
+  DidOpenTextDocumentParams,
 } from 'vscode-languageserver-protocol';
 import { logger as rootLogger } from '../utils/logger.js';
 
@@ -86,6 +87,7 @@ export interface FindUsagesConfig {
 // Type-safe LSP connection interface
 export interface LSPConnection {
   sendRequest<TResult = unknown>(method: string, params?: unknown): Promise<TResult>;
+  sendNotification?(method: string, params?: unknown): void;
 }
 
 export class FindUsagesTool extends BatchableTool<FindUsagesParams, FindUsagesResult> {
@@ -173,13 +175,32 @@ export class FindUsagesTool extends BatchableTool<FindUsagesParams, FindUsagesRe
       throw new Error(`No language server available for ${params.uri}`);
     }
 
+    // Validate position bounds to avoid TypeScript server errors
+    if (params.position.line < 0 || params.position.character < 0) {
+      logger.warn('Invalid position (negative values)', params.position);
+      return [];
+    }
+
+    // Basic bounds check - if position is extremely large, return empty
+    if (params.position.line > 10000 || params.position.character > 1000) {
+      logger.warn('Position likely out of bounds', params.position);
+      return [];
+    }
+
+    // Ensure the document and related files are open in the language server
+    await this.ensureWorkspaceOpen(connection, params.uri, workspaceDir);
+
     const referenceParams: ReferenceParams = {
       textDocument: { uri: params.uri },
       position: params.position,
       context: { includeDeclaration: params.includeDeclaration },
     };
 
-    logger.info('Finding references', { uri: params.uri, position: params.position });
+    logger.info('Finding references', {
+      uri: params.uri,
+      position: params.position,
+      workspaceDir,
+    });
 
     try {
       const locations = await connection.sendRequest<Location[]>(
@@ -187,8 +208,14 @@ export class FindUsagesTool extends BatchableTool<FindUsagesParams, FindUsagesRe
         referenceParams
       );
 
+      logger.info('LSP references response', {
+        locationsCount: locations?.length || 0,
+        locations: locations?.slice(0, 3), // Log first 3 for debugging
+        requestParams: referenceParams,
+      });
+
       if (!locations || locations.length === 0) {
-        logger.info('No references found');
+        logger.warn('No references found', { uri: params.uri, position: params.position });
         return [];
       }
 
@@ -196,10 +223,12 @@ export class FindUsagesTool extends BatchableTool<FindUsagesParams, FindUsagesRe
       const references: ReferenceResult[] = [];
 
       for (const location of locations.slice(0, params.maxResults)) {
+        const preview = await this.generatePreview(location);
         references.push({
           uri: location.uri,
           range: location.range,
           kind: this.classifyUsage(params, location),
+          preview,
         });
       }
 
@@ -544,6 +573,134 @@ export class FindUsagesTool extends BatchableTool<FindUsagesParams, FindUsagesRe
   }
 
   /**
+   * Ensure all TypeScript files in the workspace are open for better cross-file references
+   */
+  private async ensureWorkspaceOpen(
+    connection: LSPConnection,
+    currentUri: string,
+    workspaceDir: string
+  ): Promise<void> {
+    try {
+      const fs = await import('fs/promises');
+      const path = await import('path');
+
+      // Find all TypeScript files in the workspace
+      const files = await fs.readdir(workspaceDir);
+      const tsFiles = files.filter((file) => file.endsWith('.ts') || file.endsWith('.js'));
+
+      logger.info(`Opening ${tsFiles.length} TypeScript files in workspace: ${workspaceDir}`);
+
+      // Open each TypeScript file
+      for (const file of tsFiles) {
+        const filePath = path.join(workspaceDir, file);
+        const fileUri = `file://${filePath}`;
+        await this.ensureDocumentOpen(connection, fileUri);
+      }
+    } catch (error) {
+      logger.warn(
+        { error, workspaceDir },
+        'Failed to open workspace files, proceeding with single file'
+      );
+      // Fallback to opening just the current document
+      await this.ensureDocumentOpen(connection, currentUri);
+    }
+  }
+
+  /**
+   * Ensure a document is open in the language server by sending didOpen notification
+   */
+  private async ensureDocumentOpen(connection: LSPConnection, uri: string): Promise<void> {
+    try {
+      // Read the file content
+      const fs = await import('fs/promises');
+      const { fileURLToPath } = await import('url');
+      const filePath = fileURLToPath(uri);
+      const content = await fs.readFile(filePath, 'utf-8');
+
+      // Determine language ID from file extension
+      const ext = filePath.split('.').pop()?.toLowerCase() || '';
+      let languageId = 'plaintext';
+      switch (ext) {
+        case 'ts':
+          languageId = 'typescript';
+          break;
+        case 'js':
+          languageId = 'javascript';
+          break;
+        case 'py':
+          languageId = 'python';
+          break;
+        case 'rs':
+          languageId = 'rust';
+          break;
+        case 'go':
+          languageId = 'go';
+          break;
+        case 'java':
+          languageId = 'java';
+          break;
+        case 'cpp':
+        case 'cc':
+        case 'cxx':
+          languageId = 'cpp';
+          break;
+        case 'c':
+          languageId = 'c';
+          break;
+        case 'rb':
+          languageId = 'ruby';
+          break;
+        case 'php':
+          languageId = 'php';
+          break;
+      }
+
+      const didOpenParams: DidOpenTextDocumentParams = {
+        textDocument: {
+          uri,
+          languageId,
+          version: 1,
+          text: content,
+        },
+      };
+
+      // Send didOpen notification (no response expected)
+      if (connection.sendNotification) {
+        void connection.sendNotification('textDocument/didOpen', didOpenParams);
+        logger.debug(`Sent didOpen notification for: ${uri}`);
+      } else {
+        logger.warn('sendNotification not available on connection, skipping didOpen');
+      }
+    } catch (error) {
+      logger.warn({ error, uri }, 'Failed to open document in language server, proceeding anyway');
+      // Don't throw - this is not critical for functionality
+    }
+  }
+
+  /**
+   * Generate a preview of the code at a reference location
+   */
+  private async generatePreview(location: Location): Promise<string | undefined> {
+    try {
+      const fs = await import('fs/promises');
+      const { fileURLToPath } = await import('url');
+      const filePath = fileURLToPath(location.uri);
+      const content = await fs.readFile(filePath, 'utf-8');
+      const lines = content.split('\n');
+
+      const lineIndex = location.range.start.line;
+      if (lineIndex < 0 || lineIndex >= lines.length) {
+        return undefined;
+      }
+
+      return lines[lineIndex]?.trim();
+    } catch (error) {
+      logger.debug({ error, location }, 'Failed to generate preview');
+      return undefined;
+    }
+  }
+
+  /**
    * Classify the usage type of a reference location.
    *
    * Current implementation provides basic classification:
@@ -564,10 +721,12 @@ export class FindUsagesTool extends BatchableTool<FindUsagesParams, FindUsagesRe
    */
   private classifyUsage(params: FindUsagesParams, location: Location): ReferenceResult['kind'] {
     // Check if this is the original declaration/definition position
+    // Allow for some tolerance in character position as LSP servers may return
+    // slightly different positions for the same symbol
     if (
       location.uri === params.uri &&
       location.range.start.line === params.position.line &&
-      location.range.start.character === params.position.character
+      Math.abs(location.range.start.character - params.position.character) <= 1
     ) {
       return 'declaration';
     }

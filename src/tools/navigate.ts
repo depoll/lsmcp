@@ -1,7 +1,11 @@
-import { Location, LocationLink, Position } from 'vscode-languageserver-protocol';
+import {
+  Location,
+  LocationLink,
+  Position,
+  DidOpenTextDocumentParams,
+} from 'vscode-languageserver-protocol';
 import { z } from 'zod';
 import { ConnectionPool } from '../lsp/index.js';
-import { getLanguageFromUri } from '../utils/languages.js';
 import { BatchableTool } from './base.js';
 import { FileAwareLRUCache } from '../utils/fileCache.js';
 import { readFile } from 'fs/promises';
@@ -161,8 +165,16 @@ export class NavigateTool extends BatchableTool<NavigateParams, NavigateResult> 
       return cached.slice(0, maxResults);
     }
 
-    const language = getLanguageFromUri(uri);
-    const client = await this.clientManager.get(language, uri);
+    // Extract workspace directory and get appropriate client
+    const workspaceDir = this.extractWorkspaceDir(uri);
+    const client = await this.clientManager.getForFile(uri, workspaceDir);
+
+    if (!client) {
+      throw new Error(`No language server available for ${uri}`);
+    }
+
+    // Ensure the document and related files are open in the language server
+    await this.ensureWorkspaceOpen(client, uri, workspaceDir);
 
     // Map target to LSP method
     const method = this.getNavigationMethod(target);
@@ -335,5 +347,153 @@ export class NavigateTool extends BatchableTool<NavigateParams, NavigateResult> 
   clearCache(): void {
     this.cache.clear();
     this.logger.info('Cleared all navigation caches');
+  }
+
+  /**
+   * Extract workspace directory from a file URI with cross-platform support
+   */
+  private extractWorkspaceDir(uri: string): string {
+    try {
+      // Parse the URI to handle encoded characters and validate format
+      const parsed = new URL(uri);
+
+      if (parsed.protocol !== 'file:') {
+        throw new Error(`Unsupported protocol: ${parsed.protocol}`);
+      }
+
+      let filePath = parsed.pathname;
+
+      // Handle Windows paths (remove leading slash on Windows)
+      if (
+        process.platform === 'win32' &&
+        filePath.startsWith('/') &&
+        filePath.match(/^\/[A-Za-z]:/)
+      ) {
+        filePath = filePath.slice(1);
+      }
+
+      // Extract directory (everything before the last slash)
+      const lastSlash = filePath.lastIndexOf('/');
+      if (lastSlash <= 0) {
+        // If no slash or at root, return a sensible default
+        return process.platform === 'win32' ? 'C:/' : '/';
+      }
+
+      return filePath.substring(0, lastSlash);
+    } catch (error) {
+      this.logger.error({ uri, error }, 'Failed to extract workspace directory from URI');
+      throw new Error(`Invalid URI format: ${uri}`);
+    }
+  }
+
+  /**
+   * Ensure all TypeScript files in the workspace are open for better cross-file navigation
+   */
+  private async ensureWorkspaceOpen(
+    connection: { sendNotification?: (method: string, params: unknown) => void },
+    currentUri: string,
+    workspaceDir: string
+  ): Promise<void> {
+    try {
+      const fs = await import('fs/promises');
+      const path = await import('path');
+
+      // Find all TypeScript files in the workspace
+      const files = await fs.readdir(workspaceDir);
+      const tsFiles = files.filter((file) => file.endsWith('.ts') || file.endsWith('.js'));
+
+      this.logger.info(`Opening ${tsFiles.length} TypeScript files in workspace: ${workspaceDir}`);
+
+      // Open each TypeScript file
+      for (const file of tsFiles) {
+        const filePath = path.join(workspaceDir, file);
+        const fileUri = `file://${filePath}`;
+        await this.ensureDocumentOpen(connection, fileUri);
+      }
+    } catch (error) {
+      this.logger.warn(
+        { error, workspaceDir },
+        'Failed to open workspace files, proceeding with single file'
+      );
+      // Fallback to opening just the current document
+      await this.ensureDocumentOpen(connection, currentUri);
+    }
+  }
+
+  /**
+   * Ensure a document is open in the language server by sending didOpen notification
+   */
+  private async ensureDocumentOpen(
+    connection: { sendNotification?: (method: string, params: unknown) => void },
+    uri: string
+  ): Promise<void> {
+    try {
+      // Read the file content
+      const fs = await import('fs/promises');
+      const { fileURLToPath } = await import('url');
+      const filePath = fileURLToPath(uri);
+      const content = await fs.readFile(filePath, 'utf-8');
+
+      // Determine language ID from file extension
+      const ext = filePath.split('.').pop()?.toLowerCase() || '';
+      let languageId = 'plaintext';
+      switch (ext) {
+        case 'ts':
+          languageId = 'typescript';
+          break;
+        case 'js':
+          languageId = 'javascript';
+          break;
+        case 'py':
+          languageId = 'python';
+          break;
+        case 'rs':
+          languageId = 'rust';
+          break;
+        case 'go':
+          languageId = 'go';
+          break;
+        case 'java':
+          languageId = 'java';
+          break;
+        case 'cpp':
+        case 'cc':
+        case 'cxx':
+          languageId = 'cpp';
+          break;
+        case 'c':
+          languageId = 'c';
+          break;
+        case 'rb':
+          languageId = 'ruby';
+          break;
+        case 'php':
+          languageId = 'php';
+          break;
+      }
+
+      const didOpenParams: DidOpenTextDocumentParams = {
+        textDocument: {
+          uri,
+          languageId,
+          version: 1,
+          text: content,
+        },
+      };
+
+      // Send didOpen notification (no response expected)
+      if (connection.sendNotification) {
+        connection.sendNotification('textDocument/didOpen', didOpenParams);
+        this.logger.debug(`Sent didOpen notification for: ${uri}`);
+      } else {
+        this.logger.warn('sendNotification not available on connection, skipping didOpen');
+      }
+    } catch (error) {
+      this.logger.warn(
+        { error, uri },
+        'Failed to open document in language server, proceeding anyway'
+      );
+      // Don't throw - this is not critical for functionality
+    }
   }
 }

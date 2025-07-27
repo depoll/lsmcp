@@ -121,8 +121,7 @@ manager.addUser(testUser);
 
   it('should navigate to function definition', async () => {
     if (!hasTypeScriptServer) {
-      console.log('Skipping: TypeScript language server not installed');
-      return;
+      pending('TypeScript language server not installed');
     }
 
     // Wait a bit for the language server to initialize
@@ -131,7 +130,7 @@ manager.addUser(testUser);
     // Navigate to formatUser function definition
     const result = await navigateTool.execute({
       uri: testFileUri,
-      position: { line: 9, character: 15 }, // Position on 'formatUser' in main.ts
+      position: { line: 8, character: 15 }, // Position on 'formatUser' in main.ts
       target: 'definition',
     });
 
@@ -143,7 +142,7 @@ manager.addUser(testUser);
 
   it('should navigate to type definition', async () => {
     if (!hasTypeScriptServer) {
-      return;
+      pending('TypeScript language server not installed');
     }
 
     await new Promise((resolve) => setTimeout(resolve, 1000));
@@ -163,15 +162,15 @@ manager.addUser(testUser);
 
   it('should navigate to class implementation', async () => {
     if (!hasTypeScriptServer) {
-      return;
+      pending('TypeScript language server not installed');
     }
 
     await new Promise((resolve) => setTimeout(resolve, 1000));
 
-    // Navigate to UserManager class definition
+    // Navigate to UserManager class definition from import statement
     const result = await navigateTool.execute({
       uri: testFileUri,
-      position: { line: 12, character: 20 }, // Position on 'UserManager' in main.ts
+      position: { line: 0, character: 37 }, // Position on 'UserManager' in import statement
       target: 'definition',
     });
 
@@ -183,7 +182,7 @@ manager.addUser(testUser);
 
   it('should handle navigation with no results', async () => {
     if (!hasTypeScriptServer) {
-      return;
+      pending('TypeScript language server not installed');
     }
 
     await new Promise((resolve) => setTimeout(resolve, 1000));
@@ -202,7 +201,7 @@ manager.addUser(testUser);
 
   it('should handle batch navigation requests', async () => {
     if (!hasTypeScriptServer) {
-      return;
+      pending('TypeScript language server not installed');
     }
 
     await new Promise((resolve) => setTimeout(resolve, 1000));
@@ -212,7 +211,7 @@ manager.addUser(testUser);
       batch: [
         {
           uri: testFileUri,
-          position: { line: 9, character: 15 }, // formatUser
+          position: { line: 8, character: 15 }, // formatUser
           target: 'definition',
         },
         {
@@ -222,7 +221,7 @@ manager.addUser(testUser);
         },
         {
           uri: testFileUri,
-          position: { line: 12, character: 20 }, // UserManager
+          position: { line: 0, character: 37 }, // UserManager in import
           target: 'definition',
         },
       ],
@@ -237,7 +236,7 @@ manager.addUser(testUser);
 
   it('should apply maxResults limit', async () => {
     if (!hasTypeScriptServer) {
-      return;
+      pending('TypeScript language server not installed');
     }
 
     await new Promise((resolve) => setTimeout(resolve, 1000));
@@ -271,14 +270,14 @@ const role: UserRole = 'admin';
 
   it('should cache navigation results', async () => {
     if (!hasTypeScriptServer) {
-      return;
+      pending('TypeScript language server not installed');
     }
 
     await new Promise((resolve) => setTimeout(resolve, 1000));
 
     const params = {
       uri: testFileUri,
-      position: { line: 9, character: 15 }, // formatUser
+      position: { line: 8, character: 15 }, // formatUser
       target: 'definition' as const,
     };
 
@@ -298,7 +297,7 @@ const role: UserRole = 'admin';
 
   it('should sort results by relevance', async () => {
     if (!hasTypeScriptServer) {
-      return;
+      pending('TypeScript language server not installed');
     }
 
     await new Promise((resolve) => setTimeout(resolve, 1000));

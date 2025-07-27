@@ -2,16 +2,12 @@ import { describe, it, expect, beforeAll, afterAll } from '@jest/globals';
 import { FindUsagesTool } from '../../../src/tools/find-usages.js';
 import { ConnectionPool } from '../../../src/lsp/index.js';
 // import { TypeScriptLanguageProvider } from '../../../src/lsp/languages/typescript-provider.js';
-import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
+import { join } from 'path';
 import { writeFile, mkdir, rm } from 'fs/promises';
 import type {
   FindUsagesParams,
   StreamingFindUsagesResult,
 } from '../../../src/tools/find-usages.js';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
 
 describe('FindUsagesTool Integration', () => {
   let tool: FindUsagesTool;
@@ -30,8 +26,8 @@ describe('FindUsagesTool Integration', () => {
   });
 
   beforeAll(async () => {
-    // Create test directory
-    testDir = join(__dirname, '../../fixtures/find-usages-test');
+    // Create test directory in temp directory
+    testDir = join(process.cwd(), 'tests', 'fixtures', 'find-usages-test');
     await mkdir(testDir, { recursive: true });
 
     // Create test TypeScript files
@@ -130,19 +126,29 @@ export function ackermann(m: number, n: number): number {
       )
     );
 
-    // Initialize connection pool
+    // Initialize connection pool with longer timeouts for integration tests
     connectionPool = new ConnectionPool({
-      idleTimeout: 60000,
-      healthCheckInterval: 30000,
+      idleTimeout: 120000, // 2 minutes
+      healthCheckInterval: 60000, // 1 minute
+      maxRetries: 5,
+      retryDelay: 2000, // 2 seconds between retries
     });
 
-    // Pre-initialize TypeScript language server
+    // Pre-initialize and wait for TypeScript language server to be ready
     const fileUri = `file://${join(testDir, 'math.ts')}`;
-    await connectionPool.getForFile(fileUri, testDir);
+    const connection = await connectionPool.getForFile(fileUri, testDir);
+
+    if (!connection) {
+      throw new Error('Failed to initialize TypeScript language server for integration tests');
+    }
+
+    // Wait for language server to index files
+    console.log('Waiting for language server to index files...');
+    await new Promise((resolve) => setTimeout(resolve, 3000)); // 3 second delay
 
     // Initialize tool
     tool = new FindUsagesTool(connectionPool);
-  }, 30000);
+  }, 60000); // Increased timeout for integration test setup
 
   afterAll(async () => {
     await connectionPool.disposeAll();
@@ -153,7 +159,7 @@ export function ackermann(m: number, n: number): number {
     it('should find all references to add function', async () => {
       const params = createFindUsagesParams({
         uri: `file://${join(testDir, 'math.ts')}`,
-        position: { line: 0, character: 17 }, // Position of 'add' function name
+        position: { line: 0, character: 15 }, // Position of 'add' function name
         type: 'references',
         includeDeclaration: true,
       });

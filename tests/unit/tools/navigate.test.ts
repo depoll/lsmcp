@@ -14,7 +14,20 @@ jest.mock('fs/promises', () => ({
   readFile: jest.fn(() => Promise.resolve('// Mock file content\nconst mockLine = "test";\n')),
   stat: jest.fn(() => Promise.resolve({ mtimeMs: Date.now() })),
 }));
-jest.mock('../../../src/utils/logger.js');
+jest.mock('../../../src/utils/logger.js', () => ({
+  logger: {
+    child: jest.fn(() => ({
+      debug: jest.fn(),
+      info: jest.fn(),
+      warn: jest.fn(),
+      error: jest.fn(),
+    })),
+    debug: jest.fn(),
+    info: jest.fn(),
+    warn: jest.fn(),
+    error: jest.fn(),
+  },
+}));
 
 // Mock FileAwareLRUCache with controllable behavior
 const mockCache = {
@@ -49,12 +62,14 @@ describe('NavigateTool', () => {
     // Create mock client
     mockClient = {
       sendRequest: jest.fn(),
+      sendNotification: jest.fn(),
       isConnected: jest.fn().mockReturnValue(true),
     };
 
     // Create mock client manager
     mockClientManager = {
       get: jest.fn(() => Promise.resolve(mockClient)),
+      getForFile: jest.fn(() => Promise.resolve(mockClient)),
     };
 
     tool = new NavigateTool(mockClientManager);
@@ -102,7 +117,10 @@ describe('NavigateTool', () => {
 
       const result = await tool.execute(singleParams);
 
-      expect(mockClientManager.get).toHaveBeenCalledWith('typescript', singleParams.uri);
+      expect(mockClientManager.getForFile).toHaveBeenCalledWith(
+        singleParams.uri,
+        expect.any(String)
+      );
       expect(mockClient.sendRequest).toHaveBeenCalledWith('textDocument/definition', {
         textDocument: { uri: singleParams.uri },
         position: singleParams.position,

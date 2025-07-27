@@ -58,9 +58,9 @@ describe('TypeScriptLanguageServerProvider', () => {
       const mockChild = new MockChildProcess();
       mockSpawn.mockReturnValueOnce(mockChild as unknown as SpawnResult);
 
-      // Simulate successful version output
+      // Simulate successful which/where command (first check)
       setImmediate(() => {
-        mockChild.stdout.push('typescript-language-server version 4.0.0\n');
+        mockChild.stdout.push('/usr/local/bin/typescript-language-server\n');
         mockChild.stdout.push(null); // End stream
         mockChild.emit('close', 0);
       });
@@ -68,9 +68,11 @@ describe('TypeScriptLanguageServerProvider', () => {
       const result = await provider.isAvailable();
 
       expect(result).toBe(true);
+      // Should call 'which' first (or 'where' on Windows)
+      const expectedCommand = process.platform === 'win32' ? 'where' : 'which';
       expect(mockSpawn).toHaveBeenCalledWith(
-        'typescript-language-server',
-        ['--version'],
+        expectedCommand,
+        ['typescript-language-server'],
         expect.objectContaining({
           cwd: '/test/project',
           stdio: ['ignore', 'pipe', 'pipe'],
@@ -78,18 +80,72 @@ describe('TypeScriptLanguageServerProvider', () => {
       );
     });
 
-    it('should return false when typescript-language-server is not available', async () => {
-      const mockChild = new MockChildProcess();
-      mockSpawn.mockReturnValueOnce(mockChild as unknown as SpawnResult);
-
-      // Simulate command not found
+    it('should return true when which fails but version check succeeds', async () => {
+      // First call (which) fails
+      const whichChild = new MockChildProcess();
+      mockSpawn.mockReturnValueOnce(whichChild as unknown as SpawnResult);
       setImmediate(() => {
-        mockChild.emit('error', new Error('Command not found'));
+        whichChild.emit('error', new Error('Command not found'));
+      });
+
+      // Second call (version check) succeeds
+      const versionChild = new MockChildProcess();
+      mockSpawn.mockReturnValueOnce(versionChild as unknown as SpawnResult);
+      setImmediate(() => {
+        versionChild.stdout.push('typescript-language-server version 4.0.0\n');
+        versionChild.stdout.push(null);
+        versionChild.emit('close', 0);
+      });
+
+      const result = await provider.isAvailable();
+
+      expect(result).toBe(true);
+      expect(mockSpawn).toHaveBeenCalledTimes(2);
+
+      // First call should be which/where
+      const expectedCommand = process.platform === 'win32' ? 'where' : 'which';
+      expect(mockSpawn).toHaveBeenNthCalledWith(
+        1,
+        expectedCommand,
+        ['typescript-language-server'],
+        expect.any(Object)
+      );
+
+      // Second call should be version check
+      expect(mockSpawn).toHaveBeenNthCalledWith(
+        2,
+        'typescript-language-server',
+        ['--version'],
+        expect.any(Object)
+      );
+    });
+
+    it('should return false when typescript-language-server is not available', async () => {
+      // First call (which) fails
+      const whichChild = new MockChildProcess();
+      mockSpawn.mockReturnValueOnce(whichChild as unknown as SpawnResult);
+      setImmediate(() => {
+        whichChild.emit('error', new Error('Command not found'));
+      });
+
+      // Second call (version check) fails
+      const versionChild = new MockChildProcess();
+      mockSpawn.mockReturnValueOnce(versionChild as unknown as SpawnResult);
+      setImmediate(() => {
+        versionChild.emit('error', new Error('Command not found'));
+      });
+
+      // Third call (npm list) fails
+      const npmChild = new MockChildProcess();
+      mockSpawn.mockReturnValueOnce(npmChild as unknown as SpawnResult);
+      setImmediate(() => {
+        npmChild.emit('error', new Error('npm not found'));
       });
 
       const result = await provider.isAvailable();
 
       expect(result).toBe(false);
+      expect(mockSpawn).toHaveBeenCalledTimes(3);
     });
   });
 
