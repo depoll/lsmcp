@@ -28,5 +28,5 @@
     "esm": true
   },
   "include": ["src/**/*", "tests/**/*"],
-  "exclude": ["node_modules", "dist", "coverage"]
+  "exclude": ["node_modules", "dist", "coverage", "tests/fixtures"]
 }
