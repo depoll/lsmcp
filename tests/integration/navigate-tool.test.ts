@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from '@jest/globals';
 import { ConnectionPool } from '../../src/lsp/manager.js';
 import { NavigateTool } from '../../src/tools/navigate.js';
+import { pathToFileUri } from '../../src/utils/logger.js';
 import { execSync } from 'child_process';
 import { writeFileSync, rmSync, mkdirSync } from 'fs';
 import { join } from 'path';
@@ -101,7 +102,7 @@ manager.addUser(testUser);
 `
     );
 
-    testFileUri = `file://${mainFile}`;
+    testFileUri = pathToFileUri(mainFile);
   });
 
   afterEach(() => {
@@ -278,7 +279,7 @@ const role: UserRole = 'admin';
 
     // Navigate from the import statement which might have multiple results
     const result = await navigateTool.execute({
-      uri: `file://${importsFile}`,
+      uri: pathToFileUri(importsFile),
       position: { line: 0, character: 10 }, // On the import statement
       target: 'definition',
       maxResults: 2,
@@ -359,7 +360,7 @@ function internalFunction() {
 
     // Navigate from a position that might have multiple results
     const result = await navigateTool.execute({
-      uri: `file://${localFile}`,
+      uri: pathToFileUri(localFile),
       position: { line: 3, character: 2 }, // Inside localFunction
       target: 'definition',
     });

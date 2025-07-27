@@ -20,3 +20,21 @@ export const logger = isTest
         },
       },
     });
+
+/**
+ * Convert a filesystem path to a proper file:// URI
+ * Handles Windows paths correctly
+ */
+export function pathToFileUri(path: string): string {
+  if (path.startsWith('file://')) {
+    return path;
+  }
+
+  // Handle Windows paths
+  if (process.platform === 'win32') {
+    return `file:///${path.replace(/\\/g, '/')}`;
+  }
+
+  // Unix-like paths
+  return `file://${path}`;
+}

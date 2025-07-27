@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from '@jest/globals';
 import { FindUsagesTool } from '../../src/tools/find-usages.js';
 import { ConnectionPool } from '../../src/lsp/index.js';
+import { pathToFileUri } from '../../src/utils/logger.js';
 // import { TypeScriptLanguageProvider } from '../../src/lsp/languages/typescript-provider.js';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
@@ -39,7 +40,7 @@ describe('FindUsagesTool Efficiency Benchmarks', () => {
   const comparisons: EfficiencyComparison[] = [];
 
   const createFindUsagesParams = (overrides: Partial<FindUsagesParams> = {}): FindUsagesParams => ({
-    uri: `file://${testDir}/test.ts`,
+    uri: pathToFileUri(join(testDir, 'test.ts')),
     position: { line: 0, character: 0 },
     type: 'references' as const,
     maxResults: 1000,
@@ -330,7 +331,7 @@ describe('AuthService', () => {
     });
 
     // Pre-initialize language server
-    const fileUri = `file://${join(testDir, 'src/models/User.ts')}`;
+    const fileUri = pathToFileUri(join(testDir, 'src/models/User.ts'));
     try {
       await connectionPool.getForFile(fileUri, 'typescript');
     } catch {
@@ -367,7 +368,7 @@ describe('AuthService', () => {
 
   it('should efficiently find all references to User class', async () => {
     const params = createFindUsagesParams({
-      uri: `file://${join(testDir, 'src/models/User.ts')}`,
+      uri: pathToFileUri(join(testDir, 'src/models/User.ts')),
       position: { line: 8, character: 13 }, // Position of 'User' class declaration
       type: 'references',
       includeDeclaration: true,
@@ -435,7 +436,7 @@ describe('AuthService', () => {
 
   it('should efficiently find call hierarchy for authenticate method', async () => {
     const params = createFindUsagesParams({
-      uri: `file://${join(testDir, 'src/services/authService.ts')}`,
+      uri: pathToFileUri(join(testDir, 'src/services/authService.ts')),
       position: { line: 5, character: 9 }, // Position of 'authenticate' method
       type: 'callHierarchy',
       direction: 'incoming',
@@ -510,20 +511,20 @@ describe('AuthService', () => {
 
   it('should efficiently batch find references for multiple utilities', async () => {
     const params = createFindUsagesParams({
-      uri: `file://${join(testDir, 'src/utils/jwt.ts')}`,
+      uri: pathToFileUri(join(testDir, 'src/utils/jwt.ts')),
       position: { line: 0, character: 0 }, // Dummy position
       type: 'references',
       batch: [
         {
-          uri: `file://${join(testDir, 'src/utils/jwt.ts')}`,
+          uri: pathToFileUri(join(testDir, 'src/utils/jwt.ts')),
           position: { line: 7, character: 17 }, // generateToken
         },
         {
-          uri: `file://${join(testDir, 'src/utils/jwt.ts')}`,
+          uri: pathToFileUri(join(testDir, 'src/utils/jwt.ts')),
           position: { line: 12, character: 17 }, // verifyToken
         },
         {
-          uri: `file://${join(testDir, 'src/utils/jwt.ts')}`,
+          uri: pathToFileUri(join(testDir, 'src/utils/jwt.ts')),
           position: { line: 18, character: 17 }, // getUserFromToken
         },
       ],
@@ -594,7 +595,7 @@ describe('AuthService', () => {
   it('should stream large reference results efficiently', async () => {
     // Find references to something used frequently
     const params = createFindUsagesParams({
-      uri: `file://${join(testDir, 'src/models/User.ts')}`,
+      uri: pathToFileUri(join(testDir, 'src/models/User.ts')),
       position: { line: 0, character: 17 }, // UserData interface
       type: 'references',
       includeDeclaration: true,
