@@ -69,9 +69,7 @@ export class ProcessManager extends EventEmitter {
           'Process spawn error'
         );
         reject(
-          new ConnectionError(
-            `Failed to spawn process "${this.config.command}": ${error.message}`
-          )
+          new ConnectionError(`Failed to spawn process "${this.config.command}": ${error.message}`)
         );
       });
 

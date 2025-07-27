@@ -2,6 +2,7 @@ export default {
   preset: 'ts-jest/presets/default-esm',
   testEnvironment: 'node',
   extensionsToTreatAsEsm: ['.ts'],
+  forceExit: true, // Force exit after tests to handle external processes
   globals: {
     'ts-jest': {
       useESM: true,

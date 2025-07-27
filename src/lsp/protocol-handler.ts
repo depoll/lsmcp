@@ -76,6 +76,7 @@ export class ProtocolHandler {
         timeoutId = setTimeout(() => {
           reject(new TimeoutError(`Ping request timed out after ${this.requestTimeout}ms`));
         }, this.requestTimeout);
+        timeoutId.unref();
       });
 
       const requestPromise = this.connection.sendRequest('$/ping', {});
@@ -104,6 +105,7 @@ export class ProtocolHandler {
       timeoutId = setTimeout(() => {
         reject(new TimeoutError(`Request ${method} timed out after ${timeout}ms`));
       }, timeout);
+      timeoutId.unref();
     });
 
     // Use the untyped string-based sendRequest overload

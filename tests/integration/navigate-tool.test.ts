@@ -23,7 +23,7 @@ describe('Navigate Tool Integration Tests', () => {
     }
 
     pool = new ConnectionPool({
-      healthCheckInterval: 10000, // Increase interval to reduce CI noise
+      healthCheckInterval: 0, // Disable health checks in tests to prevent hanging
       maxRetries: 2, // Reduce retries in test environment
     });
 
