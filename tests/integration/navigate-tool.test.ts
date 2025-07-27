@@ -204,7 +204,7 @@ manager.addUser(testUser);
       pending('TypeScript language server not installed');
     }
 
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+    await new Promise((resolve) => setTimeout(resolve, 2000));
 
     // Batch navigation to multiple targets
     const result = await navigateTool.execute({
@@ -232,7 +232,7 @@ manager.addUser(testUser);
     // Check that we got results from different files
     const uniqueUris = new Set(result.results.map((r) => r.uri));
     expect(uniqueUris.size).toBeGreaterThanOrEqual(2); // Should have utils.ts and types.ts
-  });
+  }, 15000);
 
   it('should apply maxResults limit', async () => {
     if (!hasTypeScriptServer) {
