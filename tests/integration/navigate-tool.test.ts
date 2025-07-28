@@ -244,7 +244,7 @@ manager.addUser(testUser);
     if (result.results.length < 3) {
       console.log('Expected at least 3 results but got:', result.results.length);
       console.log('Results:', result.results);
-      console.log('Errors:', result.errors);
+      console.log('Fallback suggestion:', result.fallbackSuggestion);
     }
 
     expect(result.results.length).toBeGreaterThanOrEqual(2); // Reduced expectation to be more robust
