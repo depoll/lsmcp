@@ -574,7 +574,8 @@ describe('FindUsagesTool', () => {
       const tool = new FindUsagesTool(mockPool);
       const uri = 'file:///file.ts';
       const result = tool.extractWorkspaceDir(uri);
-      expect(result).toBe('/');
+      const expectedRoot = process.platform === 'win32' ? 'C:/' : '/';
+      expect(result).toBe(expectedRoot);
     });
   });
 });
