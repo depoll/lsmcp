@@ -9,8 +9,7 @@ import { join } from 'path';
 // Check if typescript-language-server is available synchronously at module load time
 let hasTypeScriptServer = false;
 try {
-  const whichCmd = 'which';
-  execSync(`${whichCmd} typescript-language-server`, { stdio: 'ignore' });
+  execSync('which typescript-language-server', { stdio: 'ignore' });
   hasTypeScriptServer = true;
   console.log('TypeScript language server detected during module load');
 } catch {

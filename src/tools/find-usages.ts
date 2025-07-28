@@ -526,7 +526,7 @@ export class FindUsagesTool extends BatchableTool<FindUsagesParams, FindUsagesRe
   }
 
   /**
-   * Extract workspace directory from a file URI with cross-platform support.
+   * Extract workspace directory from a file URI.
    *
    * @param uri - The file URI (e.g., 'file:///path/to/file.ts')
    * @returns The workspace directory path
@@ -535,9 +535,6 @@ export class FindUsagesTool extends BatchableTool<FindUsagesParams, FindUsagesRe
    * ```typescript
    * extractWorkspaceDir('file:///home/user/project/src/file.ts')
    * // Returns: '/home/user/project/src'
-   *
-   * extractWorkspaceDir('file:///C:/Users/user/project/src/file.ts')
-   * // Returns: 'C:/Users/user/project/src'
    * ```
    */
   extractWorkspaceDir(uri: string): string {
