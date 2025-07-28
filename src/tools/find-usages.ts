@@ -567,7 +567,11 @@ export class FindUsagesTool extends BatchableTool<FindUsagesParams, FindUsagesRe
           return filePath; // Return "C:" for "C:"
         }
         // On Windows, if we're at Unix-style root (like /test.ts or just /), default to C:/
-        if (process.platform === 'win32' && filePath.startsWith('/') && !filePath.match(/^\/[A-Za-z]:/)) {
+        if (
+          process.platform === 'win32' &&
+          filePath.startsWith('/') &&
+          !filePath.match(/^\/[A-Za-z]:/)
+        ) {
           return 'C:/';
         }
         return filePath.startsWith('/') ? '/' : './';
