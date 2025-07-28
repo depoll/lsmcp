@@ -738,12 +738,12 @@ export class FindUsagesTool extends BatchableTool<FindUsagesParams, FindUsagesRe
     // Allow for some tolerance in character position as LSP servers may return
     // slightly different positions for the same symbol
     // Use normalized URIs for comparison to handle Windows case-insensitivity
-    
+
     const normalizedLocationUri = normalizeUri(location.uri);
     const normalizedParamsUri = normalizeUri(params.uri);
     const lineMatch = location.range.start.line === params.position.line;
     const charMatch = Math.abs(location.range.start.character - params.position.character) <= 1;
-    
+
     if (normalizedLocationUri === normalizedParamsUri && lineMatch && charMatch) {
       return 'declaration';
     }

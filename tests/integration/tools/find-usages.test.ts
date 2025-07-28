@@ -173,10 +173,8 @@ export function ackermann(m: number, n: number): number {
       const result = await tool.execute(params);
 
       expect(result.references).toBeDefined();
-      
-      
-      expect(result.references!.length).toBeGreaterThan(0);
 
+      expect(result.references!.length).toBeGreaterThan(0);
 
       // Should find references in both math.ts and app.ts
       const fileUris = new Set(result.references!.map((ref) => ref.uri));
