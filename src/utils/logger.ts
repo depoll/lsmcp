@@ -35,8 +35,12 @@ export function pathToFileUri(path: string): string {
     return `file:///${path.replace(/\\/g, '/')}`;
   }
 
-  // Unix-like paths
-  return `file://${path}`;
+  // Unix-like paths - ensure we have exactly three slashes for absolute paths
+  if (path.startsWith('/')) {
+    return `file://${path}`;
+  } else {
+    return `file:///${path}`;
+  }
 }
 
 /**

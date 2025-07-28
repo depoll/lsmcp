@@ -27,8 +27,10 @@ describe('FindUsagesTool Integration', () => {
   });
 
   beforeAll(async () => {
-    // Create test directory in temp directory
-    testDir = join(process.cwd(), 'tests', 'fixtures', 'find-usages-test');
+    // Create test directory with unique name to avoid race conditions
+    const timestamp = Date.now();
+    const random = Math.random().toString(36).substring(2, 8);
+    testDir = join(process.cwd(), 'tests', 'fixtures', `find-usages-test-${timestamp}-${random}`);
     await mkdir(testDir, { recursive: true });
 
     // Create test TypeScript files
@@ -163,7 +165,7 @@ export function ackermann(m: number, n: number): number {
     it('should find all references to add function', async () => {
       const params = createFindUsagesParams({
         uri: pathToFileUri(join(testDir, 'math.ts')),
-        position: { line: 0, character: 15 }, // Position of 'add' function name
+        position: { line: 0, character: 16 }, // Position of 'add' function name
         type: 'references',
         includeDeclaration: true,
       });
@@ -171,7 +173,10 @@ export function ackermann(m: number, n: number): number {
       const result = await tool.execute(params);
 
       expect(result.references).toBeDefined();
+      
+      
       expect(result.references!.length).toBeGreaterThan(0);
+
 
       // Should find references in both math.ts and app.ts
       const fileUris = new Set(result.references!.map((ref) => ref.uri));
@@ -189,7 +194,7 @@ export function ackermann(m: number, n: number): number {
     it('should find references without declaration', async () => {
       const params = createFindUsagesParams({
         uri: pathToFileUri(join(testDir, 'math.ts')),
-        position: { line: 0, character: 17 }, // Position of 'add' function
+        position: { line: 0, character: 16 }, // Position of 'add' function
         type: 'references',
         includeDeclaration: false,
       });
@@ -225,7 +230,7 @@ export function ackermann(m: number, n: number): number {
     it('should respect maxResults limit', async () => {
       const params = createFindUsagesParams({
         uri: pathToFileUri(join(testDir, 'math.ts')),
-        position: { line: 0, character: 17 }, // Position of 'add' function
+        position: { line: 0, character: 16 }, // Position of 'add' function
         type: 'references',
         maxResults: 3,
       });
@@ -241,7 +246,7 @@ export function ackermann(m: number, n: number): number {
     it('should find incoming calls', async () => {
       const params = createFindUsagesParams({
         uri: pathToFileUri(join(testDir, 'math.ts')),
-        position: { line: 0, character: 17 }, // Position of 'add' function
+        position: { line: 0, character: 16 }, // Position of 'add' function
         type: 'callHierarchy',
         direction: 'incoming',
         maxDepth: 2,
@@ -262,7 +267,7 @@ export function ackermann(m: number, n: number): number {
     it('should find outgoing calls', async () => {
       const params = createFindUsagesParams({
         uri: pathToFileUri(join(testDir, 'math.ts')),
-        position: { line: 8, character: 17 }, // Position of 'calculate' function
+        position: { line: 8, character: 16 }, // Position of 'calculate' function
         type: 'callHierarchy',
         direction: 'outgoing',
         maxDepth: 1,
@@ -283,7 +288,7 @@ export function ackermann(m: number, n: number): number {
     it('should handle recursive calls', async () => {
       const params = createFindUsagesParams({
         uri: pathToFileUri(join(testDir, 'recursive.ts')),
-        position: { line: 0, character: 17 }, // Position of 'factorial' function
+        position: { line: 0, character: 16 }, // Position of 'factorial' function
         type: 'callHierarchy',
         direction: 'outgoing',
         maxDepth: 3,
@@ -312,11 +317,11 @@ export function ackermann(m: number, n: number): number {
         batch: [
           {
             uri: pathToFileUri(join(testDir, 'math.ts')),
-            position: { line: 0, character: 17 }, // 'add' function
+            position: { line: 0, character: 16 }, // 'add' function
           },
           {
             uri: pathToFileUri(join(testDir, 'math.ts')),
-            position: { line: 4, character: 17 }, // 'multiply' function
+            position: { line: 4, character: 16 }, // 'multiply' function
           },
         ],
       });
