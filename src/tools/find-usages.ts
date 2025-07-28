@@ -566,6 +566,10 @@ export class FindUsagesTool extends BatchableTool<FindUsagesParams, FindUsagesRe
         if (filePath.match(/^[A-Za-z]:$/)) {
           return filePath; // Return "C:" for "C:"
         }
+        // On Windows, if we're at Unix-style root (like /test.ts), default to C:/
+        if (process.platform === 'win32' && filePath.startsWith('/')) {
+          return 'C:/';
+        }
         return filePath.startsWith('/') ? '/' : './';
       }
 
@@ -592,7 +596,9 @@ export class FindUsagesTool extends BatchableTool<FindUsagesParams, FindUsagesRe
       const files = await fs.readdir(workspaceDir);
       const tsFiles = files.filter((file) => file.endsWith('.ts') || file.endsWith('.js'));
 
-      logger.info(`Opening ${tsFiles.length} TypeScript files in workspace: ${workspaceDir}`, { files: tsFiles });
+      logger.info(`Opening ${tsFiles.length} TypeScript files in workspace: ${workspaceDir}`, {
+        files: tsFiles,
+      });
 
       // Open each TypeScript file
       for (const file of tsFiles) {
