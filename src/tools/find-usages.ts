@@ -551,30 +551,11 @@ export class FindUsagesTool extends BatchableTool<FindUsagesParams, FindUsagesRe
 
       let filePath = parsed.pathname;
 
-      // Handle Windows paths (remove leading slash for Windows drive letters)
-      // Windows file URIs have format: file:///C:/path/to/file
-      // We need to remove the leading slash to get: C:/path/to/file
-      if (filePath.startsWith('/') && filePath.match(/^\/[A-Za-z]:/)) {
-        filePath = filePath.slice(1);
-      }
-
-      // Extract directory (everything before the last slash)
+      // Extract directory (everything before the last slash) - Unix-style paths
       const lastSlash = filePath.lastIndexOf('/');
       if (lastSlash <= 0) {
-        // If no slash or at root, return a sensible default
-        // Check if this looks like a Windows path
-        if (filePath.match(/^[A-Za-z]:$/)) {
-          return filePath; // Return "C:" for "C:"
-        }
-        // On Windows, if we're at Unix-style root (like /test.ts or just /), default to C:/
-        if (
-          process.platform === 'win32' &&
-          filePath.startsWith('/') &&
-          !filePath.match(/^\/[A-Za-z]:/)
-        ) {
-          return 'C:/';
-        }
-        return filePath.startsWith('/') ? '/' : './';
+        // If no slash or at root, return Unix root
+        return '/';
       }
 
       return filePath.substring(0, lastSlash);
@@ -737,7 +718,7 @@ export class FindUsagesTool extends BatchableTool<FindUsagesParams, FindUsagesRe
     // Check if this is the original declaration/definition position
     // Allow for some tolerance in character position as LSP servers may return
     // slightly different positions for the same symbol
-    // Use normalized URIs for comparison to handle Windows case-insensitivity
+    // Use normalized URIs for comparison
 
     const normalizedLocationUri = normalizeUri(location.uri);
     const normalizedParamsUri = normalizeUri(params.uri);

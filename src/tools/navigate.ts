@@ -364,20 +364,11 @@ export class NavigateTool extends BatchableTool<NavigateParams, NavigateResult> 
 
       let filePath = parsed.pathname;
 
-      // Handle Windows paths (remove leading slash on Windows)
-      if (
-        process.platform === 'win32' &&
-        filePath.startsWith('/') &&
-        filePath.match(/^\/[A-Za-z]:/)
-      ) {
-        filePath = filePath.slice(1);
-      }
-
-      // Extract directory (everything before the last slash)
+      // Extract directory (everything before the last slash) - Unix-style paths
       const lastSlash = filePath.lastIndexOf('/');
       if (lastSlash <= 0) {
-        // If no slash or at root, return a sensible default
-        return process.platform === 'win32' ? 'C:/' : '/';
+        // If no slash or at root, return Unix root
+        return '/';
       }
 
       return filePath.substring(0, lastSlash);

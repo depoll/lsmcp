@@ -95,7 +95,7 @@ describe('FindUsagesTool', () => {
 
       // eslint-disable-next-line @typescript-eslint/unbound-method
       const getForFileMock = jest.mocked(mockPool.getForFile);
-      const expectedWorkspaceRoot = process.platform === 'win32' ? 'C:/' : '/';
+      const expectedWorkspaceRoot = '/';
       expect(getForFileMock).toHaveBeenCalledWith('file:///test.ts', expectedWorkspaceRoot);
       expect(mockConnection.sendRequest).toHaveBeenCalledWith('textDocument/references', {
         textDocument: { uri: 'file:///test.ts' },
@@ -556,26 +556,11 @@ describe('FindUsagesTool', () => {
       expect(result).toBe('/home/user/project/src');
     });
 
-    it('should extract workspace directory from Windows file URI', () => {
-      const tool = new FindUsagesTool(mockPool);
-      const uri = 'file:///C:/Users/user/project/src/file.ts';
-      const result = tool.extractWorkspaceDir(uri);
-      expect(result).toBe('C:/Users/user/project/src');
-    });
-
-    it('should handle short Windows paths', () => {
-      const tool = new FindUsagesTool(mockPool);
-      const uri = 'file:///C:/file.ts';
-      const result = tool.extractWorkspaceDir(uri);
-      expect(result).toBe('C:');
-    });
-
     it('should handle root paths', () => {
       const tool = new FindUsagesTool(mockPool);
       const uri = 'file:///file.ts';
       const result = tool.extractWorkspaceDir(uri);
-      const expectedRoot = process.platform === 'win32' ? 'C:/' : '/';
-      expect(result).toBe(expectedRoot);
+      expect(result).toBe('/');
     });
   });
 });

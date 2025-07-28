@@ -503,14 +503,9 @@ export class SymbolSearchTool extends BatchableTool<SymbolSearchParams, SymbolSe
       if (url.protocol === 'file:') {
         // Normalize file paths
         const filePath = decodeURIComponent(url.pathname);
-        // On Windows, remove leading slash if it's a drive letter
-        const normalizedPath =
-          process.platform === 'win32' && filePath.startsWith('/') && /^\/[a-zA-Z]:/.test(filePath)
-            ? filePath.substring(1)
-            : filePath;
 
-        // Use path module for proper path manipulation
-        const dir = dirname(normalizedPath);
+        // Use path module for proper path manipulation (Unix-style paths)
+        const dir = dirname(filePath);
 
         // Security: Validate that the resolved path is within allowed boundaries
         const resolvedPath = resolve(dir);

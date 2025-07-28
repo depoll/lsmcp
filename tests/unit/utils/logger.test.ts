@@ -15,85 +15,24 @@ describe('Logger Utils', () => {
       expect(result).toBe(uri);
     });
 
-    it('should handle Windows paths on Windows platform', () => {
-      const originalPlatform = process.platform;
-      Object.defineProperty(process, 'platform', {
-        value: 'win32',
-        configurable: true,
-      });
-
-      try {
-        const path = 'C:\\Users\\user\\project\\file.ts';
-        const uri = pathToFileUri(path);
-        expect(uri).toBe('file:///C:/Users/user/project/file.ts');
-      } finally {
-        Object.defineProperty(process, 'platform', {
-          value: originalPlatform,
-          configurable: true,
-        });
-      }
+    it('should handle relative paths', () => {
+      const path = 'relative/path/file.ts';
+      const uri = pathToFileUri(path);
+      expect(uri).toBe('file:///relative/path/file.ts');
     });
   });
 
   describe('normalizeUri', () => {
-    it('should return URIs unchanged on Unix-like systems', () => {
-      const originalPlatform = process.platform;
-      Object.defineProperty(process, 'platform', {
-        value: 'darwin',
-        configurable: true,
-      });
-
-      try {
-        const uri = 'file:///home/user/project/file.ts';
-        const normalized = normalizeUri(uri);
-        expect(normalized).toBe(uri);
-      } finally {
-        Object.defineProperty(process, 'platform', {
-          value: originalPlatform,
-          configurable: true,
-        });
-      }
+    it('should return URIs unchanged in container environment', () => {
+      const uri = 'file:///home/user/project/file.ts';
+      const normalized = normalizeUri(uri);
+      expect(normalized).toBe(uri);
     });
 
-    it('should lowercase URIs on Windows', () => {
-      const originalPlatform = process.platform;
-      Object.defineProperty(process, 'platform', {
-        value: 'win32',
-        configurable: true,
-      });
-
-      try {
-        const uri = 'file:///C:/Users/USER/Project/FILE.ts';
-        const normalized = normalizeUri(uri);
-        expect(normalized).toBe('file:///c:/users/user/project/file.ts');
-      } finally {
-        Object.defineProperty(process, 'platform', {
-          value: originalPlatform,
-          configurable: true,
-        });
-      }
-    });
-
-    it('should handle case differences in Windows drive letters', () => {
-      const originalPlatform = process.platform;
-      Object.defineProperty(process, 'platform', {
-        value: 'win32',
-        configurable: true,
-      });
-
-      try {
-        const uri1 = 'file:///C:/path/to/file.ts';
-        const uri2 = 'file:///c:/path/to/file.ts';
-        const normalized1 = normalizeUri(uri1);
-        const normalized2 = normalizeUri(uri2);
-        expect(normalized1).toBe(normalized2);
-        expect(normalized1).toBe('file:///c:/path/to/file.ts');
-      } finally {
-        Object.defineProperty(process, 'platform', {
-          value: originalPlatform,
-          configurable: true,
-        });
-      }
+    it('should preserve case-sensitive paths', () => {
+      const uri = 'file:///Path/To/File.ts';
+      const normalized = normalizeUri(uri);
+      expect(normalized).toBe(uri);
     });
   });
 });

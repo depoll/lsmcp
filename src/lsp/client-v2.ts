@@ -196,12 +196,7 @@ export class LSPClientV2 extends EventEmitter {
       return path;
     }
 
-    // Handle Windows paths
-    if (process.platform === 'win32') {
-      return `file:///${path.replace(/\\/g, '/')}`;
-    }
-
-    // Unix-like paths
+    // Unix-style paths in container environment
     return `file://${path}`;
   }
 }

@@ -34,10 +34,10 @@ export class ProcessManager extends EventEmitter {
       }, this.startTimeout);
       timeout.unref();
 
-      // On Windows, we may need shell to resolve .cmd files
+      // Container environment doesn't need shell resolution
       const spawnOptions = {
         stdio: 'pipe' as const,
-        shell: process.platform === 'win32',
+        shell: false,
       };
 
       this.process = spawn(this.config.command, this.config.args, spawnOptions);

@@ -30,9 +30,8 @@ export class TypeScriptLanguageServerProvider implements LanguageServerProvider 
 
   async isAvailable(): Promise<boolean> {
     try {
-      // First try simple which/where check
-      const whichCmd = process.platform === 'win32' ? 'where' : 'which';
-      await this.executeCommand([whichCmd, 'typescript-language-server']);
+      // Try simple which check (Unix-style since we're container-first)
+      await this.executeCommand(['which', 'typescript-language-server']);
       logger.info('TypeScript language server found in PATH');
       return true;
     } catch (whichError) {
@@ -141,14 +140,14 @@ export class TypeScriptLanguageServerProvider implements LanguageServerProvider 
         return;
       }
 
-      // Use spawn for security - no shell interpretation on Unix, shell on Windows for .cmd resolution
+      // Use spawn for security - no shell interpretation (container environment)
       let child: ChildProcessByStdio<null, Readable, Readable> | undefined;
       try {
         child = spawn(cmd, args, {
           cwd: this.language.rootPath || process.cwd(),
           env: process.env,
           stdio: ['ignore', 'pipe', 'pipe'],
-          shell: process.platform === 'win32',
+          shell: false,
         });
       } catch (error) {
         reject(

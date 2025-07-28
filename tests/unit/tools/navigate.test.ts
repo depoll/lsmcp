@@ -95,8 +95,7 @@ describe('NavigateTool', () => {
 
   describe('single navigation', () => {
     // Use platform-appropriate file URLs
-    const isWindows = process.platform === 'win32';
-    const filePrefix = isWindows ? 'file:///C:' : 'file://';
+    const filePrefix = 'file://';
 
     const singleParams = {
       uri: `${filePrefix}/test/file.ts`,
@@ -227,8 +226,7 @@ describe('NavigateTool', () => {
 
   describe('batch navigation', () => {
     // Use platform-appropriate file URLs
-    const isWindows = process.platform === 'win32';
-    const filePrefix = isWindows ? 'file:///C:' : 'file://';
+    const filePrefix = 'file://';
 
     const batchParams = {
       batch: [
@@ -282,8 +280,7 @@ describe('NavigateTool', () => {
 
   describe('result processing', () => {
     // Use platform-appropriate file URLs
-    const isWindows = process.platform === 'win32';
-    const filePrefix = isWindows ? 'file:///C:' : 'file://';
+    const filePrefix = 'file://';
 
     it('should sort results by relevance', async () => {
       const sourceUri = `${filePrefix}/project/src/index.ts`;
@@ -319,8 +316,7 @@ describe('NavigateTool', () => {
 
   describe('caching', () => {
     // Use platform-appropriate file URLs
-    const isWindows = process.platform === 'win32';
-    const filePrefix = isWindows ? 'file:///C:' : 'file://';
+    const filePrefix = 'file://';
 
     it('should return consistent results for repeated calls', async () => {
       // Note: Due to ES module mocking limitations, we cannot directly test cache internals.

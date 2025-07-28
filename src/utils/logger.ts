@@ -23,19 +23,14 @@ export const logger = isTest
 
 /**
  * Convert a filesystem path to a proper file:// URI
- * Handles Windows paths correctly
+ * Container environment uses Unix-style paths
  */
 export function pathToFileUri(path: string): string {
   if (path.startsWith('file://')) {
     return path;
   }
 
-  // Handle Windows paths
-  if (process.platform === 'win32') {
-    return `file:///${path.replace(/\\/g, '/')}`;
-  }
-
-  // Unix-like paths - ensure we have exactly three slashes for absolute paths
+  // Unix-style paths - ensure we have exactly three slashes for absolute paths
   if (path.startsWith('/')) {
     return `file://${path}`;
   } else {
@@ -45,12 +40,8 @@ export function pathToFileUri(path: string): string {
 
 /**
  * Normalize a file URI for comparison
- * On Windows, makes URIs lowercase for case-insensitive comparison
- * On Unix-like systems, returns the URI unchanged
+ * Container environment uses case-sensitive Unix-style paths
  */
 export function normalizeUri(uri: string): string {
-  if (process.platform === 'win32') {
-    return uri.toLowerCase();
-  }
   return uri;
 }

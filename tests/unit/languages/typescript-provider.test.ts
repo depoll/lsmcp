@@ -91,7 +91,7 @@ describe('TypeScriptLanguageServerProvider', () => {
       const mockChild = new MockChildProcess();
       mockSpawn.mockReturnValueOnce(mockChild as unknown as SpawnResult);
 
-      // Simulate successful which/where command (first check)
+      // Simulate successful which command (first check)
       setImmediate(() => {
         mockChild.stdout.push('/usr/local/bin/typescript-language-server\n');
         mockChild.stdout.push(null); // End stream
@@ -101,10 +101,9 @@ describe('TypeScriptLanguageServerProvider', () => {
       const result = await provider.isAvailable();
 
       expect(result).toBe(true);
-      // Should call 'which' first (or 'where' on Windows)
-      const expectedCommand = process.platform === 'win32' ? 'where' : 'which';
+      // Should call 'which' first (container environment uses Unix commands)
       expect(mockSpawn).toHaveBeenCalledWith(
-        expectedCommand,
+        'which',
         ['typescript-language-server'],
         expect.objectContaining({
           cwd: '/test/project',
@@ -135,11 +134,10 @@ describe('TypeScriptLanguageServerProvider', () => {
       expect(result).toBe(true);
       expect(mockSpawn).toHaveBeenCalledTimes(2);
 
-      // First call should be which/where
-      const expectedCommand = process.platform === 'win32' ? 'where' : 'which';
+      // First call should be which (container environment uses Unix commands)
       expect(mockSpawn).toHaveBeenNthCalledWith(
         1,
-        expectedCommand,
+        'which',
         ['typescript-language-server'],
         expect.any(Object)
       );
