@@ -547,4 +547,34 @@ describe('FindUsagesTool', () => {
       await expect(tool.execute(params)).rejects.toThrow('Connection failed');
     });
   });
+
+  describe('extractWorkspaceDir', () => {
+    it('should extract workspace directory from Unix file URI', () => {
+      const tool = new FindUsagesTool(mockPool);
+      const uri = 'file:///home/user/project/src/file.ts';
+      const result = tool.extractWorkspaceDir(uri);
+      expect(result).toBe('/home/user/project/src');
+    });
+
+    it('should extract workspace directory from Windows file URI', () => {
+      const tool = new FindUsagesTool(mockPool);
+      const uri = 'file:///C:/Users/user/project/src/file.ts';
+      const result = tool.extractWorkspaceDir(uri);
+      expect(result).toBe('C:/Users/user/project/src');
+    });
+
+    it('should handle short Windows paths', () => {
+      const tool = new FindUsagesTool(mockPool);
+      const uri = 'file:///C:/file.ts';
+      const result = tool.extractWorkspaceDir(uri);
+      expect(result).toBe('C:');
+    });
+
+    it('should handle root paths', () => {
+      const tool = new FindUsagesTool(mockPool);
+      const uri = 'file:///file.ts';
+      const result = tool.extractWorkspaceDir(uri);
+      expect(result).toBe('/');
+    });
+  });
 });
