@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { BatchableTool } from './base.js';
 import { ConnectionPool } from '../lsp/index.js';
-import { pathToFileUri } from '../utils/logger.js';
+import { pathToFileUri, normalizeUri } from '../utils/logger.js';
 import {
   Location,
   Range,
@@ -737,8 +737,9 @@ export class FindUsagesTool extends BatchableTool<FindUsagesParams, FindUsagesRe
     // Check if this is the original declaration/definition position
     // Allow for some tolerance in character position as LSP servers may return
     // slightly different positions for the same symbol
+    // Use normalized URIs for comparison to handle Windows case-insensitivity
     if (
-      location.uri === params.uri &&
+      normalizeUri(location.uri) === normalizeUri(params.uri) &&
       location.range.start.line === params.position.line &&
       Math.abs(location.range.start.character - params.position.character) <= 1
     ) {

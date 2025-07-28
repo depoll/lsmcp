@@ -38,3 +38,15 @@ export function pathToFileUri(path: string): string {
   // Unix-like paths
   return `file://${path}`;
 }
+
+/**
+ * Normalize a file URI for comparison
+ * On Windows, makes URIs lowercase for case-insensitive comparison
+ * On Unix-like systems, returns the URI unchanged
+ */
+export function normalizeUri(uri: string): string {
+  if (process.platform === 'win32') {
+    return uri.toLowerCase();
+  }
+  return uri;
+}
