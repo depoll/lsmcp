@@ -8,6 +8,7 @@ import { z } from 'zod';
 import { ConnectionPool } from '../lsp/index.js';
 import { BatchableTool } from './base.js';
 import { FileAwareLRUCache } from '../utils/fileCache.js';
+import { pathToFileUri } from '../utils/logger.js';
 import { readFile } from 'fs/promises';
 import { fileURLToPath } from 'url';
 import { relative, dirname } from 'path';
@@ -407,7 +408,7 @@ export class NavigateTool extends BatchableTool<NavigateParams, NavigateResult> 
       // Open each TypeScript file
       for (const file of tsFiles) {
         const filePath = path.join(workspaceDir, file);
-        const fileUri = `file://${filePath}`;
+        const fileUri = pathToFileUri(filePath);
         await this.ensureDocumentOpen(connection, fileUri);
       }
     } catch (error) {

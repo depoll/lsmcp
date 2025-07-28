@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { BatchableTool } from './base.js';
 import { ConnectionPool } from '../lsp/index.js';
+import { pathToFileUri } from '../utils/logger.js';
 import {
   Location,
   Range,
@@ -169,6 +170,7 @@ export class FindUsagesTool extends BatchableTool<FindUsagesParams, FindUsagesRe
 
   private async findReferences(params: FindUsagesParams): Promise<ReferenceResult[]> {
     const workspaceDir = this.extractWorkspaceDir(params.uri);
+    logger.info(`Find references: URI=${params.uri}, workspace=${workspaceDir}`);
     const connection = await this.clientManager.getForFile(params.uri, workspaceDir);
 
     if (!connection) {
@@ -590,12 +592,12 @@ export class FindUsagesTool extends BatchableTool<FindUsagesParams, FindUsagesRe
       const files = await fs.readdir(workspaceDir);
       const tsFiles = files.filter((file) => file.endsWith('.ts') || file.endsWith('.js'));
 
-      logger.info(`Opening ${tsFiles.length} TypeScript files in workspace: ${workspaceDir}`);
+      logger.info(`Opening ${tsFiles.length} TypeScript files in workspace: ${workspaceDir}`, { files: tsFiles });
 
       // Open each TypeScript file
       for (const file of tsFiles) {
         const filePath = path.join(workspaceDir, file);
-        const fileUri = `file://${filePath}`;
+        const fileUri = pathToFileUri(filePath);
         await this.ensureDocumentOpen(connection, fileUri);
       }
     } catch (error) {
