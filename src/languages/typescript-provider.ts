@@ -23,8 +23,8 @@ export class TypeScriptLanguageServerProvider implements LanguageServerProvider 
     return (
       process.env['CONTAINER'] === 'true' ||
       process.env['DOCKER'] === 'true' ||
-      existsSync('/.dockerenv') ||
-      process.cwd() === '/workspace'
+      // Check for /.dockerenv file (most reliable container indicator)
+      existsSync('/.dockerenv')
     );
   }
 

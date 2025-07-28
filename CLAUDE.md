@@ -26,7 +26,7 @@ The project has a comprehensive implementation plan (see PLAN.md) and foundation
 ✅ **NEW APPROACH** - The project now runs in Docker containers to solve cross-platform compatibility issues:
 
 - **Docker Container**: MCP server runs inside container with language servers pre-installed
-- **Working Directory Mount**: User's code is mounted at `/workspace` in the container
+- **Consistent Path Mounting**: User's code is mounted at the same path as the host system
 - **Safe Auto-Installation**: Language servers can be safely installed within container isolation
 - **Windows Compatibility**: Eliminates Windows-specific LSP server installation issues
 

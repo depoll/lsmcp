@@ -24,7 +24,7 @@ This project creates an MCP server that communicates with LSP servers, enabling 
 2. **Configure your MCP client** to use the `lsmcp` server from `.mcp.json`
 
 3. **The container will:**
-   - Mount your working directory at `/workspace`
+   - Mount your working directory at the same path as your host system
    - Provide pre-installed language servers for TypeScript, Python, Go, Rust, etc.
    - Automatically detect project languages and provide code intelligence
 
@@ -92,10 +92,37 @@ npm run build
 ## Architecture
 
 The system runs inside a Docker container with:
-- Your workspace mounted at `/workspace`
+- Your workspace mounted at the same path as your host system
 - Language servers pre-installed and configured
 - Automatic language detection and connection pooling
 - Health monitoring and crash recovery
+
+## Troubleshooting
+
+If the MCP server doesn't load in Claude Code:
+
+1. **Build the Docker image first:**
+   ```bash
+   npm run docker:build
+   ```
+
+2. **Run the debug script:**
+   ```bash
+   npm run debug:mcp
+   ```
+
+3. **Try the alternative configuration:**
+   - Use `lsmcp-simple` instead of `lsmcp` in your MCP client
+   - This uses `/workspace` mounting as fallback
+
+4. **Check Docker connectivity:**
+   - Ensure Docker Desktop is running
+   - Verify Claude Code can access Docker daemon
+
+5. **Manual testing:**
+   ```bash
+   echo '{"jsonrpc": "2.0", "id": 1, "method": "tools/list"}' | docker run --rm -i -v "$(pwd):$(pwd)" -w "$(pwd)" lsmcp:latest
+   ```
 
 ## Development
 

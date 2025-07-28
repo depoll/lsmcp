@@ -19,10 +19,11 @@
     "post-edit-check": "node scripts/hooks/post-edit-check.js",
     "postinstall": "npm run validate-setup",
     "docker:build": "./scripts/build-docker.sh",
-    "docker:run": "docker run --rm -i -v \"$(pwd):/workspace\" lsmcp:latest",
+    "docker:run": "docker run --rm -i -v \"$(pwd):$(pwd)\" -w \"$(pwd)\" lsmcp:latest",
     "docker:compose": "docker-compose up",
     "docker:dev": "docker-compose -f docker-compose.dev.yml up",
-    "docker:test": "./scripts/docker-test.sh"
+    "docker:test": "./scripts/docker-test.sh",
+    "debug:mcp": "./scripts/debug-mcp.sh"
   },
   "repository": {
     "type": "git",

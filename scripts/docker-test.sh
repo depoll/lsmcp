@@ -5,8 +5,8 @@
 echo "🧪 Running tests in Docker container..."
 
 docker run --rm \
-  -v "$(pwd):/workspace" \
-  -w /workspace \
+  -v "$(pwd):$(pwd)" \
+  -w "$(pwd)" \
   -e NODE_ENV=test \
   --entrypoint="" \
   lsmcp:test \

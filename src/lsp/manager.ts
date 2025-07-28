@@ -87,10 +87,8 @@ export class ConnectionPool {
     return (
       process.env['CONTAINER'] === 'true' ||
       process.env['DOCKER'] === 'true' ||
-      // Check for /.dockerenv file
-      existsSync('/.dockerenv') ||
-      // Check if we're running in workspace directory (mounted in container)
-      process.cwd() === '/workspace'
+      // Check for /.dockerenv file (most reliable container indicator)
+      existsSync('/.dockerenv')
     );
   }
 

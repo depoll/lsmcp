@@ -104,7 +104,8 @@ jobs:
       run: |
         # Test that the container starts and responds
         timeout 30s docker run --rm -i \
-          -v "${PWD}:/workspace" \
+          -v "${PWD}:${PWD}" \
+          -w "${PWD}" \
           lsmcp:test \
           echo '{"method": "initialize", "params": {"clientInfo": {"name": "test"}}}' || true
     

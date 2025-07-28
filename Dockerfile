@@ -44,6 +44,9 @@ ENV PATH="/opt/python-lsp/bin:$PATH"
 ENV GOPATH=/opt/go
 ENV PATH="$GOPATH/bin:$PATH"
 
+# Create workspace directory for fallback mounting
+RUN mkdir -p /workspace
+
 # Development stage
 FROM base AS development
 WORKDIR /app
@@ -54,7 +57,7 @@ COPY src/ ./src/
 COPY tests/ ./tests/
 RUN npm ci
 ENV NODE_ENV=development
-WORKDIR /workspace
+# Container will start in the mounted directory (same path as host)
 CMD ["npx", "tsx", "watch", "/app/src/index.ts"]
 
 # Production stage
@@ -68,6 +71,6 @@ RUN npm ci
 RUN npm run build
 
 ENV NODE_ENV=production
-WORKDIR /workspace
+# Container will start in the mounted directory (same path as host)
 EXPOSE 3000
 CMD ["node", "/app/dist/src/index.js"]
