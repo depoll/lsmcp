@@ -21,6 +21,15 @@ The project has a comprehensive implementation plan (see PLAN.md) and foundation
 - **✅ GitHub Actions CI/CD pipeline with matrix testing**
 - **✅ Basic MCP server with health check functionality**
 
+## Container-First Architecture
+
+✅ **NEW APPROACH** - The project now runs in Docker containers to solve cross-platform compatibility issues:
+
+- **Docker Container**: MCP server runs inside container with language servers pre-installed
+- **Working Directory Mount**: User's code is mounted at `/workspace` in the container
+- **Safe Auto-Installation**: Language servers can be safely installed within container isolation
+- **Windows Compatibility**: Eliminates Windows-specific LSP server installation issues
+
 ## Development Setup
 
 ✅ **COMPLETED** - The project now has a fully functional TypeScript setup with:
@@ -96,7 +105,12 @@ The project implements:
 
 ## Common Development Tasks
 
-Development commands:
+### Container Commands (Production):
+- Build Docker image: `npm run docker:build`
+- Run in container: `npm run docker:run`
+- Use docker-compose: `npm run docker:compose`
+
+### Native Development Commands:
 - Install dependencies: `npm install`
 - Run development server: `npm run dev`
 - Run tests: `npm test`
@@ -107,6 +121,10 @@ Development commands:
 - Type checking: `npm run type-check`
 - Linting: `npm run lint`
 - Build for production: `npm run build`
+
+### MCP Configuration:
+- **Production**: Use `lsmcp` server (runs in Docker)
+- **Development**: Use `lsmcp-dev` server (runs natively)
 
 ## Key Technologies
 

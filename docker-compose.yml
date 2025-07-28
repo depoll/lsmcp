@@ -1,0 +1,24 @@
+version: '3.8'
+
+services:
+  lsmcp:
+    build:
+      context: .
+      target: production
+    volumes:
+      # Mount the working directory into the container
+      - type: bind
+        source: ${WORKSPACE_ROOT:-.}
+        target: /workspace
+        read_only: false
+    environment:
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - NODE_ENV=${NODE_ENV:-production}
+    stdin_open: true
+    tty: true
+    networks:
+      - lsmcp-network
+
+networks:
+  lsmcp-network:
+    driver: bridge

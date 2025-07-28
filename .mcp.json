@@ -11,10 +11,14 @@
     },
     "lsmcp": {
       "type": "stdio",
-      "command": "npx",
+      "command": "docker",
       "args": [
-        "tsx",
-        "src/index.ts"
+        "run",
+        "--rm",
+        "-i",
+        "--volume",
+        "${PWD}:/workspace",
+        "lsmcp:latest"
       ]
     }
   }

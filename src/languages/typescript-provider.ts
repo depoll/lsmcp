@@ -1,6 +1,7 @@
 import { spawn } from 'child_process';
 import type { ChildProcessByStdio } from 'child_process';
 import type { Readable } from 'stream';
+import { existsSync } from 'fs';
 import { DetectedLanguage } from './detector.js';
 import { logger } from '../utils/logger.js';
 
@@ -12,7 +13,20 @@ export interface LanguageServerProvider {
 }
 
 export class TypeScriptLanguageServerProvider implements LanguageServerProvider {
-  constructor(public readonly language: DetectedLanguage) {}
+  private isContainer: boolean;
+
+  constructor(public readonly language: DetectedLanguage) {
+    this.isContainer = this.detectContainer();
+  }
+
+  private detectContainer(): boolean {
+    return (
+      process.env['CONTAINER'] === 'true' ||
+      process.env['DOCKER'] === 'true' ||
+      existsSync('/.dockerenv') ||
+      process.cwd() === '/workspace'
+    );
+  }
 
   async isAvailable(): Promise<boolean> {
     try {
@@ -49,6 +63,15 @@ export class TypeScriptLanguageServerProvider implements LanguageServerProvider 
   }
 
   async install(options?: { force?: boolean }): Promise<void> {
+    // In containers, language servers should already be pre-installed
+    if (this.isContainer) {
+      logger.info('Running in container - language servers should be pre-installed');
+      throw new Error(
+        'Language server installation in containers is not supported. ' +
+          'The typescript-language-server should be pre-installed in the container image.'
+      );
+    }
+
     if (!options?.force) {
       throw new Error(
         'Auto-installation requires explicit user consent. Pass { force: true } to confirm installation.'

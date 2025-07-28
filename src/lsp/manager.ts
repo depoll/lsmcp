@@ -1,6 +1,7 @@
 import { LSPClientV2 as LSPClient } from './client-v2.js';
 import { LanguageServerConfig, HealthStatus, ConnectionPoolOptions } from '../types/lsp.js';
 import { LanguageDetector, createLanguageServerProvider } from '../languages/index.js';
+import { existsSync } from 'fs';
 import pino from 'pino';
 
 const DEFAULT_SERVERS: Record<string, LanguageServerConfig> = {
@@ -18,6 +19,8 @@ const DEFAULT_SERVERS: Record<string, LanguageServerConfig> = {
     command: 'pylsp',
     args: [],
     pip: 'python-lsp-server',
+    // In container, use the virtual environment
+    containerCommand: '/opt/python-lsp/bin/pylsp',
   },
   rust: {
     command: 'rust-analyzer',
@@ -63,6 +66,7 @@ export class ConnectionPool {
   private logger = pino({ level: 'info' });
   private options: Required<ConnectionPoolOptions>;
   private languageDetector = new LanguageDetector();
+  private isContainer = this.detectContainer();
 
   constructor(options: ConnectionPoolOptions = {}) {
     this.options = {
@@ -78,9 +82,29 @@ export class ConnectionPool {
     });
   }
 
+  private detectContainer(): boolean {
+    // Check common container environment indicators
+    return (
+      process.env['CONTAINER'] === 'true' ||
+      process.env['DOCKER'] === 'true' ||
+      // Check for /.dockerenv file
+      existsSync('/.dockerenv') ||
+      // Check if we're running in workspace directory (mounted in container)
+      process.cwd() === '/workspace'
+    );
+  }
+
+  private resolveCommand(config: LanguageServerConfig): string {
+    // Use container-specific command if we're in a container and it's available
+    if (this.isContainer && config.containerCommand) {
+      return config.containerCommand;
+    }
+    return config.command;
+  }
+
   registerLanguageServer(language: string, config: LanguageServerConfig): void {
     this.languageServers.set(language, config);
-    this.logger.info(`Registered language server for ${language}`);
+    this.logger.info(`Registered language server for ${language} (container: ${this.isContainer})`);
   }
 
   /**
@@ -178,7 +202,13 @@ export class ConnectionPool {
     retryCount = 0
   ): Promise<LSPClient> {
     try {
-      const client = new LSPClient(`${language}-${workspace}`, config, {
+      // Resolve command based on environment (container vs host)
+      const resolvedConfig = {
+        ...config,
+        command: this.resolveCommand(config),
+      };
+
+      const client = new LSPClient(`${language}-${workspace}`, resolvedConfig, {
         workspaceFolders: [workspace],
       });
 

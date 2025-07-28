@@ -90,6 +90,30 @@ jobs:
         name: build-artifacts
         path: dist/
 
+  docker-test:
+    runs-on: ubuntu-latest
+    needs: test
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Build Docker image
+      run: docker build -t lsmcp:test .
+    
+    - name: Test Docker image
+      run: |
+        # Test that the container starts and responds
+        timeout 30s docker run --rm -i \
+          -v "${PWD}:/workspace" \
+          lsmcp:test \
+          echo '{"method": "initialize", "params": {"clientInfo": {"name": "test"}}}' || true
+    
+    - name: Test Docker compose configuration
+      run: |
+        # Test docker-compose setup
+        echo "WORKSPACE_ROOT=${PWD}" > .env
+        docker-compose config
+
   # Efficiency benchmark job disabled - see issue #17
   # efficiency-benchmark:
   #   runs-on: ubuntu-latest

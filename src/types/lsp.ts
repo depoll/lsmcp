@@ -13,6 +13,7 @@ export interface LanguageServerConfig {
   args: string[];
   npm?: string;
   pip?: string;
+  containerCommand?: string;
   initializationOptions?: Record<string, unknown>;
 }
 
