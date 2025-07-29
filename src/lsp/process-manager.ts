@@ -32,14 +32,19 @@ export class ProcessManager extends EventEmitter {
           new ConnectionError(`Language server failed to start within ${this.startTimeout}ms`)
         );
       }, this.startTimeout);
+      timeout.unref();
 
-      this.process = spawn(this.config.command, this.config.args, {
-        stdio: 'pipe',
+      // Container environment doesn't need shell resolution
+      const spawnOptions = {
+        stdio: 'pipe' as const,
         shell: false,
-      });
+      };
+
+      this.process = spawn(this.config.command, this.config.args, spawnOptions);
 
       this.process.once('spawn', () => {
         clearTimeout(timeout);
+        this.logger.info(`Process spawned successfully: PID=${this.process!.pid}`);
 
         if (!this.process!.stdin || !this.process!.stdout) {
           reject(new ConnectionError('Process streams not available'));
@@ -54,15 +59,29 @@ export class ProcessManager extends EventEmitter {
 
       this.process.once('error', (error) => {
         clearTimeout(timeout);
-        this.logger.error('Process spawn error:', error);
-        reject(new ConnectionError(`Failed to spawn process: ${error.message}`));
+        this.logger.error(
+          {
+            error,
+            command: this.config.command,
+            args: this.config.args,
+            platform: process.platform,
+          },
+          'Process spawn error'
+        );
+        reject(
+          new ConnectionError(`Failed to spawn process "${this.config.command}": ${error.message}`)
+        );
       });
 
       this.process.on('exit', (code, signal) => {
-        this.logger.warn(`Process exited: code=${code}, signal=${signal}`);
+        this.logger.warn(
+          `Process exited: code=${code}, signal=${signal}, PID=${this.process?.pid}`
+        );
         this.emit('exit', code, signal);
 
-        if (code !== 0 || signal) {
+        // Only emit crash if it's an unexpected termination
+        // SIGTERM during shutdown is expected, not a crash
+        if ((code !== 0 && code !== null) || (signal && signal !== 'SIGTERM')) {
           this.emit('crash', new ServerCrashError('Language server crashed', code, signal));
         }
       });
@@ -97,6 +116,7 @@ export class ProcessManager extends EventEmitter {
         }
         resolve();
       }, 5000);
+      timeout.unref();
 
       process.once('exit', () => {
         clearTimeout(timeout);

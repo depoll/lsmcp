@@ -1,6 +1,7 @@
 import { LSPClientV2 as LSPClient } from './client-v2.js';
 import { LanguageServerConfig, HealthStatus, ConnectionPoolOptions } from '../types/lsp.js';
 import { LanguageDetector, createLanguageServerProvider } from '../languages/index.js';
+import { existsSync } from 'fs';
 import pino from 'pino';
 
 const DEFAULT_SERVERS: Record<string, LanguageServerConfig> = {
@@ -18,6 +19,8 @@ const DEFAULT_SERVERS: Record<string, LanguageServerConfig> = {
     command: 'pylsp',
     args: [],
     pip: 'python-lsp-server',
+    // In container, use the virtual environment
+    containerCommand: '/opt/python-lsp/bin/pylsp',
   },
   rust: {
     command: 'rust-analyzer',
@@ -63,6 +66,7 @@ export class ConnectionPool {
   private logger = pino({ level: 'info' });
   private options: Required<ConnectionPoolOptions>;
   private languageDetector = new LanguageDetector();
+  private isContainer = this.detectContainer();
 
   constructor(options: ConnectionPoolOptions = {}) {
     this.options = {
@@ -78,9 +82,27 @@ export class ConnectionPool {
     });
   }
 
+  private detectContainer(): boolean {
+    // Check common container environment indicators
+    return (
+      process.env['CONTAINER'] === 'true' ||
+      process.env['DOCKER'] === 'true' ||
+      // Check for /.dockerenv file (most reliable container indicator)
+      existsSync('/.dockerenv')
+    );
+  }
+
+  private resolveCommand(config: LanguageServerConfig): string {
+    // Use container-specific command if we're in a container and it's available
+    if (this.isContainer && config.containerCommand) {
+      return config.containerCommand;
+    }
+    return config.command;
+  }
+
   registerLanguageServer(language: string, config: LanguageServerConfig): void {
     this.languageServers.set(language, config);
-    this.logger.info(`Registered language server for ${language}`);
+    this.logger.info(`Registered language server for ${language} (container: ${this.isContainer})`);
   }
 
   /**
@@ -163,6 +185,8 @@ export class ConnectionPool {
       info.healthCheckInterval = setInterval(() => {
         void this.checkHealth(key);
       }, this.options.healthCheckInterval);
+      // Unref the interval so it doesn't keep the process alive during tests
+      info.healthCheckInterval.unref();
     }
 
     this.connections.set(key, info);
@@ -176,7 +200,13 @@ export class ConnectionPool {
     retryCount = 0
   ): Promise<LSPClient> {
     try {
-      const client = new LSPClient(`${language}-${workspace}`, config, {
+      // Resolve command based on environment (container vs host)
+      const resolvedConfig = {
+        ...config,
+        command: this.resolveCommand(config),
+      };
+
+      const client = new LSPClient(`${language}-${workspace}`, resolvedConfig, {
         workspaceFolders: [workspace],
       });
 
@@ -193,7 +223,10 @@ export class ConnectionPool {
         this.logger.warn(
           `Failed to start ${language} server, retrying (${retryCount + 1}/${this.options.maxRetries})...`
         );
-        await new Promise((resolve) => setTimeout(resolve, this.options.retryDelay));
+        await new Promise((resolve) => {
+          const timeout = setTimeout(resolve, this.options.retryDelay);
+          timeout.unref();
+        });
         return this.createConnection(language, workspace, config, retryCount + 1);
       }
       throw error;
@@ -225,6 +258,8 @@ export class ConnectionPool {
       info.healthCheckInterval = setInterval(() => {
         void this.checkHealth(key);
       }, this.options.healthCheckInterval);
+      // Unref the interval so it doesn't keep the process alive during tests
+      info.healthCheckInterval.unref();
     }
 
     this.connections.set(key, info);
@@ -293,28 +328,48 @@ export class ConnectionPool {
    * This method is more lenient than get() and will not throw errors.
    */
   async getForFile(filePath: string, workspace: string): Promise<LSPClient | null> {
-    // Try to detect language from file extension
-    const detected = this.languageDetector.detectLanguageByExtension(filePath);
-    if (!detected) {
+    try {
+      // Try to detect language from file extension
+      const detected = this.languageDetector.detectLanguageByExtension(filePath);
+      if (!detected) {
+        this.logger.debug(`Could not detect language for file: ${filePath}`);
+        return null;
+      }
+
+      // Check if we already have a working connection for this language and workspace
+      const key = `${detected.id}:${workspace}`;
+      const existing = this.connections.get(key);
+      if (existing && existing.client.isConnected()) {
+        this.logger.debug(`Reusing existing connection for ${detected.id} in ${workspace}`);
+        existing.lastUsed = new Date();
+        return existing.client;
+      }
+
+      // Update the detected language with the workspace root
+      const detectedWithRoot = { ...detected, rootPath: workspace };
+
+      // Only check availability if we don't have an existing connection
+      // This avoids unnecessary availability checks for servers we've already started
+      if (!existing) {
+        const provider = createLanguageServerProvider(detectedWithRoot);
+        if (provider && !(await provider.isAvailable())) {
+          const installCmd = this.getInstallCommand(detected.id);
+          this.logger.warn(
+            `Language server for ${detected.id} is not installed. ` +
+              (installCmd
+                ? `Please install it manually: ${installCmd}`
+                : 'Please install it manually.')
+          );
+          return null; // Return null if server is not available
+        }
+      }
+
+      // Get or create connection
+      return this.get(detected.id, workspace);
+    } catch (error) {
+      this.logger.error({ error, filePath, workspace }, 'Error in getForFile');
       return null;
     }
-
-    // Update the detected language with the workspace root
-    const detectedWithRoot = { ...detected, rootPath: workspace };
-
-    // Check if language server is available
-    const provider = createLanguageServerProvider(detectedWithRoot);
-    if (provider && !(await provider.isAvailable())) {
-      const installCmd = this.getInstallCommand(detected.id);
-      this.logger.warn(
-        `Language server for ${detected.id} is not installed. ` +
-          (installCmd ? `Please install it manually: ${installCmd}` : 'Please install it manually.')
-      );
-      return null; // Return null if server is not available
-    }
-
-    // Get or create connection
-    return this.get(detected.id, workspace);
   }
 
   private async handleCrashRecovery(

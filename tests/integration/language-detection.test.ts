@@ -1,28 +1,24 @@
-import { describe, it, expect, beforeAll, beforeEach, afterEach } from '@jest/globals';
+import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
 import { ConnectionPool } from '../../src/lsp/index.js';
 import { LanguageDetector } from '../../src/languages/index.js';
-import { exec } from 'child_process';
-import { promisify } from 'util';
+import { execSync } from 'child_process';
 import { mkdtemp, rm, writeFile } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
 
-const execAsync = promisify(exec);
+// Check if typescript-language-server is available synchronously at module load time
+let hasTypeScriptServer = false;
+try {
+  execSync('which typescript-language-server', { stdio: 'ignore' });
+  hasTypeScriptServer = true;
+  console.log('TypeScript language server detected during module load');
+} catch {
+  console.log('TypeScript language server not found during module load');
+}
 
 describe('Language Detection Integration Tests', () => {
   let pool: ConnectionPool;
   let tempDir: string;
-  let hasTypeScriptServer = false;
-
-  beforeAll(async () => {
-    // Check if typescript-language-server is available
-    try {
-      await execAsync('typescript-language-server --version');
-      hasTypeScriptServer = true;
-    } catch {
-      console.log('TypeScript language server not found, some tests will be skipped');
-    }
-  });
 
   beforeEach(async () => {
     pool = new ConnectionPool();

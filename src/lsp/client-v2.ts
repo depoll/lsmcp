@@ -62,7 +62,9 @@ export class LSPClientV2 extends EventEmitter {
 
     try {
       // Start the process
+      this.logger.info(`Starting process for language server: ${this.id}`);
       const streams = await this.processManager.start();
+      this.logger.info(`Process started successfully for: ${this.id}`);
 
       // Create protocol connection
       const reader = new StreamMessageReader(streams.reader);
@@ -83,26 +85,34 @@ export class LSPClientV2 extends EventEmitter {
 
       // Start listening
       this.connection.listen();
+      this.logger.info(`Protocol connection listening for: ${this.id}`);
 
       // Initialize
       const initParams: InitializeParams = {
         processId: process.pid,
         capabilities: {},
-        rootUri: this.options.workspaceFolders?.[0] || null,
+        rootUri: this.options.workspaceFolders?.[0]
+          ? this.toFileUri(this.options.workspaceFolders[0])
+          : null,
         workspaceFolders:
           this.options.workspaceFolders?.map((folder) => ({
-            uri: folder,
+            uri: this.toFileUri(folder),
             name: folder.split('/').pop() || folder,
           })) || null,
         initializationOptions: this.config.initializationOptions,
       };
 
+      this.logger.info('Sending initialize request', {
+        rootUri: initParams.rootUri,
+        workspaceFolders: initParams.workspaceFolders,
+      });
       const result = await this.protocolHandler.initialize(initParams);
       this.capabilities = result.capabilities;
       this.connected = true;
 
-      this.logger.info(`Language server started: ${this.id}`);
+      this.logger.info(`Language server initialized successfully: ${this.id}`);
     } catch (error) {
+      this.logger.error(`Failed to start language server ${this.id}:`, error);
       await this.cleanup();
       throw error;
     }
@@ -168,5 +178,25 @@ export class LSPClientV2 extends EventEmitter {
     }
 
     return this.protocolHandler.sendRequest<R>(method, params);
+  }
+
+  sendNotification(method: string, params?: unknown): void {
+    if (!this.connection) {
+      throw new Error('Client is not connected');
+    }
+
+    void this.connection.sendNotification(method, params);
+  }
+
+  /**
+   * Convert a filesystem path to a file:// URI
+   */
+  private toFileUri(path: string): string {
+    if (path.startsWith('file://')) {
+      return path;
+    }
+
+    // Unix-style paths in container environment
+    return `file://${path}`;
   }
 }

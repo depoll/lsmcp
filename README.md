@@ -1,34 +1,42 @@
 # LSMCP - Language Server Protocol MCP
 
-An experimental project for building an MCP (Model Context Protocol) for the Language Server Protocol (LSP).
+An experimental Model Context Protocol (MCP) implementation that provides AI models with access to Language Server Protocol (LSP) capabilities.
 
 ## Overview
 
-This project aims to create an MCP implementation that can communicate with LSP servers, potentially enabling AI models to access code intelligence features like auto-completion, go-to-definition, find-references, and other language-specific capabilities.
+This project creates an MCP server that communicates with LSP servers, enabling AI models to access code intelligence features like auto-completion, go-to-definition, find-references, and other language-specific capabilities.
 
 ## Status
 
-🚧 **Under Development** - This project is in the early stages of development.
+✅ **Container-Ready** - The project now runs in Docker containers for cross-platform compatibility.
 
-## Getting Started
+## Quick Start
 
-### Prerequisites
+### Using Docker (Recommended)
 
-- Node.js 18+ (tested on 18.x, 20.x, and 22.x)
-- npm or yarn
+1. **Build the container:**
+   ```bash
+   git clone https://github.com/depoll/lsmcp.git
+   cd lsmcp
+   npm run docker:build
+   ```
 
-### Installation
+2. **Configure your MCP client** to use the `lsmcp` server from `.mcp.json`
+
+3. **The container will:**
+   - Mount your working directory at the same path as your host system
+   - Provide pre-installed language servers for TypeScript, Python, Go, Rust, etc.
+   - Automatically detect project languages and provide code intelligence
+
+### Development Setup
+
+For development and testing:
 
 ```bash
-git clone https://github.com/depoll/lsmcp.git
-cd lsmcp
+# Install dependencies
 npm install
-```
 
-### Development
-
-```bash
-# Run in development mode with hot reloading
+# Run in development mode
 npm run dev
 
 # Run tests
@@ -49,32 +57,76 @@ npm run lint
 npm run build
 ```
 
-## Project Structure
+## Features
 
-```
-lsmcp/
-├── src/              # Source code
-│   ├── server.ts     # MCP server implementation
-│   ├── types/        # TypeScript type definitions
-│   ├── tools/        # MCP tool implementations
-│   ├── lsp/          # LSP client implementations
-│   └── utils/        # Utility functions
-├── tests/            # Test suites
-│   ├── unit/         # Unit tests
-│   ├── integration/  # Integration tests
-│   └── efficiency/   # Efficiency benchmarks
-└── dist/             # Built artifacts
-```
+- **6 Combined MCP Tools** for efficient code intelligence:
+  - `navigate` - Definition, implementation, and type navigation
+  - `getCodeIntelligence` - Hover info, signatures, and completions
+  - `findSymbols` - Document and workspace symbol search
+  - `findUsages` - References and call hierarchy
+  - `applyEdit` - Code actions, rename, format with transactions
+  - `getDiagnostics` - Errors, warnings, and quick fixes
 
-## CI/CD
+- **Container-First Architecture**:
+  - Eliminates Windows compatibility issues
+  - Safe automatic language server installation
+  - Consistent environment across platforms
 
-The project uses GitHub Actions for continuous integration with:
+- **Zero-Config Language Support**:
+  - Automatic language detection
+  - Pre-installed language servers
+  - Support for 10+ programming languages
 
-- Matrix testing across Node.js 18, 20, and 22
-- Cross-platform testing on Ubuntu, macOS, and Windows
-- Automated linting and type checking
-- Test coverage reporting with >90% threshold
-- Efficiency benchmark tracking on PRs
+## Supported Languages
+
+- TypeScript/JavaScript
+- Python
+- Go
+- Rust
+- Java
+- C/C++
+- Ruby
+- PHP
+- And more...
+
+## Architecture
+
+The system runs inside a Docker container with:
+- Your workspace mounted at the same path as your host system
+- Language servers pre-installed and configured
+- Automatic language detection and connection pooling
+- Health monitoring and crash recovery
+
+## Troubleshooting
+
+If the MCP server doesn't load in Claude Code:
+
+1. **Build the Docker image first:**
+   ```bash
+   npm run docker:build
+   ```
+
+2. **Run the debug script:**
+   ```bash
+   npm run debug:mcp
+   ```
+
+3. **Try the alternative configuration:**
+   - Use `lsmcp-simple` instead of `lsmcp` in your MCP client
+   - This uses `/workspace` mounting as fallback
+
+4. **Check Docker connectivity:**
+   - Ensure Docker Desktop is running
+   - Verify Claude Code can access Docker daemon
+
+5. **Manual testing:**
+   ```bash
+   echo '{"jsonrpc": "2.0", "id": 1, "method": "tools/list"}' | docker run --rm -i -v "$(pwd):$(pwd)" -w "$(pwd)" lsmcp:latest
+   ```
+
+## Development
+
+See [CLAUDE.md](./CLAUDE.md) for detailed development instructions and architecture overview.
 
 ## License
 

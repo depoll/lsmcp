@@ -28,8 +28,7 @@ describe('TypeScript Language Server Integration', () => {
 
   it('should connect to TypeScript language server', async () => {
     if (!hasTypeScriptServer) {
-      console.log('Skipping: TypeScript language server not installed');
-      return;
+      pending('TypeScript language server not installed');
     }
 
     const client = await pool.get('typescript', process.cwd());
@@ -42,7 +41,7 @@ describe('TypeScript Language Server Integration', () => {
 
   it('should reuse connection for same workspace', async () => {
     if (!hasTypeScriptServer) {
-      return;
+      pending('TypeScript language server not installed');
     }
 
     const client1 = await pool.get('typescript', process.cwd());
@@ -53,7 +52,7 @@ describe('TypeScript Language Server Integration', () => {
 
   it('should track health status', async () => {
     if (!hasTypeScriptServer) {
-      return;
+      pending('TypeScript language server not installed');
     }
 
     await pool.get('typescript', process.cwd());

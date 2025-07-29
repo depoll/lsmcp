@@ -20,3 +20,28 @@ export const logger = isTest
         },
       },
     });
+
+/**
+ * Convert a filesystem path to a proper file:// URI
+ * Container environment uses Unix-style paths
+ */
+export function pathToFileUri(path: string): string {
+  if (path.startsWith('file://')) {
+    return path;
+  }
+
+  // Unix-style paths - ensure we have exactly three slashes for absolute paths
+  if (path.startsWith('/')) {
+    return `file://${path}`;
+  } else {
+    return `file:///${path}`;
+  }
+}
+
+/**
+ * Normalize a file URI for comparison
+ * Container environment uses case-sensitive Unix-style paths
+ */
+export function normalizeUri(uri: string): string {
+  return uri;
+}

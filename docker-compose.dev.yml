@@ -1,0 +1,29 @@
+services:
+  lsmcp-dev:
+    build: 
+      context: .
+      target: development
+    volumes:
+      # Mount the working directory at the same path as host for consistent file paths
+      - type: bind
+        source: ${WORKSPACE_ROOT:-${PWD}}
+        target: ${WORKSPACE_ROOT:-${PWD}}
+        read_only: false
+      # Mount source code for development
+      - type: bind
+        source: ./src
+        target: /app/src
+        read_only: false
+    environment:
+      - LOG_LEVEL=${LOG_LEVEL:-debug}
+      - NODE_ENV=development
+    working_dir: ${WORKSPACE_ROOT:-${PWD}}
+    stdin_open: true
+    tty: true
+    command: ["npx", "tsx", "watch", "src/index.ts"]
+    networks:
+      - lsmcp-network
+
+networks:
+  lsmcp-network:
+    driver: bridge

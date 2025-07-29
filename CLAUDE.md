@@ -21,6 +21,15 @@ The project has a comprehensive implementation plan (see PLAN.md) and foundation
 - **✅ GitHub Actions CI/CD pipeline with matrix testing**
 - **✅ Basic MCP server with health check functionality**
 
+## Container-First Architecture
+
+✅ **NEW APPROACH** - The project now runs in Docker containers to solve cross-platform compatibility issues:
+
+- **Docker Container**: MCP server runs inside container with language servers pre-installed
+- **Consistent Path Mounting**: User's code is mounted at the same path as the host system
+- **Safe Auto-Installation**: Language servers can be safely installed within container isolation
+- **Windows Compatibility**: Eliminates Windows-specific LSP server installation issues
+
 ## Development Setup
 
 ✅ **COMPLETED** - The project now has a fully functional TypeScript setup with:
@@ -96,7 +105,12 @@ The project implements:
 
 ## Common Development Tasks
 
-Development commands:
+### Container Commands (Production):
+- Build Docker image: `npm run docker:build`
+- Run in container: `npm run docker:run`
+- Use docker compose: `npm run docker:compose`
+
+### Native Development Commands:
 - Install dependencies: `npm install`
 - Run development server: `npm run dev`
 - Run tests: `npm test`
@@ -108,10 +122,14 @@ Development commands:
 - Linting: `npm run lint`
 - Build for production: `npm run build`
 
+### MCP Configuration:
+- **Production**: Use `lsmcp` server (runs in Docker)
+- **Development**: Use `lsmcp-dev` server (runs natively)
+
 ## Key Technologies
 
 - **Language**: TypeScript with strict mode
-- **Runtime**: Node.js 18+
+- **Runtime**: Node.js 20+
 - **Protocols**: 
   - MCP (Model Context Protocol) for AI agent communication
   - LSP (Language Server Protocol) for code intelligence
@@ -154,3 +172,9 @@ Every PR must include:
 
 - **Asynchronous Programming**:
   - async is better than sync in virtually any case that's got blocking I/O, etc.
+- **Testing**:
+  - Never silently skip tests. If a test needs to be skipped, it should do so visibly. But also, this should be an extremely rare occurrence -- prioritize fixing the underlying reason for skipping the test over skipping it
+
+## Version Control and Branching Strategy
+
+- **New work that will ultimately become a PR should happen in a branch**
