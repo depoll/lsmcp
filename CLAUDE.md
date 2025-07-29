@@ -108,7 +108,7 @@ The project implements:
 ### Container Commands (Production):
 - Build Docker image: `npm run docker:build`
 - Run in container: `npm run docker:run`
-- Use docker-compose: `npm run docker:compose`
+- Use docker compose: `npm run docker:compose`
 
 ### Native Development Commands:
 - Install dependencies: `npm install`

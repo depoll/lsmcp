@@ -71,7 +71,7 @@ jobs:
       run: |
         # Test docker-compose setup
         echo "WORKSPACE_ROOT=${PWD}" > .env
-        docker-compose config
+        docker compose config
 
   # Efficiency benchmark job disabled - see issue #17
   # efficiency-benchmark:

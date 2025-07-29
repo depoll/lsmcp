@@ -20,8 +20,8 @@
     "postinstall": "npm run validate-setup",
     "docker:build": "./scripts/build-docker.sh",
     "docker:run": "docker run --rm -i -v \"$(pwd):$(pwd)\" -w \"$(pwd)\" lsmcp:latest",
-    "docker:compose": "docker-compose up",
-    "docker:dev": "docker-compose -f docker-compose.dev.yml up",
+    "docker:compose": "docker compose up",
+    "docker:dev": "docker compose -f docker-compose.dev.yml up",
     "docker:test": "./scripts/docker-test.sh",
     "debug:mcp": "./scripts/debug-mcp.sh"
   },
