@@ -66,6 +66,7 @@ WORKDIR /app
 COPY package*.json ./
 COPY tsconfig.json ./
 COPY eslint.config.js ./
+COPY jest.config.js ./
 COPY scripts/ ./scripts/
 COPY src/ ./src/
 COPY tests/ ./tests/
