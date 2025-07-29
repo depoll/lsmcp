@@ -34,17 +34,17 @@ jobs:
     
     - name: Run type checking in container
       run: |
-        docker run --rm -v "${{ github.workspace }}:${{ github.workspace }}" -w "${{ github.workspace }}" \
+        docker run --rm \
         lsmcp:ci npm run type-check
     
     - name: Run linting in container
       run: |
-        docker run --rm -v "${{ github.workspace }}:${{ github.workspace }}" -w "${{ github.workspace }}" \
+        docker run --rm \
         lsmcp:ci npm run lint
     
     - name: Run all tests in container
       run: |
-        docker run --rm -v "${{ github.workspace }}:${{ github.workspace }}" -w "${{ github.workspace }}" \
+        docker run --rm \
         lsmcp:ci npm test -- --coverage
     
     - name: Extract build artifacts from container
