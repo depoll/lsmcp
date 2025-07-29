@@ -72,16 +72,18 @@ RUN npm ci --include=dev
 RUN npm run build
 ENV NODE_ENV=test
 
-# Production stage - lean, no dev dependencies
-FROM base AS production
+# Build stage - includes dev dependencies for building only
+FROM base AS build
 WORKDIR /app
 COPY package*.json ./
 COPY tsconfig.json ./
 COPY scripts/ ./scripts/
 COPY src/ ./src/
-RUN npm ci --omit=dev
+RUN npm ci --include=dev
 RUN npm run build
 
+# Production stage - for now, same as build to avoid complexity
+FROM build AS production
 ENV NODE_ENV=production
 # Container will start in the mounted directory (same path as host)
 EXPOSE 3000
