@@ -60,8 +60,8 @@ ENV NODE_ENV=development
 # Container will start in the mounted directory (same path as host)
 CMD ["npx", "tsx", "watch", "/app/src/index.ts"]
 
-# Production stage
-FROM base AS production
+# CI/Testing stage - includes dev dependencies for type checking and testing
+FROM base AS ci
 WORKDIR /app
 COPY package*.json ./
 COPY tsconfig.json ./
@@ -69,6 +69,17 @@ COPY scripts/ ./scripts/
 COPY src/ ./src/
 COPY tests/ ./tests/
 RUN npm ci --include=dev
+RUN npm run build
+ENV NODE_ENV=test
+
+# Production stage - lean, no dev dependencies
+FROM base AS production
+WORKDIR /app
+COPY package*.json ./
+COPY tsconfig.json ./
+COPY scripts/ ./scripts/
+COPY src/ ./src/
+RUN npm ci --omit=dev
 RUN npm run build
 
 ENV NODE_ENV=production
