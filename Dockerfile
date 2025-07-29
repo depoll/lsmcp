@@ -67,7 +67,8 @@ COPY package*.json ./
 COPY tsconfig.json ./
 COPY scripts/ ./scripts/
 COPY src/ ./src/
-RUN npm ci
+COPY tests/ ./tests/
+RUN npm ci --include=dev
 RUN npm run build
 
 ENV NODE_ENV=production
