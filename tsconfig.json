@@ -2,9 +2,9 @@
   "compilerOptions": {
     "target": "ES2022",
     "module": "ESNext", 
-    "lib": ["ES2022"],
-    "types": ["node", "jest"],
+    "lib": ["ES2022", "DOM"],
     "moduleResolution": "node",
+    "typeRoots": ["./node_modules/@types"],
     "allowImportingTsExtensions": false,
     "outDir": "./dist",
     "rootDir": "./",
