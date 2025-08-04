@@ -354,7 +354,9 @@ describe('ApplyEditTool', () => {
 
   describe('error handling', () => {
     it('should handle missing language server', async () => {
-      mockClientManager.get = jest.fn((_language: string, _workspace: string) => Promise.resolve(null as any));
+      mockClientManager.get = jest.fn((_language: string, _workspace: string) =>
+        Promise.resolve(null as any)
+      );
 
       const result = await tool.execute({
         type: 'format',
