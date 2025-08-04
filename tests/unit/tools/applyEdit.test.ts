@@ -10,7 +10,7 @@ import { ConnectionPool } from '../../../src/lsp/index.js';
 // Types are only used for mocking, not directly imported
 // import { LSPClientV2 } from '../../../src/lsp/client-v2.js';
 // import { EditTransactionManager } from '../../../src/tools/transactions.js';
-import { CodeAction, Command, WorkspaceEdit, TextEdit } from 'vscode-languageserver-protocol';
+import { CodeAction, Command, WorkspaceEdit, TextEdit, Diagnostic } from 'vscode-languageserver-protocol';
 
 jest.mock('../../../src/lsp/index.js');
 jest.mock('../../../src/tools/transactions.js');
@@ -97,7 +97,7 @@ describe('ApplyEditTool', () => {
         'textDocument/codeAction',
         expect.any(Object)
       );
-      expect(mockTransactionManager.executeTransaction).toHaveBeenCalledWith([codeAction.edit!], {
+      expect(mockTransactionManager.executeTransaction).toHaveBeenCalledWith([codeAction.edit], {
         atomic: true,
         dryRun: false,
       });
@@ -152,6 +152,149 @@ describe('ApplyEditTool', () => {
         command: 'typescript.organizeImports',
         arguments: ['file:///test/file.ts'],
       });
+      expect(result.success).toBe(true);
+    });
+
+    it('should select preferred action kind when strategy is "preferred"', async () => {
+      const actions: CodeAction[] = [
+        {
+          title: 'Extract Method',
+          kind: 'refactor.extract.method',
+          edit: { documentChanges: [] },
+        },
+        {
+          title: 'Quick Fix',
+          kind: 'quickfix',
+          edit: { documentChanges: [] },
+        },
+        {
+          title: 'Organize Imports',
+          kind: 'source.organizeImports',
+          edit: { documentChanges: [] },
+        },
+      ];
+
+      mockClient.sendRequest.mockResolvedValue(actions);
+      mockTransactionManager.executeTransaction.mockResolvedValue({
+        success: true,
+        transactionId: 'test-id',
+        filesModified: 1,
+        totalChanges: 1,
+        changes: [],
+      });
+
+      const result = await tool.execute({
+        type: 'codeAction',
+        actions: [
+          {
+            uri: 'file:///test/file.ts',
+            position: { line: 0, character: 0 },
+            selectionStrategy: 'preferred',
+            preferredKinds: ['quickfix', 'refactor.extract'],
+          },
+        ],
+      });
+
+      expect(mockTransactionManager.executeTransaction).toHaveBeenCalledWith(
+        [actions[1].edit!], // Should select the quickfix action
+        expect.any(Object)
+      );
+      expect(result.success).toBe(true);
+    });
+
+    it('should apply multiple actions when strategy is "all"', async () => {
+      const actions: CodeAction[] = [
+        {
+          title: 'Fix 1',
+          edit: { documentChanges: [] },
+        },
+        {
+          title: 'Fix 2',
+          edit: { documentChanges: [] },
+        },
+        {
+          title: 'Fix 3',
+          edit: { documentChanges: [] },
+        },
+      ];
+
+      mockClient.sendRequest.mockResolvedValue(actions);
+      mockTransactionManager.executeTransaction.mockResolvedValue({
+        success: true,
+        transactionId: 'test-id',
+        filesModified: 3,
+        totalChanges: 3,
+        changes: [],
+      });
+
+      const result = await tool.execute({
+        type: 'codeAction',
+        actions: [
+          {
+            uri: 'file:///test/file.ts',
+            position: { line: 0, character: 0 },
+            selectionStrategy: 'all',
+            maxActions: 2,
+          },
+        ],
+      });
+
+      // Should apply only first 2 actions due to maxActions
+      expect(mockTransactionManager.executeTransaction).toHaveBeenCalledWith(
+        [actions[0].edit!, actions[1].edit!],
+        expect.any(Object)
+      );
+      expect(result.success).toBe(true);
+    });
+
+    it('should match diagnostic when strategy is "best-match"', async () => {
+      const diagnostic: Diagnostic = {
+        range: { start: { line: 5, character: 10 }, end: { line: 5, character: 20 } },
+        message: 'Variable is not used',
+        severity: 2,
+      };
+
+      const actions: CodeAction[] = [
+        {
+          title: 'Generic Fix',
+          edit: { documentChanges: [] },
+        },
+        {
+          title: 'Remove unused variable',
+          diagnostics: [diagnostic],
+          edit: { documentChanges: [] },
+        },
+      ];
+
+      mockClient.sendRequest.mockResolvedValue(actions);
+      mockTransactionManager.executeTransaction.mockResolvedValue({
+        success: true,
+        transactionId: 'test-id',
+        filesModified: 1,
+        totalChanges: 1,
+        changes: [],
+      });
+
+      const result = await tool.execute({
+        type: 'codeAction',
+        actions: [
+          {
+            uri: 'file:///test/file.ts',
+            diagnostic: {
+              message: diagnostic.message,
+              range: diagnostic.range,
+              code: diagnostic.code?.toString(),
+            },
+            selectionStrategy: 'best-match',
+          },
+        ],
+      });
+
+      // Should select the action that matches the diagnostic
+      expect(mockTransactionManager.executeTransaction).toHaveBeenCalledWith(
+        [actions[1].edit!],
+        expect.any(Object)
+      );
       expect(result.success).toBe(true);
     });
   });

@@ -38,6 +38,24 @@ const CodeActionParamsSchema = z.object({
     .optional()
     .describe('Filter code actions by kind'),
   position: createPositionSchema().optional().describe('Position for context-aware code actions'),
+  selectionStrategy: z
+    .enum(['first', 'preferred', 'all', 'best-match'])
+    .default('first')
+    .optional()
+    .describe(
+      'How to select from multiple available actions: first (default), preferred (by kind), all (apply multiple), best-match (match diagnostics)'
+    ),
+  preferredKinds: z
+    .array(z.string())
+    .optional()
+    .describe('Preferred action kinds when using "preferred" strategy (e.g., ["quickfix", "refactor.extract"])'),
+  maxActions: z
+    .number()
+    .min(1)
+    .max(10)
+    .default(5)
+    .optional()
+    .describe('Maximum number of actions to apply when using "all" strategy'),
 });
 
 const RenameParamsSchema = z.object({
@@ -221,24 +239,115 @@ export class ApplyEditTool extends BatchableTool<ApplyEditParams, ApplyEditResul
         continue;
       }
 
-      const selectedAction = codeActions[0] as CodeAction | Command;
+      // Select actions based on strategy
+      const selectedActions = this.selectCodeActions(
+        codeActions as (CodeAction | Command)[],
+        action.selectionStrategy || 'first',
+        {
+          diagnostic: action.diagnostic as Diagnostic | undefined,
+          preferredKinds: action.preferredKinds,
+          maxActions: action.maxActions || 5,
+        }
+      );
 
-      if ('edit' in selectedAction && selectedAction.edit) {
-        edits.push(selectedAction.edit);
-      } else if ('command' in selectedAction && selectedAction.command) {
-        const commandResult = await client.sendRequest('workspace/executeCommand', {
-          command: selectedAction.command,
-          arguments: (selectedAction as Command).arguments,
-        });
+      this.logger.info(
+        {
+          uri: action.uri,
+          availableActions: codeActions.length,
+          selectedActions: selectedActions.length,
+          strategy: action.selectionStrategy || 'first',
+          titles: selectedActions.map((a) => {
+            if ('title' in a) return a.title;
+            if ('command' in a) return (a as Command).command;
+            return 'unknown';
+          }),
+        },
+        'Selected code actions'
+      );
 
-        if (commandResult && typeof commandResult === 'object' && 'edit' in commandResult) {
-          const resultWithEdit = commandResult as { edit: WorkspaceEdit };
-          edits.push(resultWithEdit.edit);
+      // Apply selected actions
+      for (const selectedAction of selectedActions) {
+        if ('edit' in selectedAction && selectedAction.edit) {
+          edits.push(selectedAction.edit);
+        } else if ('command' in selectedAction && selectedAction.command) {
+          const commandResult = await client.sendRequest('workspace/executeCommand', {
+            command: selectedAction.command,
+            arguments: (selectedAction as Command).arguments,
+          });
+
+          if (commandResult && typeof commandResult === 'object' && 'edit' in commandResult) {
+            const resultWithEdit = commandResult as { edit: WorkspaceEdit };
+            edits.push(resultWithEdit.edit);
+          }
         }
       }
     }
 
     return edits;
+  }
+
+  private selectCodeActions(
+    actions: (CodeAction | Command)[],
+    strategy: 'first' | 'preferred' | 'all' | 'best-match',
+    options: {
+      diagnostic?: Diagnostic;
+      preferredKinds?: string[];
+      maxActions: number;
+    }
+  ): (CodeAction | Command)[] {
+    if (actions.length === 0) return [];
+
+    const firstAction = actions[0];
+    if (!firstAction) return [];
+
+    switch (strategy) {
+      case 'first':
+        return [firstAction];
+
+      case 'preferred':
+        if (!options.preferredKinds || options.preferredKinds.length === 0) {
+          return [firstAction];
+        }
+        // Try to find actions matching preferred kinds
+        for (const preferredKind of options.preferredKinds) {
+          const matchingAction = actions.find(
+            (a) => 'kind' in a && a.kind && a.kind.startsWith(preferredKind)
+          );
+          if (matchingAction) {
+            return [matchingAction];
+          }
+        }
+        // Fallback to first action
+        return [firstAction];
+
+      case 'all':
+        return actions.slice(0, options.maxActions);
+
+      case 'best-match':
+        if (options.diagnostic) {
+          // Find actions that specifically address the diagnostic
+          const diagnosticMatches = actions.filter((action) => {
+            if ('diagnostics' in action && action.diagnostics) {
+              return action.diagnostics.some(
+                (d) =>
+                  d.range.start.line === options.diagnostic!.range.start.line &&
+                  d.range.start.character === options.diagnostic!.range.start.character &&
+                  d.message === options.diagnostic!.message
+              );
+            }
+            return false;
+          });
+          const firstMatch = diagnosticMatches[0];
+          if (firstMatch) {
+            return [firstMatch];
+          }
+        }
+        // Fallback to first action
+        return [firstAction];
+
+      default:
+        return [firstAction];
+    }
   }
 
   private async executeRename(params: ApplyEditParams): Promise<WorkspaceEdit[]> {
