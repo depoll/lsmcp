@@ -390,7 +390,7 @@ all changes are rolled back to maintain consistency.`;
       const filePath = new URL(uri).pathname;
       const content = await fs.readFile(filePath, 'utf-8');
       const language = getLanguageFromUri(uri);
-      
+
       await client.sendNotification('textDocument/didOpen', {
         textDocument: {
           uri,
@@ -399,7 +399,7 @@ all changes are rolled back to maintain consistency.`;
           text: content,
         },
       });
-      
+
       this.logger.debug({ uri }, 'Opened file in language server for rename');
     } catch (error) {
       this.logger.warn({ error, uri }, 'Could not open file in language server');
