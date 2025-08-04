@@ -42,14 +42,16 @@ const CodeActionParamsSchema = z.object({
     .enum(['first', 'preferred', 'all', 'best-match'])
     .default('first')
     .optional()
-    .describe(
-      'How to select from multiple available actions: first (default), preferred (by kind), all (apply multiple), best-match (match diagnostics)'
-    ),
+    .describe(`Strategy for selecting from multiple available code actions:
+• first: Apply the first available action (default, fastest)
+• preferred: Select action matching preferredKinds order
+• all: Apply multiple actions (limited by maxActions)
+• best-match: Select action that specifically fixes the provided diagnostic`),
   preferredKinds: z
     .array(z.string())
     .optional()
     .describe(
-      'Preferred action kinds when using "preferred" strategy (e.g., ["quickfix", "refactor.extract"])'
+      'Ordered list of preferred action kinds for "preferred" strategy. Common kinds: "quickfix", "refactor.extract", "refactor.inline", "source.fixAll"'
     ),
   maxActions: z
     .number()
@@ -57,7 +59,7 @@ const CodeActionParamsSchema = z.object({
     .max(10)
     .default(5)
     .optional()
-    .describe('Maximum number of actions to apply when using "all" strategy'),
+    .describe('Safety limit: maximum actions to apply with "all" strategy (prevents runaway changes)'),
 });
 
 const RenameParamsSchema = z.object({
@@ -104,7 +106,11 @@ const FormatParamsSchema = z.object({
 const ApplyEditParamsSchema = z.object({
   type: z
     .enum(['codeAction', 'rename', 'format', 'organizeImports'])
-    .describe('Type of edit operation to perform'),
+    .describe(`Type of edit operation to perform:
+• codeAction: Apply fixes, refactors, or source actions (e.g., fix errors, extract method)
+• rename: Rename symbols across the codebase (variables, functions, classes)
+• format: Format code according to language rules
+• organizeImports: Sort and optimize import statements`),
 
   batch: z
     .boolean()
@@ -120,13 +126,17 @@ const ApplyEditParamsSchema = z.object({
 
   format: FormatParamsSchema.optional().describe('Parameters for format operations'),
 
-  dryRun: z.boolean().default(false).optional().describe('Preview changes without applying them'),
+  dryRun: z
+    .boolean()
+    .default(false)
+    .optional()
+    .describe('Preview mode: analyze what changes would be made without applying them'),
 
   atomic: z
     .boolean()
     .default(true)
     .optional()
-    .describe('Apply all edits atomically (rollback on any failure)'),
+    .describe('Transaction mode: if any edit fails, automatically rollback all changes (default: true for safety)'),
 });
 
 type ApplyEditParams = z.infer<typeof ApplyEditParamsSchema>;
@@ -143,11 +153,16 @@ export interface ApplyEditResult {
   }>;
   error?: MCPError;
   duration?: number;
+  rollbackPerformed?: boolean;
+  rollbackReason?: string;
 }
 
 export class ApplyEditTool extends BatchableTool<ApplyEditParams, ApplyEditResult> {
   readonly name = 'applyEdit';
-  readonly description = 'Apply code actions, renames, or formatting with rollback support';
+  readonly description = `Apply code modifications via LSP with automatic rollback on failure.
+Supports code actions (quickfixes, refactors), symbol renaming, code formatting,
+and import organization. All operations are transactional - if any part fails,
+all changes are rolled back to maintain consistency.`;
   readonly inputSchema = ApplyEditParamsSchema;
 
   private transactionManager: EditTransactionManager;
@@ -200,6 +215,7 @@ export class ApplyEditTool extends BatchableTool<ApplyEditParams, ApplyEditResul
       };
     } catch (error) {
       this.logger.error({ error, params: validatedParams }, 'Apply edit failed');
+      const isTransactionError = error instanceof Error && error.name === 'TransactionError';
       return {
         success: false,
         error: {
@@ -208,6 +224,8 @@ export class ApplyEditTool extends BatchableTool<ApplyEditParams, ApplyEditResul
           details: error,
         },
         duration: Date.now() - startTime,
+        rollbackPerformed: isTransactionError && (validatedParams.atomic ?? true),
+        rollbackReason: isTransactionError ? 'Transaction failed - all changes reverted' : undefined,
       };
     }
   }
