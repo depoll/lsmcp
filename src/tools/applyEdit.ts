@@ -382,6 +382,18 @@ all changes are rolled back to maintain consistency.`;
     }
 
     const { uri, position, newName } = params.rename;
+    
+    // Log the exact parameters received
+    this.logger.info(
+      { 
+        uri, 
+        position,
+        newName,
+        paramsRaw: JSON.stringify(params.rename)
+      },
+      'executeRename called with parameters'
+    );
+    
     const client = await this.getClient(uri);
 
     // Ensure the file is opened in the language server
@@ -391,6 +403,17 @@ all changes are rolled back to maintain consistency.`;
       const content = await fs.readFile(filePath, 'utf-8');
       const language = getLanguageFromUri(uri);
 
+      // First close the file if it's already open to ensure clean state
+      try {
+        client.sendNotification('textDocument/didClose', {
+          textDocument: { uri },
+        });
+        this.logger.debug({ uri }, 'Closed existing file in language server');
+      } catch {
+        // Ignore errors on close
+      }
+
+      // Now open it fresh
       client.sendNotification('textDocument/didOpen', {
         textDocument: {
           uri,
@@ -400,12 +423,42 @@ all changes are rolled back to maintain consistency.`;
         },
       });
 
-      this.logger.debug({ uri }, 'Opened file in language server for rename');
+      this.logger.debug({ uri, language, contentLength: content.length }, 'Opened file in language server for rename');
+      
+      // Give the language server a moment to process the file
+      await new Promise(resolve => setTimeout(resolve, 200));
     } catch (error) {
       this.logger.warn({ error, uri }, 'Could not open file in language server');
     }
 
-    const prepareParams: RenameParams = {
+    // Try prepareRename first, but don't fail if it's not supported
+    try {
+      const prepareResult = await client.sendRequest('textDocument/prepareRename', {
+        textDocument: { uri },
+        position,
+      });
+
+      if (!prepareResult) {
+        this.logger.warn(
+          { uri, position },
+          'prepareRename returned null - position may not contain a renameable symbol'
+        );
+        throw new Error(
+          'Cannot rename at this location. Ensure the position points to a symbol (not whitespace or comments). ' +
+            `Current position: line ${position.line + 1}, character ${position.character + 1}`
+        );
+      }
+
+      this.logger.debug({ prepareResult }, 'prepareRename successful');
+    } catch (error) {
+      // Log the error but continue - some language servers may not support prepareRename
+      this.logger.debug(
+        { error, uri, position },
+        'prepareRename failed or not supported, proceeding with rename anyway'
+      );
+    }
+
+    const renameParams: RenameParams = {
       textDocument: { uri },
       position,
       newName,
@@ -413,28 +466,10 @@ all changes are rolled back to maintain consistency.`;
 
     this.logger.debug(
       { uri, position, newName },
-      'Attempting rename - sending prepareRename request'
+      'Sending rename request'
     );
 
-    const prepareResult = await client.sendRequest('textDocument/prepareRename', {
-      textDocument: { uri },
-      position,
-    });
-
-    if (!prepareResult) {
-      this.logger.warn(
-        { uri, position },
-        'prepareRename returned null - position may not contain a renameable symbol'
-      );
-      throw new Error(
-        'Cannot rename at this location. Ensure the position points to a symbol (not whitespace or comments). ' +
-          `Current position: line ${position.line + 1}, character ${position.character + 1}`
-      );
-    }
-
-    this.logger.debug({ prepareResult }, 'prepareRename successful');
-
-    const renameResult = await client.sendRequest('textDocument/rename', prepareParams);
+    const renameResult = await client.sendRequest('textDocument/rename', renameParams);
 
     if (!renameResult) {
       throw new Error('Rename failed - no edits returned');

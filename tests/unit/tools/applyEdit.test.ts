@@ -30,6 +30,7 @@ describe('ApplyEditTool', () => {
   beforeEach(() => {
     mockClient = {
       sendRequest: jest.fn(),
+      sendNotification: jest.fn(),
       isConnected: jest.fn().mockReturnValue(true),
       getCapabilities: jest.fn(),
     };
@@ -56,7 +57,10 @@ describe('ApplyEditTool', () => {
     it('should have correct name and description', () => {
       expect(tool.name).toBe('applyEdit');
       expect(tool.description).toBe(
-        'Apply code actions, renames, or formatting with rollback support'
+        'Apply code modifications via LSP with automatic rollback on failure.\n' +
+        'Supports code actions (quickfixes, refactors), symbol renaming, code formatting,\n' +
+        'and import organization. All operations are transactional - if any part fails,\n' +
+        'all changes are rolled back to maintain consistency.'
       );
     });
   });
@@ -374,7 +378,9 @@ describe('ApplyEditTool', () => {
     });
 
     it('should handle rename not allowed', async () => {
-      mockClient.sendRequest.mockResolvedValueOnce(null); // prepareRename returns null
+      mockClient.sendRequest
+        .mockResolvedValueOnce(null) // prepareRename returns null
+        .mockResolvedValueOnce(null); // rename also returns null
 
       const result = await tool.execute({
         type: 'rename',
@@ -386,7 +392,7 @@ describe('ApplyEditTool', () => {
       });
 
       expect(result.success).toBe(false);
-      expect(result.error?.message).toContain('Cannot rename at this location');
+      expect(result.error?.message).toContain('Rename failed - no edits returned');
     });
   });
 
