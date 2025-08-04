@@ -23,12 +23,12 @@ const ApplyEditParamsSchema = z.object({
   type: z
     .enum(['codeAction', 'rename', 'format', 'organizeImports'])
     .describe('Type of edit operation to perform'),
-  
+
   batch: z
     .boolean()
     .optional()
     .describe('Whether to perform multiple operations in a single transaction'),
-  
+
   actions: z
     .array(
       z.object({
@@ -55,7 +55,7 @@ const ApplyEditParamsSchema = z.object({
     )
     .optional()
     .describe('Parameters for code action operations'),
-  
+
   rename: z
     .object({
       uri: z.string().describe(FILE_URI_DESCRIPTION),
@@ -75,7 +75,7 @@ const ApplyEditParamsSchema = z.object({
     })
     .optional()
     .describe('Parameters for rename operations'),
-  
+
   format: z
     .object({
       uris: z
@@ -102,13 +102,9 @@ const ApplyEditParamsSchema = z.object({
     })
     .optional()
     .describe('Parameters for format operations'),
-  
-  dryRun: z
-    .boolean()
-    .default(false)
-    .optional()
-    .describe('Preview changes without applying them'),
-  
+
+  dryRun: z.boolean().default(false).optional().describe('Preview changes without applying them'),
+
   atomic: z
     .boolean()
     .default(true)
@@ -208,7 +204,7 @@ export class ApplyEditTool extends BatchableTool<ApplyEditParams, ApplyEditResul
 
     for (const action of params.actions) {
       const client = await this.getClient(action.uri);
-      
+
       const codeActionParams: CodeActionParams = {
         textDocument: { uri: action.uri },
         range: action.diagnostic?.range || {
@@ -222,14 +218,14 @@ export class ApplyEditTool extends BatchableTool<ApplyEditParams, ApplyEditResul
       };
 
       const codeActions = await client.sendRequest('textDocument/codeAction', codeActionParams);
-      
+
       if (!Array.isArray(codeActions) || codeActions.length === 0) {
         this.logger.warn({ uri: action.uri }, 'No code actions available');
         continue;
       }
 
       const selectedAction = codeActions[0] as CodeAction | Command;
-      
+
       if ('edit' in selectedAction && selectedAction.edit) {
         edits.push(selectedAction.edit);
       } else if ('command' in selectedAction && selectedAction.command) {
@@ -237,7 +233,7 @@ export class ApplyEditTool extends BatchableTool<ApplyEditParams, ApplyEditResul
           command: selectedAction.command,
           arguments: (selectedAction as Command).arguments,
         });
-        
+
         if (commandResult && typeof commandResult === 'object' && 'edit' in commandResult) {
           const resultWithEdit = commandResult as { edit: WorkspaceEdit };
           edits.push(resultWithEdit.edit);
@@ -290,7 +286,7 @@ export class ApplyEditTool extends BatchableTool<ApplyEditParams, ApplyEditResul
 
     for (const uri of uris) {
       const client = await this.getClient(uri);
-      
+
       const formattingParams: DocumentFormattingParams = {
         textDocument: { uri },
         options: (params.format.options as FormattingOptions) || {
@@ -300,12 +296,13 @@ export class ApplyEditTool extends BatchableTool<ApplyEditParams, ApplyEditResul
       };
 
       const textEdits = await client.sendRequest('textDocument/formatting', formattingParams);
-      
-      if (textEdits && textEdits.length > 0) {
+
+      if (textEdits && Array.isArray(textEdits) && textEdits.length > 0) {
         edits.push({
           documentChanges: [
             {
               textDocument: { uri, version: null },
+              // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
               edits: textEdits,
             },
           ],
@@ -318,7 +315,7 @@ export class ApplyEditTool extends BatchableTool<ApplyEditParams, ApplyEditResul
 
   private async executeOrganizeImports(params: ApplyEditParams): Promise<WorkspaceEdit[]> {
     const edits: WorkspaceEdit[] = [];
-    
+
     const uris = params.format?.uris
       ? Array.isArray(params.format.uris)
         ? params.format.uris
@@ -358,10 +355,10 @@ export class ApplyEditTool extends BatchableTool<ApplyEditParams, ApplyEditResul
         for (const change of edit.documentChanges) {
           if ('textDocument' in change) {
             filesModified++;
-            const editCount = (change).edits.length;
+            const editCount = change.edits.length;
             totalChanges += editCount;
             changes.push({
-              uri: (change).textDocument.uri,
+              uri: change.textDocument.uri,
               edits: editCount,
             });
           }
@@ -391,7 +388,7 @@ export class ApplyEditTool extends BatchableTool<ApplyEditParams, ApplyEditResul
     const language = getLanguageFromUri(uri);
     const workspace = this.extractWorkspaceFromUri(uri);
     const client = await this.clientManager.get(language, workspace);
-    
+
     if (!client) {
       throw new Error(`No language server available for ${language}`);
     }
@@ -404,12 +401,12 @@ export class ApplyEditTool extends BatchableTool<ApplyEditParams, ApplyEditResul
       const url = new URL(uri);
       const filePath = decodeURIComponent(url.pathname);
       const parts = filePath.split('/');
-      
+
       // Find common workspace patterns
       for (let i = parts.length - 1; i >= 0; i--) {
         const part = parts[i];
         if (!part) continue;
-        
+
         if (part === 'src' || part === 'lib' || part === 'test') {
           return parts.slice(0, i).join('/') || '/';
         }
@@ -417,7 +414,7 @@ export class ApplyEditTool extends BatchableTool<ApplyEditParams, ApplyEditResul
           return parts.slice(0, i).join('/') || '/';
         }
       }
-      
+
       // Default to parent directory of the file
       return parts.slice(0, -1).join('/') || '/';
     } catch {

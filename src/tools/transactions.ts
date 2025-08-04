@@ -87,7 +87,7 @@ export class EditTransactionManager {
       this.verifyEdits(results);
 
       const successResult = this.createSuccessResult(results, transactionId);
-      
+
       this.logger.info(
         {
           transactionId,
@@ -100,11 +100,11 @@ export class EditTransactionManager {
       return successResult;
     } catch (error) {
       this.logger.error({ error, transactionId }, 'Transaction failed, rolling back');
-      
+
       if (options.atomic) {
         await this.rollback(backup);
       }
-      
+
       throw new TransactionError(
         error instanceof Error ? error.message : 'Transaction failed',
         transactionId,
@@ -132,7 +132,7 @@ export class EditTransactionManager {
       try {
         const filePath = fileURLToPath(uri);
         const exists = await this.fileExists(filePath);
-        
+
         if (exists) {
           const content = await readFile(filePath, 'utf-8');
           backup.files.set(uri, {
@@ -153,10 +153,7 @@ export class EditTransactionManager {
       }
     }
 
-    this.logger.info(
-      { transactionId, filesBackedUp: backup.files.size },
-      'Backup created'
-    );
+    this.logger.info({ transactionId, filesBackedUp: backup.files.size }, 'Backup created');
 
     return backup;
   }
@@ -211,7 +208,7 @@ export class EditTransactionManager {
               const createOp = change;
               const filePath = fileURLToPath(createOp.uri);
               const dir = dirname(filePath);
-              
+
               if (!(await this.fileExists(dir))) {
                 throw new Error(`Parent directory does not exist: ${dir}`);
               }
@@ -232,7 +229,7 @@ export class EditTransactionManager {
       try {
         const result = await this.applySingleEdit(edit);
         results.push(result);
-        
+
         if (!result.applied && options.atomic) {
           throw new Error(`Edit failed: ${result.failureReason || 'Unknown reason'}`);
         }
@@ -240,7 +237,7 @@ export class EditTransactionManager {
         if (options.atomic) {
           throw error;
         }
-        
+
         results.push({
           applied: false,
           failureReason: error instanceof Error ? error.message : 'Unknown error',
@@ -280,7 +277,7 @@ export class EditTransactionManager {
   private async applyTextDocumentEdit(edit: TextDocumentEdit): Promise<void> {
     const filePath = fileURLToPath(edit.textDocument.uri);
     const content = await readFile(filePath, 'utf-8');
-    
+
     let newContent = content;
     const sortedEdits = [...edit.edits].sort((a, b) => {
       const lineDiff = b.range.start.line - a.range.start.line;
@@ -295,27 +292,45 @@ export class EditTransactionManager {
     await writeFile(filePath, newContent, 'utf-8');
   }
 
-  private applyTextEdit(content: string, edit: { range: { start: { line: number; character: number }; end: { line: number; character: number } }; newText: string }): string {
+  private applyTextEdit(
+    content: string,
+    edit: {
+      range: {
+        start: { line: number; character: number };
+        end: { line: number; character: number };
+      };
+      newText: string;
+    }
+  ): string {
     const lines = content.split('\n');
     const { start, end } = edit.range;
-    
+
     const startLine = lines[start.line] || '';
     const endLine = lines[end.line] || '';
-    
+
     const before = startLine.substring(0, start.character);
     const after = endLine.substring(end.character);
-    
+
     const newLines = [before + edit.newText + after];
-    
+
     lines.splice(start.line, end.line - start.line + 1, ...newLines);
-    
+
     return lines.join('\n');
   }
 
-  private async applyTextEdits(uri: string, edits: Array<{ range: { start: { line: number; character: number }; end: { line: number; character: number } }; newText: string }>): Promise<void> {
+  private async applyTextEdits(
+    uri: string,
+    edits: Array<{
+      range: {
+        start: { line: number; character: number };
+        end: { line: number; character: number };
+      };
+      newText: string;
+    }>
+  ): Promise<void> {
     const filePath = fileURLToPath(uri);
     const content = await readFile(filePath, 'utf-8');
-    
+
     let newContent = content;
     const sortedEdits = [...edits].sort((a, b) => {
       const lineDiff = b.range.start.line - a.range.start.line;
@@ -330,7 +345,9 @@ export class EditTransactionManager {
     await writeFile(filePath, newContent, 'utf-8');
   }
 
-  private async applyResourceOperation(operation: CreateFile | RenameFile | DeleteFile): Promise<void> {
+  private async applyResourceOperation(
+    operation: CreateFile | RenameFile | DeleteFile
+  ): Promise<void> {
     if (operation.kind === 'create') {
       const createOp = operation;
       const filePath = fileURLToPath(createOp.uri);
@@ -373,10 +390,7 @@ export class EditTransactionManager {
     };
   }
 
-  private simulateTransaction(
-    edits: WorkspaceEdit[],
-    transactionId: string
-  ): TransactionResult {
+  private simulateTransaction(edits: WorkspaceEdit[], transactionId: string): TransactionResult {
     const changes: TransactionResult['changes'] = [];
     let totalChanges = 0;
     const filesModified = new Set<string>();
@@ -422,7 +436,7 @@ export class EditTransactionManager {
       if (edit.documentChanges) {
         for (const change of edit.documentChanges) {
           if ('textDocument' in change) {
-            uris.add((change).textDocument.uri);
+            uris.add(change.textDocument.uri);
           } else if ('uri' in change) {
             const resourceOp = change;
             uris.add(resourceOp.uri);

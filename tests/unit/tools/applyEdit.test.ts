@@ -1,14 +1,16 @@
-import { describe, it, expect, jest, beforeEach, afterEach } from '@jest/globals';
+/* eslint-disable @typescript-eslint/no-explicit-any */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
+/* eslint-disable @typescript-eslint/no-unsafe-call */
+
+import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
+import { jest } from '@jest/globals';
 import { ApplyEditTool } from '../../../src/tools/applyEdit.js';
 import { ConnectionPool } from '../../../src/lsp/index.js';
-import { LSPClientV2 } from '../../../src/lsp/client-v2.js';
-import { EditTransactionManager } from '../../../src/tools/transactions.js';
-import {
-  CodeAction,
-  Command,
-  WorkspaceEdit,
-  TextEdit,
-} from 'vscode-languageserver-protocol';
+// Types are only used for mocking, not directly imported
+// import { LSPClientV2 } from '../../../src/lsp/client-v2.js';
+// import { EditTransactionManager } from '../../../src/tools/transactions.js';
+import { CodeAction, Command, WorkspaceEdit, TextEdit } from 'vscode-languageserver-protocol';
 
 jest.mock('../../../src/lsp/index.js');
 jest.mock('../../../src/tools/transactions.js');
@@ -16,27 +18,28 @@ jest.mock('../../../src/tools/transactions.js');
 describe('ApplyEditTool', () => {
   let tool: ApplyEditTool;
   let mockClientManager: jest.Mocked<ConnectionPool>;
-  let mockClient: jest.Mocked<LSPClientV2>;
-  let mockTransactionManager: jest.Mocked<EditTransactionManager>;
+  let mockClient: any;
+  let mockTransactionManager: any;
 
   beforeEach(() => {
     mockClient = {
       sendRequest: jest.fn(),
       isConnected: jest.fn().mockReturnValue(true),
       getCapabilities: jest.fn(),
-    } as any;
+    };
 
     mockClientManager = {
-      get: jest.fn().mockResolvedValue(mockClient),
-    } as any;
+      get: jest.fn(() => Promise.resolve(mockClient)),
+    } as unknown as jest.Mocked<ConnectionPool>;
 
     mockTransactionManager = {
       executeTransaction: jest.fn(),
-    } as any;
+    };
 
     tool = new ApplyEditTool(mockClientManager);
     // Replace the transaction manager with our mock
-    (tool as any).transactionManager = mockTransactionManager;
+    const toolWithMock = tool as any;
+    toolWithMock.transactionManager = mockTransactionManager;
   });
 
   afterEach(() => {
@@ -46,7 +49,9 @@ describe('ApplyEditTool', () => {
   describe('metadata', () => {
     it('should have correct name and description', () => {
       expect(tool.name).toBe('applyEdit');
-      expect(tool.description).toBe('Apply code actions, renames, or formatting with rollback support');
+      expect(tool.description).toBe(
+        'Apply code actions, renames, or formatting with rollback support'
+      );
     });
   });
 
@@ -58,7 +63,12 @@ describe('ApplyEditTool', () => {
           documentChanges: [
             {
               textDocument: { uri: 'file:///test/file.ts', version: null },
-              edits: [{ range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } }, newText: 'import { foo } from "./foo";\n' }],
+              edits: [
+                {
+                  range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
+                  newText: 'import { foo } from "./foo";\n',
+                },
+              ],
             },
           ],
         },
@@ -83,11 +93,14 @@ describe('ApplyEditTool', () => {
         ],
       });
 
-      expect(mockClient.sendRequest).toHaveBeenCalledWith('textDocument/codeAction', expect.any(Object));
-      expect(mockTransactionManager.executeTransaction).toHaveBeenCalledWith(
-        [codeAction.edit],
-        { atomic: true, dryRun: false }
+      expect(mockClient.sendRequest).toHaveBeenCalledWith(
+        'textDocument/codeAction',
+        expect.any(Object)
       );
+      expect(mockTransactionManager.executeTransaction).toHaveBeenCalledWith([codeAction.edit!], {
+        atomic: true,
+        dryRun: false,
+      });
       expect(result.success).toBe(true);
       expect(result.filesModified).toBe(1);
     });
@@ -103,7 +116,12 @@ describe('ApplyEditTool', () => {
         documentChanges: [
           {
             textDocument: { uri: 'file:///test/file.ts', version: null },
-            edits: [{ range: { start: { line: 0, character: 0 }, end: { line: 5, character: 0 } }, newText: 'organized imports' }],
+            edits: [
+              {
+                range: { start: { line: 0, character: 0 }, end: { line: 5, character: 0 } },
+                newText: 'organized imports',
+              },
+            ],
           },
         ],
       };
@@ -145,21 +163,32 @@ describe('ApplyEditTool', () => {
           {
             textDocument: { uri: 'file:///test/file1.ts', version: null },
             edits: [
-              { range: { start: { line: 10, character: 5 }, end: { line: 10, character: 15 } }, newText: 'newName' },
-              { range: { start: { line: 20, character: 10 }, end: { line: 20, character: 20 } }, newText: 'newName' },
+              {
+                range: { start: { line: 10, character: 5 }, end: { line: 10, character: 15 } },
+                newText: 'newName',
+              },
+              {
+                range: { start: { line: 20, character: 10 }, end: { line: 20, character: 20 } },
+                newText: 'newName',
+              },
             ],
           },
           {
             textDocument: { uri: 'file:///test/file2.ts', version: null },
             edits: [
-              { range: { start: { line: 5, character: 0 }, end: { line: 5, character: 10 } }, newText: 'newName' },
+              {
+                range: { start: { line: 5, character: 0 }, end: { line: 5, character: 10 } },
+                newText: 'newName',
+              },
             ],
           },
         ],
       };
 
       mockClient.sendRequest
-        .mockResolvedValueOnce({ range: { start: { line: 10, character: 5 }, end: { line: 10, character: 15 } } }) // prepareRename
+        .mockResolvedValueOnce({
+          range: { start: { line: 10, character: 5 }, end: { line: 10, character: 15 } },
+        }) // prepareRename
         .mockResolvedValueOnce(renameEdit); // rename
 
       mockTransactionManager.executeTransaction.mockResolvedValue({
@@ -182,7 +211,10 @@ describe('ApplyEditTool', () => {
         },
       });
 
-      expect(mockClient.sendRequest).toHaveBeenCalledWith('textDocument/prepareRename', expect.any(Object));
+      expect(mockClient.sendRequest).toHaveBeenCalledWith(
+        'textDocument/prepareRename',
+        expect.any(Object)
+      );
       expect(mockClient.sendRequest).toHaveBeenCalledWith('textDocument/rename', {
         textDocument: { uri: 'file:///test/file1.ts' },
         position: { line: 10, character: 10 },
@@ -212,7 +244,10 @@ describe('ApplyEditTool', () => {
   describe('format', () => {
     it('should format single file', async () => {
       const textEdits: TextEdit[] = [
-        { range: { start: { line: 0, character: 0 }, end: { line: 10, character: 0 } }, newText: 'formatted code' },
+        {
+          range: { start: { line: 0, character: 0 }, end: { line: 10, character: 0 } },
+          newText: 'formatted code',
+        },
       ];
 
       mockClient.sendRequest.mockResolvedValue(textEdits);
@@ -247,7 +282,10 @@ describe('ApplyEditTool', () => {
 
     it('should format multiple files', async () => {
       const textEdits: TextEdit[] = [
-        { range: { start: { line: 0, character: 0 }, end: { line: 10, character: 0 } }, newText: 'formatted' },
+        {
+          range: { start: { line: 0, character: 0 }, end: { line: 10, character: 0 } },
+          newText: 'formatted',
+        },
       ];
 
       mockClient.sendRequest.mockResolvedValue(textEdits);
@@ -281,13 +319,20 @@ describe('ApplyEditTool', () => {
         documentChanges: [
           {
             textDocument: { uri: 'file:///test/file.ts', version: null },
-            edits: [{ range: { start: { line: 10, character: 5 }, end: { line: 10, character: 15 } }, newText: 'newName' }],
+            edits: [
+              {
+                range: { start: { line: 10, character: 5 }, end: { line: 10, character: 15 } },
+                newText: 'newName',
+              },
+            ],
           },
         ],
       };
 
       mockClient.sendRequest
-        .mockResolvedValueOnce({ range: { start: { line: 10, character: 5 }, end: { line: 10, character: 15 } } })
+        .mockResolvedValueOnce({
+          range: { start: { line: 10, character: 5 }, end: { line: 10, character: 15 } },
+        })
         .mockResolvedValueOnce(renameEdit);
 
       const result = await tool.execute({
@@ -309,7 +354,7 @@ describe('ApplyEditTool', () => {
 
   describe('error handling', () => {
     it('should handle missing language server', async () => {
-      mockClientManager.get.mockResolvedValue(null);
+      mockClientManager.get = jest.fn((_language: string, _workspace: string) => Promise.resolve(null as any));
 
       const result = await tool.execute({
         type: 'format',
@@ -352,7 +397,12 @@ describe('ApplyEditTool', () => {
           documentChanges: [
             {
               textDocument: { uri: 'file:///test/file.ts', version: null },
-              edits: [{ range: { start: { line: 0, character: 0 }, end: { line: 5, character: 0 } }, newText: 'organized imports' }],
+              edits: [
+                {
+                  range: { start: { line: 0, character: 0 }, end: { line: 5, character: 0 } },
+                  newText: 'organized imports',
+                },
+              ],
             },
           ],
         },
@@ -374,11 +424,14 @@ describe('ApplyEditTool', () => {
         },
       });
 
-      expect(mockClient.sendRequest).toHaveBeenCalledWith('textDocument/codeAction', expect.objectContaining({
-        context: expect.objectContaining({
-          only: ['source'],
-        }),
-      }));
+      expect(mockClient.sendRequest).toHaveBeenCalledWith(
+        'textDocument/codeAction',
+        expect.objectContaining({
+          context: expect.objectContaining({
+            only: ['source'],
+          }),
+        })
+      );
       expect(result.success).toBe(true);
     });
   });

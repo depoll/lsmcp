@@ -1,4 +1,10 @@
-import { describe, it, expect, jest, beforeEach } from '@jest/globals';
+/* eslint-disable @typescript-eslint/no-explicit-any */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
+/* eslint-disable @typescript-eslint/no-unsafe-call */
+/* eslint-disable @typescript-eslint/no-unsafe-argument */
+
+import { describe, it, expect, beforeEach } from '@jest/globals';
 import { WorkspaceEdit } from 'vscode-languageserver-protocol';
 import { EditTransactionManager, TransactionError } from '../../../src/tools/transactions.js';
 
@@ -20,8 +26,14 @@ describe('EditTransactionManager', () => {
             {
               textDocument: { uri: 'file:///test/file1.ts', version: null },
               edits: [
-                { range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } }, newText: 'hello' },
-                { range: { start: { line: 1, character: 0 }, end: { line: 1, character: 0 } }, newText: 'world' },
+                {
+                  range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
+                  newText: 'hello',
+                },
+                {
+                  range: { start: { line: 1, character: 0 }, end: { line: 1, character: 0 } },
+                  newText: 'world',
+                },
               ],
             },
           ],
@@ -29,13 +41,19 @@ describe('EditTransactionManager', () => {
         {
           changes: {
             'file:///test/file2.ts': [
-              { range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } }, newText: 'foo' },
+              {
+                range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
+                newText: 'foo',
+              },
             ],
           },
         },
       ];
 
-      const result = await transactionManager.executeTransaction(edits, { atomic: true, dryRun: true });
+      const result = await transactionManager.executeTransaction(edits, {
+        atomic: true,
+        dryRun: true,
+      });
 
       expect(result.success).toBe(true);
       expect(result.filesModified).toBe(2);
@@ -72,7 +90,10 @@ describe('EditTransactionManager', () => {
         },
       ];
 
-      const result = await transactionManager.executeTransaction(edits, { atomic: true, dryRun: true });
+      const result = await transactionManager.executeTransaction(edits, {
+        atomic: true,
+        dryRun: true,
+      });
 
       expect(result.success).toBe(true);
       // Resource operations don't count as file modifications in dry run
@@ -86,12 +107,18 @@ describe('EditTransactionManager', () => {
       const edit: WorkspaceEdit = {
         changes: {
           'file:///test/file.ts': [
-            { range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } }, newText: 'test' },
+            {
+              range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
+              newText: 'test',
+            },
           ],
         },
       };
 
-      const result = await transactionManager.executeTransaction([edit], { atomic: true, dryRun: true });
+      const result = await transactionManager.executeTransaction([edit], {
+        atomic: true,
+        dryRun: true,
+      });
 
       expect(result).toMatchObject({
         success: true,
@@ -111,14 +138,14 @@ describe('EditTransactionManager', () => {
   describe('text edit logic', () => {
     it('should correctly calculate edit positions', () => {
       // Test the private applyTextEdit method logic
-      const manager = transactionManager as any;
+      const manager: any = transactionManager;
       const content = 'line 1\nline 2 with some text\nline 3';
       const edit = {
-        range: { 
-          start: { line: 1, character: 5 }, 
-          end: { line: 1, character: 10 } 
+        range: {
+          start: { line: 1, character: 5 },
+          end: { line: 1, character: 10 },
         },
-        newText: 'replaced'
+        newText: 'replaced',
       };
 
       const result = manager.applyTextEdit(content, edit);
@@ -128,14 +155,14 @@ describe('EditTransactionManager', () => {
     });
 
     it('should handle multiline edits', () => {
-      const manager = transactionManager as any;
+      const manager: any = transactionManager;
       const content = 'line 1\nline 2\nline 3\nline 4';
       const edit = {
-        range: { 
-          start: { line: 1, character: 0 }, 
-          end: { line: 2, character: 6 } 
+        range: {
+          start: { line: 1, character: 0 },
+          end: { line: 2, character: 6 },
         },
-        newText: 'replaced content'
+        newText: 'replaced content',
       };
 
       const result = manager.applyTextEdit(content, edit);
@@ -143,14 +170,14 @@ describe('EditTransactionManager', () => {
     });
 
     it('should handle empty newText (deletion)', () => {
-      const manager = transactionManager as any;
+      const manager: any = transactionManager;
       const content = 'line 1\nline 2\nline 3';
       const edit = {
-        range: { 
-          start: { line: 1, character: 0 }, 
-          end: { line: 1, character: 6 } 
+        range: {
+          start: { line: 1, character: 0 },
+          end: { line: 1, character: 6 },
         },
-        newText: ''
+        newText: '',
       };
 
       const result = manager.applyTextEdit(content, edit);
@@ -161,7 +188,7 @@ describe('EditTransactionManager', () => {
   describe('error handling', () => {
     it('should handle TransactionError correctly', () => {
       const error = new TransactionError('Test error', 'test-id', new Error('Cause'));
-      
+
       expect(error.message).toBe('Test error');
       expect(error.transactionId).toBe('test-id');
       expect(error.cause).toBeInstanceOf(Error);
@@ -171,7 +198,7 @@ describe('EditTransactionManager', () => {
 
   describe('getAffectedUris', () => {
     it('should extract all affected URIs from edits', () => {
-      const manager = transactionManager as any;
+      const manager: any = transactionManager;
       const edits: WorkspaceEdit[] = [
         {
           documentChanges: [
@@ -199,7 +226,7 @@ describe('EditTransactionManager', () => {
       ];
 
       const uris = manager.getAffectedUris(edits);
-      
+
       expect(uris.size).toBe(6);
       expect(Array.from(uris).sort()).toEqual([
         'file:///test/file1.ts',
