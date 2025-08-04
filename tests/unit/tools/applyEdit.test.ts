@@ -58,9 +58,9 @@ describe('ApplyEditTool', () => {
       expect(tool.name).toBe('applyEdit');
       expect(tool.description).toBe(
         'Apply code modifications via LSP with automatic rollback on failure.\n' +
-        'Supports code actions (quickfixes, refactors), symbol renaming, code formatting,\n' +
-        'and import organization. All operations are transactional - if any part fails,\n' +
-        'all changes are rolled back to maintain consistency.'
+          'Supports code actions (quickfixes, refactors), symbol renaming, code formatting,\n' +
+          'import organization, and direct text editing. All operations are transactional - \n' +
+          'if any part fails, all changes are rolled back to maintain consistency.'
       );
     });
   });
@@ -590,6 +590,181 @@ describe('ApplyEditTool', () => {
         })
       );
       expect(result.success).toBe(true);
+    });
+  });
+
+  describe('textEdit', () => {
+    it('should execute direct text edits', async () => {
+      mockTransactionManager.executeTransaction.mockResolvedValue({
+        success: true,
+        transactionId: 'test-id',
+        filesModified: 1,
+        totalChanges: 2,
+        changes: [{ uri: 'file:///test/file.ts', edits: 2 }],
+      });
+
+      const result = await tool.execute({
+        type: 'textEdit',
+        textEdit: {
+          uri: 'file:///test/file.ts',
+          edits: [
+            {
+              range: { start: { line: 0, character: 0 }, end: { line: 0, character: 10 } },
+              newText: 'replacement',
+            },
+            {
+              range: { start: { line: 5, character: 0 }, end: { line: 5, character: 0 } },
+              newText: 'insertion\n',
+            },
+          ],
+        },
+      });
+
+      expect(mockTransactionManager.executeTransaction).toHaveBeenCalledWith(
+        [
+          {
+            documentChanges: [
+              {
+                textDocument: { uri: 'file:///test/file.ts', version: null },
+                edits: [
+                  {
+                    range: { start: { line: 0, character: 0 }, end: { line: 0, character: 10 } },
+                    newText: 'replacement',
+                  },
+                  {
+                    range: { start: { line: 5, character: 0 }, end: { line: 5, character: 0 } },
+                    newText: 'insertion\n',
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+        expect.any(Object)
+      );
+      expect(result.success).toBe(true);
+      expect(result.filesModified).toBe(1);
+    });
+  });
+
+  describe('multiFileEdit', () => {
+    it('should execute edits across multiple files', async () => {
+      mockTransactionManager.executeTransaction.mockResolvedValue({
+        success: true,
+        transactionId: 'test-id',
+        filesModified: 2,
+        totalChanges: 3,
+        changes: [
+          { uri: 'file:///test/file1.ts', edits: 2 },
+          { uri: 'file:///test/file2.ts', edits: 1 },
+        ],
+      });
+
+      const result = await tool.execute({
+        type: 'multiFileEdit',
+        multiFileEdit: {
+          edits: [
+            {
+              uri: 'file:///test/file1.ts',
+              edits: [
+                {
+                  range: { start: { line: 0, character: 0 }, end: { line: 0, character: 5 } },
+                  newText: 'hello',
+                },
+                {
+                  range: { start: { line: 10, character: 0 }, end: { line: 10, character: 5 } },
+                  newText: 'world',
+                },
+              ],
+            },
+            {
+              uri: 'file:///test/file2.ts',
+              edits: [
+                {
+                  range: { start: { line: 5, character: 0 }, end: { line: 5, character: 0 } },
+                  newText: 'new line\n',
+                },
+              ],
+            },
+          ],
+        },
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.filesModified).toBe(2);
+      expect(result.totalChanges).toBe(3);
+    });
+  });
+
+  describe('batch operations', () => {
+    it('should execute multiple operations in sequence', async () => {
+      const formatEdit: WorkspaceEdit = {
+        documentChanges: [
+          {
+            textDocument: { uri: 'file:///test/file.ts', version: null },
+            edits: [{ range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } }, newText: '' }],
+          },
+        ],
+      };
+
+      const renameEdit: WorkspaceEdit = {
+        documentChanges: [
+          {
+            textDocument: { uri: 'file:///test/file.ts', version: null },
+            edits: [{ range: { start: { line: 5, character: 0 }, end: { line: 5, character: 5 } }, newText: 'newName' }],
+          },
+        ],
+      };
+
+      mockClient.sendRequest
+        .mockResolvedValueOnce([{ range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } }, newText: '' }]) // format
+        .mockResolvedValueOnce({ range: { start: { line: 5, character: 0 }, end: { line: 5, character: 5 } } }) // prepareRename
+        .mockResolvedValueOnce(renameEdit); // rename
+
+      mockTransactionManager.executeTransaction.mockResolvedValue({
+        success: true,
+        transactionId: 'test-id',
+        filesModified: 1,
+        totalChanges: 3,
+        changes: [{ uri: 'file:///test/file.ts', edits: 3 }],
+      });
+
+      const result = await tool.execute({
+        type: 'batch',
+        batchOperations: {
+          operations: [
+            {
+              type: 'format',
+              format: {
+                uris: 'file:///test/file.ts',
+              },
+            },
+            {
+              type: 'rename',
+              rename: {
+                uri: 'file:///test/file.ts',
+                position: { line: 5, character: 2 },
+                newName: 'newName',
+              },
+            },
+            {
+              type: 'textEdit',
+              textEdit: {
+                uri: 'file:///test/file.ts',
+                edits: [
+                  {
+                    range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
+                    newText: '// Comment\n',
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.totalChanges).toBe(3);
     });
   });
 });

@@ -15,7 +15,7 @@ import { getLanguageFromUri } from '../utils/languages.js';
 import { BatchableTool } from './base.js';
 import { createPositionSchema, SYMBOL_POSITION_DESCRIPTION } from './position-schema.js';
 import { FILE_URI_DESCRIPTION } from './file-uri-description.js';
-import type { LSPClientV2 } from '../lsp/client-v2.js';
+import type { LSPClient } from '../lsp/client-v2.js';
 
 // Configuration constants
 const CACHE_SIZE = 100;
@@ -507,11 +507,7 @@ Features: Result caching, AI-optimized filtering, relevance ranking.`;
     }
   }
 
-  private async ensureFileOpened(
-    client: LSPClientV2,
-    uri: string,
-    language: string
-  ): Promise<void> {
+  private async ensureFileOpened(client: LSPClient, uri: string, language: string): Promise<void> {
     try {
       const filePath = uri.replace('file://', '');
       const fs = await import('fs/promises');

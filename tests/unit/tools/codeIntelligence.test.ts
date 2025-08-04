@@ -2,7 +2,7 @@
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 import { CodeIntelligenceTool } from '../../../src/tools/codeIntelligence.js';
 import { ConnectionPool } from '../../../src/lsp/index.js';
-import { LSPClientV2 } from '../../../src/lsp/client-v2.js';
+import { LSPClient } from '../../../src/lsp/client-v2.js';
 // Mock the dependencies
 jest.mock('../../../src/lsp/index.js');
 jest.mock('../../../src/utils/logger.js');
@@ -10,14 +10,14 @@ jest.mock('../../../src/utils/logger.js');
 describe('CodeIntelligenceTool', () => {
   let tool: CodeIntelligenceTool;
   let mockClientManager: jest.Mocked<ConnectionPool>;
-  let mockClient: jest.Mocked<LSPClientV2>;
+  let mockClient: jest.Mocked<LSPClient>;
 
   beforeEach(() => {
     // Create mock client
     mockClient = {
       sendRequest: jest.fn(),
       isConnected: jest.fn().mockReturnValue(true),
-    } as unknown as jest.Mocked<LSPClientV2>;
+    } as unknown as jest.Mocked<LSPClient>;
 
     // Create mock client manager
     mockClientManager = {

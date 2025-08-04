@@ -19,7 +19,7 @@ export interface LSPClientOptions {
   workspaceFolders?: string[];
 }
 
-export class LSPClientV2 extends EventEmitter {
+export class LSPClient extends EventEmitter {
   private processManager: ProcessManager;
   private protocolHandler: ProtocolHandler | null = null;
   private connection: ProtocolConnection | null = null;
