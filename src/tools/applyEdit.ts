@@ -386,14 +386,31 @@ all changes are rolled back to maintain consistency.`;
       newName,
     };
 
+    this.logger.debug(
+      { uri, position, newName },
+      'Attempting rename - sending prepareRename request'
+    );
+
     const prepareResult = await client.sendRequest('textDocument/prepareRename', {
       textDocument: { uri },
       position,
     });
 
     if (!prepareResult) {
-      throw new Error('Cannot rename at this location');
+      this.logger.warn(
+        { uri, position },
+        'prepareRename returned null - position may not contain a renameable symbol'
+      );
+      throw new Error(
+        'Cannot rename at this location. Ensure the position points to a symbol (not whitespace or comments). ' +
+        `Current position: line ${position.line + 1}, character ${position.character + 1}`
+      );
     }
+
+    this.logger.debug(
+      { prepareResult },
+      'prepareRename successful'
+    );
 
     const renameResult = await client.sendRequest('textDocument/rename', prepareParams);
 
