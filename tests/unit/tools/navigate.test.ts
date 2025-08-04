@@ -79,7 +79,14 @@ describe('NavigateTool', () => {
     it('should have correct name and description', () => {
       expect(tool.name).toBe('navigate');
       expect(tool.description).toBe(
-        'Navigate to definitions, implementations, or type definitions'
+        `Navigate to symbol definitions, implementations, or type definitions.
+
+Targets:
+- definition: Where symbol is declared
+- implementation: Concrete implementations of interfaces/abstract classes
+- typeDefinition: Type declarations
+
+Features: Batch support, relevance sorting, grep fallback suggestions.`
       );
     });
 

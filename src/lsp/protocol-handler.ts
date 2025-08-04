@@ -7,10 +7,10 @@ import {
   ExitNotification,
 } from 'vscode-languageserver-protocol/node.js';
 import { TimeoutError } from '../utils/errors.js';
-import pino from 'pino';
+import { logger } from '../utils/logger.js';
 
 export class ProtocolHandler {
-  private logger = pino({ level: 'info' });
+  private logger = logger;
 
   constructor(
     private connection: ProtocolConnection,

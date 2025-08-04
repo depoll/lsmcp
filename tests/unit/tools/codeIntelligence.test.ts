@@ -22,6 +22,7 @@ describe('CodeIntelligenceTool', () => {
     // Create mock client manager
     mockClientManager = {
       get: jest.fn(() => Promise.resolve(mockClient)),
+      getForFile: jest.fn(() => Promise.resolve(mockClient)),
     } as unknown as jest.Mocked<ConnectionPool>;
 
     // Create tool instance
@@ -34,7 +35,15 @@ describe('CodeIntelligenceTool', () => {
   describe('metadata', () => {
     it('should have correct name and description', () => {
       expect(tool.name).toBe('getCodeIntelligence');
-      expect(tool.description).toBe('Get hover info, signatures, or completions at a position');
+      expect(tool.description)
+        .toBe(`Get code intelligence at a position: hover info, signatures, or completions.
+
+Types:
+- hover: Type info, docs, and examples for symbols
+- signature: Function signatures with parameter docs
+- completion: Context-aware suggestions with smart filtering
+
+Features: Result caching, AI-optimized filtering, relevance ranking.`);
     });
 
     it('should have correct input schema', () => {
@@ -71,7 +80,10 @@ describe('CodeIntelligenceTool', () => {
         },
       });
 
-      expect(mockClientManager.get).toHaveBeenCalledWith('typescript', 'file:///test.ts');
+      expect(mockClientManager.getForFile).toHaveBeenCalledWith(
+        'file:///test.ts',
+        expect.any(String)
+      );
       expect(mockClient.sendRequest).toHaveBeenCalledWith('textDocument/hover', {
         textDocument: { uri: 'file:///test.ts' },
         position: { line: 10, character: 5 },
@@ -315,14 +327,14 @@ describe('CodeIntelligenceTool', () => {
         { uri: 'file:///test.unknown', expectedLang: 'plaintext' },
       ];
 
-      for (const { uri, expectedLang } of testCases) {
+      for (const { uri } of testCases) {
         await tool.execute({
           uri,
           position: { line: 0, character: 0 },
           type: 'hover',
         });
 
-        expect(mockClientManager.get).toHaveBeenCalledWith(expectedLang, uri);
+        expect(mockClientManager.getForFile).toHaveBeenCalledWith(uri, expect.any(String));
       }
     });
   });
@@ -330,7 +342,7 @@ describe('CodeIntelligenceTool', () => {
   describe('error handling', () => {
     it('should propagate errors from client manager', async () => {
       const error = new Error('Failed to get client');
-      mockClientManager.get.mockRejectedValue(error);
+      mockClientManager.getForFile.mockRejectedValue(error);
 
       await expect(
         tool.execute({

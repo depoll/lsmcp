@@ -60,7 +60,21 @@ describe('FindUsagesTool', () => {
   describe('metadata', () => {
     it('should have correct name and description', () => {
       expect(tool.name).toBe('findUsages');
-      expect(tool.description).toBe('Find all references or call hierarchy for a symbol');
+      expect(tool.description).toBe(`Find symbol references or call hierarchy.
+
+Modes:
+- references: All usage locations (read, write, import)
+- callHierarchy: Function call flow (incoming/outgoing)
+
+Features: Batch processing, streaming results, deduplication.
+
+Required parameters:
+- uri: File URI containing the symbol
+- position: Symbol position (line, character)
+- type: 'references' or 'callHierarchy'
+- maxResults: Maximum results (1-10000)
+- maxDepth: Call hierarchy depth (1-10)
+- includeDeclaration: Include declaration in references (boolean)`);
     });
   });
 

@@ -16,31 +16,48 @@ import {
   DidOpenTextDocumentParams,
 } from 'vscode-languageserver-protocol';
 import { logger as rootLogger } from '../utils/logger.js';
+import { createPositionSchema, USAGE_POSITION_DESCRIPTION } from './position-schema.js';
+import { FILE_URI_DESCRIPTION, BATCH_FILE_URI_DESCRIPTION } from './file-uri-description.js';
 
 // Configuration constants
 const DEFAULT_STREAM_BATCH_SIZE = 20;
 
 const logger = rootLogger.child({ module: 'find-usages-tool' });
 
-const positionSchema = z.object({
-  line: z.number().min(0),
-  character: z.number().min(0),
-});
+const positionSchema = createPositionSchema();
 
 const batchItemSchema = z.object({
-  uri: z.string().url(),
-  position: positionSchema,
+  uri: z.string().url().describe(BATCH_FILE_URI_DESCRIPTION),
+  position: positionSchema.describe(USAGE_POSITION_DESCRIPTION),
 });
 
 export const findUsagesParamsSchema = z.object({
-  uri: z.string().url(),
-  position: positionSchema,
-  batch: z.array(batchItemSchema).optional(),
-  type: z.enum(['references', 'callHierarchy']),
-  direction: z.enum(['incoming', 'outgoing']).optional().describe('For call hierarchy only'),
-  maxResults: z.number().positive(),
-  maxDepth: z.number().positive().max(10),
-  includeDeclaration: z.boolean(),
+  uri: z.string().url().describe(FILE_URI_DESCRIPTION),
+  position: positionSchema.describe(USAGE_POSITION_DESCRIPTION),
+  batch: z
+    .array(batchItemSchema)
+    .optional()
+    .describe('Batch references (type="references" only). Each: uri, position. Auto-deduplicates.'),
+  type: z
+    .enum(['references', 'callHierarchy'])
+    .describe('Analysis type: references (usage locations) or callHierarchy (function call tree)'),
+  direction: z
+    .enum(['incoming', 'outgoing'])
+    .optional()
+    .describe('Call direction (callHierarchy only): incoming (callers) or outgoing (callees)'),
+  maxResults: z
+    .number()
+    .min(1)
+    .max(10000)
+    .describe('Max results. References: 50-500. CallHierarchy: 10-50 per level. Range: 1-10000'),
+  maxDepth: z
+    .number()
+    .min(1)
+    .max(10)
+    .describe('Call hierarchy depth. 1=direct, 3=recommended, 5+=deep. Range: 1-10'),
+  includeDeclaration: z
+    .boolean()
+    .describe('Include declaration in references. true=include definition, false=usage only'),
 });
 
 export type FindUsagesParams = z.infer<typeof findUsagesParamsSchema>;
@@ -93,7 +110,21 @@ export interface LSPConnection {
 
 export class FindUsagesTool extends BatchableTool<FindUsagesParams, FindUsagesResult> {
   name = 'findUsages';
-  description = 'Find all references or call hierarchy for a symbol';
+  description = `Find symbol references or call hierarchy.
+
+Modes:
+- references: All usage locations (read, write, import)
+- callHierarchy: Function call flow (incoming/outgoing)
+
+Features: Batch processing, streaming results, deduplication.
+
+Required parameters:
+- uri: File URI containing the symbol
+- position: Symbol position (line, character)
+- type: 'references' or 'callHierarchy'
+- maxResults: Maximum results (1-10000)
+- maxDepth: Call hierarchy depth (1-10)
+- includeDeclaration: Include declaration in references (boolean)`;
   inputSchema = findUsagesParamsSchema;
   private config: FindUsagesConfig;
 

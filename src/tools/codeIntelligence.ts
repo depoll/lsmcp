@@ -13,6 +13,9 @@ import { ConnectionPool } from '../lsp/index.js';
 import { FileAwareLRUCache } from '../utils/fileCache.js';
 import { getLanguageFromUri } from '../utils/languages.js';
 import { BatchableTool } from './base.js';
+import { createPositionSchema, SYMBOL_POSITION_DESCRIPTION } from './position-schema.js';
+import { FILE_URI_DESCRIPTION } from './file-uri-description.js';
+import type { LSPClientV2 } from '../lsp/client-v2.js';
 
 // Configuration constants
 const CACHE_SIZE = 100;
@@ -20,29 +23,32 @@ const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 const DEFAULT_MAX_RESULTS = 50;
 
 const CodeIntelligenceParamsSchema = z.object({
-  uri: z.string().describe('File URI (e.g., file:///path/to/file.ts)'),
-  position: z.object({
-    line: z.number().describe('Zero-based line number'),
-    character: z.number().describe('Zero-based character offset'),
-  }),
-  type: z.enum(['hover', 'signature', 'completion']).describe('Type of intelligence to retrieve'),
+  uri: z.string().describe(FILE_URI_DESCRIPTION),
+  position: createPositionSchema().describe(SYMBOL_POSITION_DESCRIPTION),
+  type: z
+    .enum(['hover', 'signature', 'completion'])
+    .describe(
+      'Intelligence type: hover (type info/docs), signature (parameter help), completion (suggestions)'
+    ),
   completionContext: z
     .object({
-      triggerCharacter: z
-        .string()
-        .optional()
-        .describe('Character that triggered completion (e.g., ".")'),
+      triggerCharacter: z.string().optional().describe('Trigger character: . ( [ \' " < / @'),
       triggerKind: z
         .number()
         .optional()
-        .describe('How completion was triggered (1=Invoked, 2=TriggerCharacter, 3=Incomplete)'),
+        .describe('Trigger kind: 1=Invoked, 2=TriggerCharacter, 3=Incomplete'),
     })
-    .optional(),
+    .optional()
+    .describe('Context for completion requests (when type="completion")'),
   maxResults: z
     .number()
+    .min(1)
+    .max(1000)
     .default(DEFAULT_MAX_RESULTS)
     .optional()
-    .describe('Maximum number of completion items to return'),
+    .describe(
+      'Max completion items. Lower (10-50) for focused, higher (100-200) for comprehensive. Default: 50'
+    ),
 });
 
 type CodeIntelligenceParams = z.infer<typeof CodeIntelligenceParamsSchema>;
@@ -86,7 +92,14 @@ export class CodeIntelligenceTool extends BatchableTool<
   CodeIntelligenceResult
 > {
   readonly name = 'getCodeIntelligence';
-  readonly description = 'Get hover info, signatures, or completions at a position';
+  readonly description = `Get code intelligence at a position: hover info, signatures, or completions.
+
+Types:
+- hover: Type info, docs, and examples for symbols
+- signature: Function signatures with parameter docs
+- completion: Context-aware suggestions with smart filtering
+
+Features: Result caching, AI-optimized filtering, relevance ranking.`;
   readonly inputSchema = CodeIntelligenceParamsSchema;
 
   private hoverCache: FileAwareLRUCache<Hover>;
@@ -126,7 +139,6 @@ export class CodeIntelligenceTool extends BatchableTool<
   }
 
   private async getHover(uri: string, position: Position): Promise<HoverResult> {
-    const language = getLanguageFromUri(uri);
     const cacheKey = `${uri}:${position.line}:${position.character}`;
     const cached = await this.hoverCache.get(cacheKey, uri);
 
@@ -135,7 +147,21 @@ export class CodeIntelligenceTool extends BatchableTool<
       return this.formatHoverResult(cached);
     }
 
-    const client = await this.clientManager.get(language, uri);
+    // Extract workspace and get client
+    const workspace = this.extractWorkspaceFromUri(uri);
+    const client = await this.clientManager.getForFile(uri, workspace);
+
+    if (!client) {
+      this.logger.warn({ uri }, 'Failed to get language client for file');
+      return { type: 'hover', content: {} };
+    }
+
+    // For TypeScript/JavaScript, ensure the file is opened
+    const language = getLanguageFromUri(uri);
+    if (language === 'typescript' || language === 'javascript') {
+      await this.ensureFileOpened(client, uri, language);
+    }
+
     const hover = await client.sendRequest<Hover | null>('textDocument/hover', {
       textDocument: { uri },
       position,
@@ -214,7 +240,6 @@ export class CodeIntelligenceTool extends BatchableTool<
   }
 
   private async getSignatureHelp(uri: string, position: Position): Promise<SignatureResult> {
-    const language = getLanguageFromUri(uri);
     const cacheKey = `${uri}:${position.line}:${position.character}`;
     const cached = await this.signatureCache.get(cacheKey, uri);
 
@@ -223,7 +248,20 @@ export class CodeIntelligenceTool extends BatchableTool<
       return this.formatSignatureResult(cached);
     }
 
-    const client = await this.clientManager.get(language, uri);
+    // Extract workspace and get client
+    const workspace = this.extractWorkspaceFromUri(uri);
+    const client = await this.clientManager.getForFile(uri, workspace);
+
+    if (!client) {
+      this.logger.warn({ uri }, 'Failed to get language client for file');
+      return { type: 'signature', signatures: [] };
+    }
+
+    // For TypeScript/JavaScript, ensure the file is opened
+    const language = getLanguageFromUri(uri);
+    if (language === 'typescript' || language === 'javascript') {
+      await this.ensureFileOpened(client, uri, language);
+    }
     const signatureHelp = await client.sendRequest<SignatureHelp | null>(
       'textDocument/signatureHelp',
       {
@@ -285,8 +323,20 @@ export class CodeIntelligenceTool extends BatchableTool<
     position: Position,
     params: CodeIntelligenceParams
   ): Promise<CompletionResult> {
+    // Extract workspace and get client
+    const workspace = this.extractWorkspaceFromUri(uri);
+    const client = await this.clientManager.getForFile(uri, workspace);
+
+    if (!client) {
+      this.logger.warn({ uri }, 'Failed to get language client for file');
+      return { type: 'completion', items: [] };
+    }
+
+    // For TypeScript/JavaScript, ensure the file is opened
     const language = getLanguageFromUri(uri);
-    const client = await this.clientManager.get(language, uri);
+    if (language === 'typescript' || language === 'javascript') {
+      await this.ensureFileOpened(client, uri, language);
+    }
 
     const completionParams: {
       textDocument: { uri: string };
@@ -440,5 +490,46 @@ export class CodeIntelligenceTool extends BatchableTool<
     this.hoverCache.clear();
     this.signatureCache.clear();
     this.logger.info('Cleared all code intelligence caches');
+  }
+
+  private extractWorkspaceFromUri(uri: string): string {
+    try {
+      const url = new URL(uri);
+      if (url.protocol === 'file:') {
+        const filePath = decodeURIComponent(url.pathname);
+        // Use path methods from node:path
+        const lastSlash = filePath.lastIndexOf('/');
+        return lastSlash > 0 ? filePath.substring(0, lastSlash) : process.cwd();
+      }
+      return process.cwd();
+    } catch {
+      return process.cwd();
+    }
+  }
+
+  private async ensureFileOpened(
+    client: LSPClientV2,
+    uri: string,
+    language: string
+  ): Promise<void> {
+    try {
+      const filePath = uri.replace('file://', '');
+      const fs = await import('fs/promises');
+      const content = await fs.readFile(filePath, 'utf-8');
+
+      client.sendNotification('textDocument/didOpen', {
+        textDocument: {
+          uri,
+          languageId: language,
+          version: 1,
+          text: content,
+        },
+      });
+
+      // Give the server a moment to process
+      await new Promise((resolve) => setTimeout(resolve, 500));
+    } catch (error) {
+      this.logger.warn({ error, uri }, 'Failed to open document for code intelligence');
+    }
   }
 }

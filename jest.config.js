@@ -3,11 +3,6 @@ export default {
   testEnvironment: 'node',
   extensionsToTreatAsEsm: ['.ts'],
   forceExit: true, // Force exit after tests to handle external processes
-  globals: {
-    'ts-jest': {
-      useESM: true,
-    },
-  },
   moduleNameMapper: {
     '^(\\.{1,2}/.*)\\.js$': '$1',
   },
@@ -16,7 +11,6 @@ export default {
       'ts-jest',
       {
         useESM: true,
-        isolatedModules: true,
         tsconfig: {
           module: 'ESNext',
           target: 'ES2022',

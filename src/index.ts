@@ -1,8 +1,6 @@
 #!/usr/bin/env node
 import { LSMCPServer } from './server.js';
-import pino from 'pino';
-
-const logger = pino({ level: 'info' });
+import { logger } from './utils/logger.js';
 
 async function main(): Promise<void> {
   const server = new LSMCPServer();

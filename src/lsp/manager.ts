@@ -2,18 +2,50 @@ import { LSPClientV2 as LSPClient } from './client-v2.js';
 import { LanguageServerConfig, HealthStatus, ConnectionPoolOptions } from '../types/lsp.js';
 import { LanguageDetector, createLanguageServerProvider } from '../languages/index.js';
 import { existsSync } from 'fs';
-import pino from 'pino';
+import { logger } from '../utils/logger.js';
 
 const DEFAULT_SERVERS: Record<string, LanguageServerConfig> = {
   typescript: {
     command: 'typescript-language-server',
     args: ['--stdio'],
     npm: 'typescript-language-server',
+    initializationOptions: {
+      preferences: {
+        includeInlayParameterNameHints: 'all',
+        includeInlayParameterNameHintsWhenArgumentMatchesName: true,
+        includeInlayFunctionParameterTypeHints: true,
+        includeInlayVariableTypeHints: true,
+        includeInlayPropertyDeclarationTypeHints: true,
+        includeInlayFunctionLikeReturnTypeHints: true,
+        includeInlayEnumMemberValueHints: true,
+      },
+      tsserver: {
+        logVerbosity: 'off',
+        maxTsServerMemory: 4096,
+      },
+      hostInfo: 'lsmcp',
+    },
   },
   javascript: {
     command: 'typescript-language-server',
     args: ['--stdio'],
     npm: 'typescript-language-server',
+    initializationOptions: {
+      preferences: {
+        includeInlayParameterNameHints: 'all',
+        includeInlayParameterNameHintsWhenArgumentMatchesName: true,
+        includeInlayFunctionParameterTypeHints: true,
+        includeInlayVariableTypeHints: true,
+        includeInlayPropertyDeclarationTypeHints: true,
+        includeInlayFunctionLikeReturnTypeHints: true,
+        includeInlayEnumMemberValueHints: true,
+      },
+      tsserver: {
+        logVerbosity: 'off',
+        maxTsServerMemory: 4096,
+      },
+      hostInfo: 'lsmcp',
+    },
   },
   python: {
     command: 'pylsp',
@@ -63,7 +95,7 @@ interface ConnectionInfo {
 export class ConnectionPool {
   private connections = new Map<string, ConnectionInfo>();
   private languageServers = new Map<string, LanguageServerConfig>();
-  private logger = pino({ level: 'info' });
+  private logger = logger;
   private options: Required<ConnectionPoolOptions>;
   private languageDetector = new LanguageDetector();
   private isContainer = this.detectContainer();
@@ -141,6 +173,7 @@ export class ConnectionPool {
         config = {
           command: detected.serverCommand[0]!,
           args: detected.serverCommand.slice(1),
+          initializationOptions: detected.initializationOptions,
         };
 
         // Check if server is available

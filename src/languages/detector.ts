@@ -35,6 +35,13 @@ export class LanguageDetector {
               includeInlayFunctionLikeReturnTypeHints: true,
               includeInlayEnumMemberValueHints: true,
             },
+            tsserver: {
+              // Enable logging for debugging
+              logVerbosity: 'off',
+              // Ensure TypeScript server loads the project
+              maxTsServerMemory: 4096,
+            },
+            hostInfo: 'lsmcp',
           },
         },
       ],
@@ -55,6 +62,13 @@ export class LanguageDetector {
               includeInlayFunctionLikeReturnTypeHints: true,
               includeInlayEnumMemberValueHints: true,
             },
+            tsserver: {
+              // Enable logging for debugging
+              logVerbosity: 'off',
+              // Ensure TypeScript server loads the project
+              maxTsServerMemory: 4096,
+            },
+            hostInfo: 'lsmcp',
           },
         },
       ],
