@@ -124,9 +124,7 @@ const TextEditParamsSchema = z.object({
 });
 
 const MultiFileEditParamsSchema = z.object({
-  edits: z
-    .array(TextEditParamsSchema)
-    .describe('Text edits to apply across multiple files'),
+  edits: z.array(TextEditParamsSchema).describe('Text edits to apply across multiple files'),
 });
 
 const BatchOperationSchema = z.object({
@@ -163,8 +161,15 @@ const BatchOperationSchema = z.object({
 });
 
 const ApplyEditParamsSchema = z.object({
-  type: z.enum(['codeAction', 'rename', 'format', 'organizeImports', 'textEdit', 'multiFileEdit', 'batch'])
-    .describe(`Type of edit operation to perform:
+  type: z.enum([
+    'codeAction',
+    'rename',
+    'format',
+    'organizeImports',
+    'textEdit',
+    'multiFileEdit',
+    'batch',
+  ]).describe(`Type of edit operation to perform:
 • codeAction: Apply fixes, refactors, or source actions (e.g., fix errors, extract method)
 • rename: Rename symbols across the codebase (variables, functions, classes)
 • format: Format code according to language rules
@@ -172,7 +177,6 @@ const ApplyEditParamsSchema = z.object({
 • textEdit: Apply direct text edits to a single file
 • multiFileEdit: Apply text edits across multiple files
 • batch: Execute multiple operations in a single transaction`),
-
 
   actions: z
     .array(CodeActionParamsSchema)
@@ -185,7 +189,9 @@ const ApplyEditParamsSchema = z.object({
 
   textEdit: TextEditParamsSchema.optional().describe('Parameters for direct text edit operations'),
 
-  multiFileEdit: MultiFileEditParamsSchema.optional().describe('Parameters for multi-file text edit operations'),
+  multiFileEdit: MultiFileEditParamsSchema.optional().describe(
+    'Parameters for multi-file text edit operations'
+  ),
 
   batchOperations: BatchOperationSchema.optional().describe('Parameters for batch operations'),
 
@@ -625,7 +631,7 @@ if any part fails, all changes are rolled back to maintain consistency.`;
     const { uri, edits } = params.textEdit;
 
     // Convert our edit format to LSP TextEdit format
-    const textEdits: TextEdit[] = edits.map(edit => ({
+    const textEdits: TextEdit[] = edits.map((edit) => ({
       range: edit.range as Range,
       newText: edit.newText,
     }));
@@ -651,9 +657,9 @@ if any part fails, all changes are rolled back to maintain consistency.`;
     const { edits } = params.multiFileEdit;
 
     // Create a single WorkspaceEdit with all file changes
-    const documentChanges = edits.map(fileEdit => ({
+    const documentChanges = edits.map((fileEdit) => ({
       textDocument: { uri: fileEdit.uri, version: null },
-      edits: fileEdit.edits.map(edit => ({
+      edits: fileEdit.edits.map((edit) => ({
         range: edit.range as Range,
         newText: edit.newText,
       })),
@@ -677,7 +683,7 @@ if any part fails, all changes are rolled back to maintain consistency.`;
     for (const operation of operations) {
       try {
         let edits: WorkspaceEdit[] = [];
-        
+
         switch (operation.type) {
           case 'codeAction':
             edits = await this.executeCodeActions({
@@ -728,13 +734,10 @@ if any part fails, all changes are rolled back to maintain consistency.`;
             });
             break;
         }
-        
+
         allEdits.push(...edits);
       } catch (error) {
-        this.logger.error(
-          { operation: operation.type, error },
-          'Batch operation failed'
-        );
+        this.logger.error({ operation: operation.type, error }, 'Batch operation failed');
         throw new Error(
           `Batch operation '${operation.type}' failed: ${
             error instanceof Error ? error.message : 'Unknown error'

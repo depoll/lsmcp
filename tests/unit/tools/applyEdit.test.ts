@@ -698,27 +698,30 @@ describe('ApplyEditTool', () => {
 
   describe('batch operations', () => {
     it('should execute multiple operations in sequence', async () => {
-      const formatEdit: WorkspaceEdit = {
-        documentChanges: [
-          {
-            textDocument: { uri: 'file:///test/file.ts', version: null },
-            edits: [{ range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } }, newText: '' }],
-          },
-        ],
-      };
-
       const renameEdit: WorkspaceEdit = {
         documentChanges: [
           {
             textDocument: { uri: 'file:///test/file.ts', version: null },
-            edits: [{ range: { start: { line: 5, character: 0 }, end: { line: 5, character: 5 } }, newText: 'newName' }],
+            edits: [
+              {
+                range: { start: { line: 5, character: 0 }, end: { line: 5, character: 5 } },
+                newText: 'newName',
+              },
+            ],
           },
         ],
       };
 
       mockClient.sendRequest
-        .mockResolvedValueOnce([{ range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } }, newText: '' }]) // format
-        .mockResolvedValueOnce({ range: { start: { line: 5, character: 0 }, end: { line: 5, character: 5 } } }) // prepareRename
+        .mockResolvedValueOnce([
+          {
+            range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
+            newText: '',
+          },
+        ]) // format
+        .mockResolvedValueOnce({
+          range: { start: { line: 5, character: 0 }, end: { line: 5, character: 5 } },
+        }) // prepareRename
         .mockResolvedValueOnce(renameEdit); // rename
 
       mockTransactionManager.executeTransaction.mockResolvedValue({
