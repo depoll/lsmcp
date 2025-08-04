@@ -352,33 +352,75 @@ Features: Fuzzy matching, kind filtering, relevance scoring, grep fallback.`;
     // Implement retry logic for TypeScript language server
     // The server may need time to build its symbol index
     let attempts = 0;
-    const maxAttempts = 3;
-    const retryDelay = 1000; // 1 second between retries
+    const maxAttempts = 5; // Increased from 3 for better resilience
+    const baseDelay = 500; // Start with 500ms
+    let lastError: unknown = null;
+    let foundAnySymbols = false;
 
     while (attempts < maxAttempts) {
-      const response = await client.sendRequest<SymbolInformation[] | null>(
-        'workspace/symbol',
-        wsParams
-      );
+      try {
+        const response = await client.sendRequest<SymbolInformation[] | null>(
+          'workspace/symbol',
+          wsParams
+        );
 
-      if (response && Array.isArray(response) && response.length > 0) {
-        return this.convertSymbolInformation(response);
+        if (response && Array.isArray(response) && response.length > 0) {
+          return this.convertSymbolInformation(response);
+        }
+
+        // Track if we've ever found symbols (helps distinguish between "not ready" vs "no matches")
+        if (response && Array.isArray(response)) {
+          foundAnySymbols = true;
+        }
+      } catch (error) {
+        lastError = error;
+        this.logger?.debug(
+          { query: params.query, attempt: attempts, error },
+          'Symbol search request failed'
+        );
       }
 
       attempts++;
 
-      // If this is an exact match query and we got no results, retry
-      // The TypeScript server might still be indexing
-      if (attempts < maxAttempts && !params.query.includes('*')) {
+      // Decide whether to retry
+      const shouldRetry =
+        attempts < maxAttempts &&
+        // Always retry on errors
+        (lastError !== null ||
+          // Retry if we haven't found any symbols yet (server might still be initializing)
+          !foundAnySymbols ||
+          // For exact queries, retry even if we got empty results
+          (!params.query.includes('*') && !params.query.includes('?')));
+
+      if (shouldRetry) {
+        // Exponential backoff: 500ms, 1s, 2s, 4s
+        const delay = baseDelay * Math.pow(2, attempts - 1);
         this.logger?.debug(
-          { query: params.query, attempt: attempts },
+          {
+            query: params.query,
+            attempt: attempts,
+            nextDelay: delay,
+            hadError: lastError !== null,
+            foundAnySymbols,
+          },
           'No symbols found, retrying after delay'
         );
-        await new Promise((resolve) => setTimeout(resolve, retryDelay));
+        await new Promise((resolve) => setTimeout(resolve, delay));
+
+        // Clear error for next attempt
+        lastError = null;
       } else {
-        // For pattern queries or after max attempts, return what we have
-        return response && Array.isArray(response) ? this.convertSymbolInformation(response) : [];
+        // We've exhausted retries or got a definitive empty result
+        break;
       }
+    }
+
+    // Log final outcome
+    if (attempts >= maxAttempts) {
+      this.logger?.warn(
+        { query: params.query, attempts, foundAnySymbols },
+        'Symbol search reached max retry attempts'
+      );
     }
 
     return [];
