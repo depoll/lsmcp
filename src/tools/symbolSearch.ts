@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { glob } from 'glob';
 import { BatchableTool } from './base.js';
 import type { ConnectionPool } from '../lsp/manager.js';
 import {
@@ -307,7 +308,6 @@ Features: Fuzzy matching, kind filtering, relevance scoring, grep fallback.`;
 
         // If no standard file found, find any TS/JS file
         if (!fileToOpen) {
-          const glob = (await import('glob')).glob;
           const files = await glob('**/*.{ts,js}', {
             cwd: workspace,
             ignore: ['node_modules/**', 'dist/**', 'build/**'],

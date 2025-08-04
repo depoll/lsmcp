@@ -19,6 +19,70 @@ import { EditTransactionManager, TransactionOptions } from './transactions.js';
 import type { LSPClientV2 } from '../lsp/client-v2.js';
 import { MCPError, MCPErrorCode } from './common-types.js';
 
+// Sub-schemas for better organization and readability
+const CodeActionParamsSchema = z.object({
+  uri: z.string().describe(FILE_URI_DESCRIPTION),
+  diagnostic: z
+    .object({
+      code: z.string().optional(),
+      message: z.string(),
+      range: z.object({
+        start: createPositionSchema(),
+        end: createPositionSchema(),
+      }),
+    })
+    .optional()
+    .describe('Diagnostic to match for code actions'),
+  actionKind: z
+    .enum(['quickfix', 'refactor', 'source'])
+    .optional()
+    .describe('Filter code actions by kind'),
+  position: createPositionSchema()
+    .optional()
+    .describe('Position for context-aware code actions'),
+});
+
+const RenameParamsSchema = z.object({
+  uri: z.string().describe(FILE_URI_DESCRIPTION),
+  position: createPositionSchema().describe('Position of symbol to rename'),
+  newName: z.string().describe('New name for the symbol'),
+  maxFiles: z
+    .number()
+    .min(1)
+    .max(1000)
+    .default(100)
+    .optional()
+    .describe('Maximum number of files to modify (safety limit)'),
+  excludePatterns: z
+    .array(z.string())
+    .optional()
+    .describe('Glob patterns to exclude from rename (e.g., node_modules)'),
+});
+
+const FormatParamsSchema = z.object({
+  uris: z
+    .array(z.string())
+    .describe('File URIs to format')
+    .or(z.string().describe('Single file URI to format')),
+  range: z
+    .object({
+      start: createPositionSchema(),
+      end: createPositionSchema(),
+    })
+    .optional()
+    .describe('Range to format (if omitted, formats entire file)'),
+  options: z
+    .object({
+      tabSize: z.number().optional(),
+      insertSpaces: z.boolean().optional(),
+      trimTrailingWhitespace: z.boolean().optional(),
+      insertFinalNewline: z.boolean().optional(),
+      trimFinalNewlines: z.boolean().optional(),
+    })
+    .optional()
+    .describe('Formatting options'),
+});
+
 const ApplyEditParamsSchema = z.object({
   type: z
     .enum(['codeAction', 'rename', 'format', 'organizeImports'])
@@ -29,79 +93,11 @@ const ApplyEditParamsSchema = z.object({
     .optional()
     .describe('Whether to perform multiple operations in a single transaction'),
 
-  actions: z
-    .array(
-      z.object({
-        uri: z.string().describe(FILE_URI_DESCRIPTION),
-        diagnostic: z
-          .object({
-            code: z.string().optional(),
-            message: z.string(),
-            range: z.object({
-              start: createPositionSchema(),
-              end: createPositionSchema(),
-            }),
-          })
-          .optional()
-          .describe('Diagnostic to match for code actions'),
-        actionKind: z
-          .enum(['quickfix', 'refactor', 'source'])
-          .optional()
-          .describe('Filter code actions by kind'),
-        position: createPositionSchema()
-          .optional()
-          .describe('Position for context-aware code actions'),
-      })
-    )
-    .optional()
-    .describe('Parameters for code action operations'),
+  actions: z.array(CodeActionParamsSchema).optional().describe('Parameters for code action operations'),
 
-  rename: z
-    .object({
-      uri: z.string().describe(FILE_URI_DESCRIPTION),
-      position: createPositionSchema().describe('Position of symbol to rename'),
-      newName: z.string().describe('New name for the symbol'),
-      maxFiles: z
-        .number()
-        .min(1)
-        .max(1000)
-        .default(100)
-        .optional()
-        .describe('Maximum number of files to modify (safety limit)'),
-      excludePatterns: z
-        .array(z.string())
-        .optional()
-        .describe('Glob patterns to exclude from rename (e.g., node_modules)'),
-    })
-    .optional()
-    .describe('Parameters for rename operations'),
+  rename: RenameParamsSchema.optional().describe('Parameters for rename operations'),
 
-  format: z
-    .object({
-      uris: z
-        .array(z.string())
-        .describe('File URIs to format')
-        .or(z.string().describe('Single file URI to format')),
-      range: z
-        .object({
-          start: createPositionSchema(),
-          end: createPositionSchema(),
-        })
-        .optional()
-        .describe('Range to format (if omitted, formats entire file)'),
-      options: z
-        .object({
-          tabSize: z.number().optional(),
-          insertSpaces: z.boolean().optional(),
-          trimTrailingWhitespace: z.boolean().optional(),
-          insertFinalNewline: z.boolean().optional(),
-          trimFinalNewlines: z.boolean().optional(),
-        })
-        .optional()
-        .describe('Formatting options'),
-    })
-    .optional()
-    .describe('Parameters for format operations'),
+  format: FormatParamsSchema.optional().describe('Parameters for format operations'),
 
   dryRun: z.boolean().default(false).optional().describe('Preview changes without applying them'),
 

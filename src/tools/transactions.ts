@@ -5,6 +5,7 @@ import {
   RenameFile,
   DeleteFile,
   ApplyWorkspaceEditResult,
+  TextEdit,
 } from 'vscode-languageserver-protocol';
 import { randomUUID } from 'crypto';
 import { readFile, writeFile, mkdir, unlink, rename, stat } from 'fs/promises';
@@ -292,16 +293,7 @@ export class EditTransactionManager {
     await writeFile(filePath, newContent, 'utf-8');
   }
 
-  private applyTextEdit(
-    content: string,
-    edit: {
-      range: {
-        start: { line: number; character: number };
-        end: { line: number; character: number };
-      };
-      newText: string;
-    }
-  ): string {
+  private applyTextEdit(content: string, edit: TextEdit): string {
     const lines = content.split('\n');
     const { start, end } = edit.range;
 
@@ -318,16 +310,7 @@ export class EditTransactionManager {
     return lines.join('\n');
   }
 
-  private async applyTextEdits(
-    uri: string,
-    edits: Array<{
-      range: {
-        start: { line: number; character: number };
-        end: { line: number; character: number };
-      };
-      newText: string;
-    }>
-  ): Promise<void> {
+  private async applyTextEdits(uri: string, edits: TextEdit[]): Promise<void> {
     const filePath = fileURLToPath(uri);
     const content = await readFile(filePath, 'utf-8');
 
