@@ -37,9 +37,7 @@ const CodeActionParamsSchema = z.object({
     .enum(['quickfix', 'refactor', 'source'])
     .optional()
     .describe('Filter code actions by kind'),
-  position: createPositionSchema()
-    .optional()
-    .describe('Position for context-aware code actions'),
+  position: createPositionSchema().optional().describe('Position for context-aware code actions'),
 });
 
 const RenameParamsSchema = z.object({
@@ -93,7 +91,10 @@ const ApplyEditParamsSchema = z.object({
     .optional()
     .describe('Whether to perform multiple operations in a single transaction'),
 
-  actions: z.array(CodeActionParamsSchema).optional().describe('Parameters for code action operations'),
+  actions: z
+    .array(CodeActionParamsSchema)
+    .optional()
+    .describe('Parameters for code action operations'),
 
   rename: RenameParamsSchema.optional().describe('Parameters for rename operations'),
 
