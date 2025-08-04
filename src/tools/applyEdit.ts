@@ -63,7 +63,11 @@ const CodeActionParamsSchema = z.object({
 
 const RenameParamsSchema = z.object({
   uri: z.string().describe(FILE_URI_DESCRIPTION),
-  position: createPositionSchema().describe('Position of symbol to rename'),
+  position: createPositionSchema().describe(
+    'Zero-based position of the symbol to rename. Must point to a character within the symbol name. ' +
+    'Line 0 = first line, character 0 = first character. Most editors show line 1 for the first line, ' +
+    'so subtract 1 from editor line numbers. Example: To rename a symbol on editor line 22, use line: 21'
+  ),
   newName: z.string().describe('New name for the symbol'),
   maxFiles: z
     .number()
@@ -403,14 +407,11 @@ all changes are rolled back to maintain consistency.`;
       );
       throw new Error(
         'Cannot rename at this location. Ensure the position points to a symbol (not whitespace or comments). ' +
-        `Current position: line ${position.line + 1}, character ${position.character + 1}`
+          `Current position: line ${position.line + 1}, character ${position.character + 1}`
       );
     }
 
-    this.logger.debug(
-      { prepareResult },
-      'prepareRename successful'
-    );
+    this.logger.debug({ prepareResult }, 'prepareRename successful');
 
     const renameResult = await client.sendRequest('textDocument/rename', prepareParams);
 

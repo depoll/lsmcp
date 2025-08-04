@@ -805,7 +805,7 @@ Key features:
         description: 'Rename operation parameters',
         properties: {
           uri: 'File containing the symbol to rename',
-          position: 'Position of the symbol to rename',
+          position: 'Zero-based position within the symbol name (line 0 = first line, subtract 1 from editor line number)',
           newName: 'New name for the symbol',
           maxFiles: 'Maximum files to modify (default: 100)',
           excludePatterns: 'Glob patterns to exclude (e.g., node_modules)',
@@ -847,12 +847,12 @@ Key features:
           type: 'rename',
           rename: {
             uri: 'file:///src/utils.ts',
-            position: { line: 15, character: 10 },
+            position: { line: 15, character: 10 }, // Zero-based: editor line 16, column 11
             newName: 'calculateTotalPrice',
             excludePatterns: ['**/tests/**', '**/node_modules/**'],
           },
         },
-        description: 'Renames a function and all its references, excluding test files',
+        description: 'Renames a function and all its references, excluding test files. Note: positions are zero-based (subtract 1 from editor line numbers)',
       },
       {
         title: 'Format multiple files',
