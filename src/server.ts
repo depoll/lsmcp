@@ -84,9 +84,10 @@ export class LSMCPServer {
       const { metadata } = registration;
 
       // MCP SDK expects ZodRawShape, so we need to extract the shape from ZodObject schemas
-      const inputSchema = metadata.inputSchema instanceof z.ZodObject
-        ? (metadata.inputSchema as z.ZodObject<z.ZodRawShape>).shape
-        : undefined;
+      const inputSchema =
+        metadata.inputSchema instanceof z.ZodObject
+          ? (metadata.inputSchema as z.ZodObject<z.ZodRawShape>).shape
+          : undefined;
 
       this.server.registerTool(
         metadata.name,
