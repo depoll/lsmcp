@@ -83,28 +83,12 @@ export class LSMCPServer {
     for (const registration of this.toolRegistry.getAll()) {
       const { metadata } = registration;
 
-      // Extract the shape from the Zod schema for MCP SDK compatibility
-      let inputSchema: z.ZodRawShape;
-
-      if (metadata.inputSchema instanceof z.ZodObject) {
-        // For ZodObject schemas, extract the shape
-        const zodObject = metadata.inputSchema as z.ZodObject<z.ZodRawShape>;
-        inputSchema = zodObject.shape;
-      } else {
-        // For other schema types, we need to handle them appropriately
-        // For now, log a warning and use an empty shape
-        this.logger.warn(
-          `Tool ${metadata.name} has a non-ZodObject schema type. Using empty shape.`
-        );
-        inputSchema = {};
-      }
-
       this.server.registerTool(
         metadata.name,
         {
           title: metadata.name,
           description: metadata.description,
-          inputSchema,
+          inputSchema: metadata.inputSchema,
         },
         (
           params: unknown,
