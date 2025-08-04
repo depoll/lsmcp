@@ -391,7 +391,7 @@ all changes are rolled back to maintain consistency.`;
       const content = await fs.readFile(filePath, 'utf-8');
       const language = getLanguageFromUri(uri);
 
-      await client.sendNotification('textDocument/didOpen', {
+      client.sendNotification('textDocument/didOpen', {
         textDocument: {
           uri,
           languageId: language,
