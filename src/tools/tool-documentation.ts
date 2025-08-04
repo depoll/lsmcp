@@ -805,7 +805,8 @@ Key features:
         description: 'Rename operation parameters',
         properties: {
           uri: 'File containing the symbol to rename',
-          position: 'Zero-based position within the symbol name (line 0 = first line, subtract 1 from editor line number)',
+          position:
+            'Zero-based position within the symbol name (line 0 = first line, subtract 1 from editor line number)',
           newName: 'New name for the symbol',
           maxFiles: 'Maximum files to modify (default: 100)',
           excludePatterns: 'Glob patterns to exclude (e.g., node_modules)',
@@ -852,7 +853,8 @@ Key features:
             excludePatterns: ['**/tests/**', '**/node_modules/**'],
           },
         },
-        description: 'Renames a function and all its references, excluding test files. Note: positions are zero-based (subtract 1 from editor line numbers)',
+        description:
+          'Renames a function and all its references, excluding test files. Note: positions are zero-based (subtract 1 from editor line numbers)',
       },
       {
         title: 'Format multiple files',

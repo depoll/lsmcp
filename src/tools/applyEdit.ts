@@ -65,8 +65,8 @@ const RenameParamsSchema = z.object({
   uri: z.string().describe(FILE_URI_DESCRIPTION),
   position: createPositionSchema().describe(
     'Zero-based position of the symbol to rename. Must point to a character within the symbol name. ' +
-    'Line 0 = first line, character 0 = first character. Most editors show line 1 for the first line, ' +
-    'so subtract 1 from editor line numbers. Example: To rename a symbol on editor line 22, use line: 21'
+      'Line 0 = first line, character 0 = first character. Most editors show line 1 for the first line, ' +
+      'so subtract 1 from editor line numbers. Example: To rename a symbol on editor line 22, use line: 21'
   ),
   newName: z.string().describe('New name for the symbol'),
   maxFiles: z
@@ -383,6 +383,27 @@ all changes are rolled back to maintain consistency.`;
 
     const { uri, position, newName } = params.rename;
     const client = await this.getClient(uri);
+
+    // Ensure the file is opened in the language server
+    try {
+      const fs = await import('fs/promises');
+      const filePath = new URL(uri).pathname;
+      const content = await fs.readFile(filePath, 'utf-8');
+      const language = getLanguageFromUri(uri);
+      
+      await client.sendNotification('textDocument/didOpen', {
+        textDocument: {
+          uri,
+          languageId: language,
+          version: 1,
+          text: content,
+        },
+      });
+      
+      this.logger.debug({ uri }, 'Opened file in language server for rename');
+    } catch (error) {
+      this.logger.warn({ error, uri }, 'Could not open file in language server');
+    }
 
     const prepareParams: RenameParams = {
       textDocument: { uri },
