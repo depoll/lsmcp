@@ -38,10 +38,7 @@ const CodeActionParamsSchema = z.object({
     .optional()
     .describe('Filter code actions by kind'),
   position: createPositionSchema().optional().describe('Position for context-aware code actions'),
-  selectionStrategy: z
-    .enum(['first', 'preferred', 'all', 'best-match'])
-    .default('first')
-    .optional()
+  selectionStrategy: z.enum(['first', 'preferred', 'all', 'best-match']).default('first').optional()
     .describe(`Strategy for selecting from multiple available code actions:
 • first: Apply the first available action (default, fastest)
 • preferred: Select action matching preferredKinds order
@@ -59,7 +56,9 @@ const CodeActionParamsSchema = z.object({
     .max(10)
     .default(5)
     .optional()
-    .describe('Safety limit: maximum actions to apply with "all" strategy (prevents runaway changes)'),
+    .describe(
+      'Safety limit: maximum actions to apply with "all" strategy (prevents runaway changes)'
+    ),
 });
 
 const RenameParamsSchema = z.object({
@@ -104,8 +103,7 @@ const FormatParamsSchema = z.object({
 });
 
 const ApplyEditParamsSchema = z.object({
-  type: z
-    .enum(['codeAction', 'rename', 'format', 'organizeImports'])
+  type: z.enum(['codeAction', 'rename', 'format', 'organizeImports'])
     .describe(`Type of edit operation to perform:
 • codeAction: Apply fixes, refactors, or source actions (e.g., fix errors, extract method)
 • rename: Rename symbols across the codebase (variables, functions, classes)
@@ -136,7 +134,9 @@ const ApplyEditParamsSchema = z.object({
     .boolean()
     .default(true)
     .optional()
-    .describe('Transaction mode: if any edit fails, automatically rollback all changes (default: true for safety)'),
+    .describe(
+      'Transaction mode: if any edit fails, automatically rollback all changes (default: true for safety)'
+    ),
 });
 
 type ApplyEditParams = z.infer<typeof ApplyEditParamsSchema>;
@@ -225,7 +225,9 @@ all changes are rolled back to maintain consistency.`;
         },
         duration: Date.now() - startTime,
         rollbackPerformed: isTransactionError && (validatedParams.atomic ?? true),
-        rollbackReason: isTransactionError ? 'Transaction failed - all changes reverted' : undefined,
+        rollbackReason: isTransactionError
+          ? 'Transaction failed - all changes reverted'
+          : undefined,
       };
     }
   }

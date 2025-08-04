@@ -778,7 +778,8 @@ Key features:
         values: ['codeAction', 'rename', 'format', 'organizeImports'],
         description: 'Type of edit operation to perform',
         details: {
-          codeAction: 'Apply fixes, refactors, or source actions (e.g., fix errors, extract method)',
+          codeAction:
+            'Apply fixes, refactors, or source actions (e.g., fix errors, extract method)',
           rename: 'Rename symbols across the codebase (variables, functions, classes)',
           format: 'Format code according to language rules',
           organizeImports: 'Sort and optimize import statements',
@@ -826,16 +827,19 @@ Key features:
         title: 'Fix a specific error',
         request: {
           type: 'codeAction',
-          actions: [{
-            uri: 'file:///src/app.ts',
-            diagnostic: {
-              message: 'Cannot find name "userService"',
-              range: { start: { line: 10, character: 5 }, end: { line: 10, character: 16 } }
+          actions: [
+            {
+              uri: 'file:///src/app.ts',
+              diagnostic: {
+                message: 'Cannot find name "userService"',
+                range: { start: { line: 10, character: 5 }, end: { line: 10, character: 16 } },
+              },
+              selectionStrategy: 'best-match',
             },
-            selectionStrategy: 'best-match'
-          }]
+          ],
         },
-        description: 'Applies the quickfix that specifically addresses the "Cannot find name" error',
+        description:
+          'Applies the quickfix that specifically addresses the "Cannot find name" error',
       },
       {
         title: 'Rename a function across the codebase',
@@ -845,8 +849,8 @@ Key features:
             uri: 'file:///src/utils.ts',
             position: { line: 15, character: 10 },
             newName: 'calculateTotalPrice',
-            excludePatterns: ['**/tests/**', '**/node_modules/**']
-          }
+            excludePatterns: ['**/tests/**', '**/node_modules/**'],
+          },
         },
         description: 'Renames a function and all its references, excluding test files',
       },
@@ -856,8 +860,8 @@ Key features:
           type: 'format',
           format: {
             uris: ['file:///src/index.ts', 'file:///src/app.ts'],
-            options: { tabSize: 2, insertSpaces: true }
-          }
+            options: { tabSize: 2, insertSpaces: true },
+          },
         },
         description: 'Formats multiple files with specific formatting options',
       },
@@ -865,13 +869,15 @@ Key features:
         title: 'Apply all available quickfixes',
         request: {
           type: 'codeAction',
-          actions: [{
-            uri: 'file:///src/broken.ts',
-            actionKind: 'quickfix',
-            selectionStrategy: 'all',
-            maxActions: 3
-          }],
-          dryRun: true
+          actions: [
+            {
+              uri: 'file:///src/broken.ts',
+              actionKind: 'quickfix',
+              selectionStrategy: 'all',
+              maxActions: 3,
+            },
+          ],
+          dryRun: true,
         },
         description: 'Preview up to 3 quickfixes without applying them',
       },
@@ -884,7 +890,8 @@ Key features:
       testing: 'Consider excluding test directories when renaming production code',
     },
     errors: {
-      'No code actions available': 'The language server found no applicable actions at the position',
+      'No code actions available':
+        'The language server found no applicable actions at the position',
       'Cannot rename at this location': 'The position does not contain a renameable symbol',
       'Transaction failed': 'One or more edits failed - all changes were rolled back',
       'No language server available': 'The file type is not supported or server is not running',
