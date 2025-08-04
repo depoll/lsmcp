@@ -48,7 +48,9 @@ const CodeActionParamsSchema = z.object({
   preferredKinds: z
     .array(z.string())
     .optional()
-    .describe('Preferred action kinds when using "preferred" strategy (e.g., ["quickfix", "refactor.extract"])'),
+    .describe(
+      'Preferred action kinds when using "preferred" strategy (e.g., ["quickfix", "refactor.extract"])'
+    ),
   maxActions: z
     .number()
     .min(1)

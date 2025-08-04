@@ -10,7 +10,13 @@ import { ConnectionPool } from '../../../src/lsp/index.js';
 // Types are only used for mocking, not directly imported
 // import { LSPClientV2 } from '../../../src/lsp/client-v2.js';
 // import { EditTransactionManager } from '../../../src/tools/transactions.js';
-import { CodeAction, Command, WorkspaceEdit, TextEdit, Diagnostic } from 'vscode-languageserver-protocol';
+import {
+  CodeAction,
+  Command,
+  WorkspaceEdit,
+  TextEdit,
+  Diagnostic,
+} from 'vscode-languageserver-protocol';
 
 jest.mock('../../../src/lsp/index.js');
 jest.mock('../../../src/tools/transactions.js');
@@ -196,7 +202,7 @@ describe('ApplyEditTool', () => {
       });
 
       expect(mockTransactionManager.executeTransaction).toHaveBeenCalledWith(
-        [actions[1].edit!], // Should select the quickfix action
+        [(actions[1] as CodeAction).edit!], // Should select the quickfix action
         expect.any(Object)
       );
       expect(result.success).toBe(true);
@@ -241,7 +247,7 @@ describe('ApplyEditTool', () => {
 
       // Should apply only first 2 actions due to maxActions
       expect(mockTransactionManager.executeTransaction).toHaveBeenCalledWith(
-        [actions[0].edit!, actions[1].edit!],
+        [(actions[0] as CodeAction).edit!, (actions[1] as CodeAction).edit!],
         expect.any(Object)
       );
       expect(result.success).toBe(true);
@@ -292,7 +298,7 @@ describe('ApplyEditTool', () => {
 
       // Should select the action that matches the diagnostic
       expect(mockTransactionManager.executeTransaction).toHaveBeenCalledWith(
-        [actions[1].edit!],
+        [(actions[1] as CodeAction).edit!],
         expect.any(Object)
       );
       expect(result.success).toBe(true);
