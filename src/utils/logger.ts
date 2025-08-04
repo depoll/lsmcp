@@ -3,23 +3,21 @@ import pino from 'pino';
 // Configure logger based on environment
 const isTest = process.env['NODE_ENV'] === 'test';
 
+// MCP servers must output logs to stderr only - stdout is reserved for JSON-RPC
+const destination = pino.destination({ dest: 2, sync: false }); // 2 = stderr
+
 export const logger = isTest
   ? pino({
       name: 'lsmcp',
       level: 'silent', // Disable logging in tests
     })
-  : pino({
-      name: 'lsmcp',
-      level: process.env['LOG_LEVEL'] || 'info',
-      transport: {
-        target: 'pino-pretty',
-        options: {
-          colorize: true,
-          ignore: 'pid,hostname',
-          translateTime: 'HH:MM:ss.l',
-        },
+  : pino(
+      {
+        name: 'lsmcp',
+        level: process.env['LOG_LEVEL'] || 'info',
       },
-    });
+      destination
+    );
 
 /**
  * Convert a filesystem path to a proper file:// URI

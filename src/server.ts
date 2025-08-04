@@ -1,6 +1,5 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import pino from 'pino';
 import { readFile } from 'fs/promises';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
@@ -11,6 +10,7 @@ import { SymbolSearchTool } from './tools/symbolSearch.js';
 import { FindUsagesTool } from './tools/find-usages.js';
 import { ToolRegistry } from './tools/registry.js';
 import { ToolRouter } from './tools/router.js';
+import { logger } from './utils/logger.js';
 import { z } from 'zod';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -19,10 +19,7 @@ const __dirname = dirname(__filename);
 export class LSMCPServer {
   private server: McpServer;
   private transport: StdioServerTransport;
-  private logger = pino({
-    name: 'lsmcp',
-    level: process.env['LOG_LEVEL'] || 'info',
-  });
+  private logger = logger;
   private running = false;
   private version: string;
   private clientManager: ConnectionPool;

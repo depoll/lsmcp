@@ -20,6 +20,7 @@ interface CacheEntry<T> {
 import { createHash } from 'crypto';
 import { dirname, resolve } from 'path';
 import type { Logger } from 'pino';
+import { DOCUMENT_SCOPE_URI_DESCRIPTION } from './file-uri-description.js';
 
 // User-friendly symbol kinds
 export const USER_SYMBOL_KINDS = [
@@ -56,11 +57,28 @@ for (const [userKind, lspKinds] of Object.entries(KIND_MAP)) {
 }
 
 export const symbolSearchParamsSchema = z.object({
-  query: z.string().describe('Symbol name or pattern to search for'),
-  scope: z.enum(['document', 'workspace']).describe('Search in current file or entire workspace'),
-  uri: z.string().optional().describe('File URI (required for document scope)'),
-  kind: z.enum(USER_SYMBOL_KINDS).optional().describe('Filter by symbol type'),
-  maxResults: z.number().default(200).describe('Maximum number of results to return'),
+  query: z
+    .string()
+    .max(200)
+    .describe(
+      'Symbol name/pattern. Exact, *prefix, *suffix, *substring*, camelCase (pU). Max 200 chars.'
+    ),
+  scope: z
+    .enum(['document', 'workspace'])
+    .describe('Search scope: document (single file, requires uri) or workspace (all files)'),
+  uri: z.string().optional().describe(DOCUMENT_SCOPE_URI_DESCRIPTION),
+  kind: z
+    .enum(USER_SYMBOL_KINDS)
+    .optional()
+    .describe(
+      'Filter by type: function, class, interface, variable, constant, method, property, enum'
+    ),
+  maxResults: z
+    .number()
+    .min(1)
+    .max(1000)
+    .default(200)
+    .describe('Max results. Relevance sorted. 50-100 focused, 200-500 comprehensive. Default: 200'),
 });
 
 export type SymbolSearchParams = z.infer<typeof symbolSearchParamsSchema>;
@@ -89,7 +107,14 @@ export interface SymbolSearchResult {
 
 export class SymbolSearchTool extends BatchableTool<SymbolSearchParams, SymbolSearchResult> {
   readonly name = 'findSymbols';
-  readonly description = 'Search for symbols in current file or entire workspace';
+  readonly description = `Search symbols by name/pattern in file or workspace.
+
+Search modes:
+- Exact: "processUser"
+- Pattern: *prefix, *suffix, *substring*
+- CamelCase: "pU" matches "processUser"
+
+Features: Fuzzy matching, kind filtering, relevance scoring, grep fallback.`;
   get inputSchema(): z.ZodType<SymbolSearchParams> {
     // Type assertion needed due to Zod's inference with default values
     // TODO: Investigate better type alignment between schema and interface
@@ -189,6 +214,31 @@ export class SymbolSearchTool extends BatchableTool<SymbolSearchParams, SymbolSe
     const language = this.detectLanguage(params.uri!);
     const client = await this.clientManager.get(language, workspace);
 
+    // For TypeScript/JavaScript, we need to ensure the file is opened
+    if (language === 'typescript' || language === 'javascript') {
+      try {
+        // Convert URI to file path
+        const filePath = params.uri!.replace('file://', '');
+        const fs = await import('fs/promises');
+
+        // Read and open the file
+        const content = await fs.readFile(filePath, 'utf-8');
+        client.sendNotification('textDocument/didOpen', {
+          textDocument: {
+            uri: params.uri!,
+            languageId: language,
+            version: 1,
+            text: content,
+          },
+        });
+
+        // Give the server a moment to process
+        await new Promise((resolve) => setTimeout(resolve, 500));
+      } catch (error) {
+        this.logger?.warn({ error, uri: params.uri }, 'Failed to open document for symbol search');
+      }
+    }
+
     const docParams: DocumentSymbolParams = {
       textDocument: { uri: params.uri! },
     };
@@ -224,20 +274,114 @@ export class SymbolSearchTool extends BatchableTool<SymbolSearchParams, SymbolSe
     const language = await this.detectWorkspaceLanguage();
     const client = await this.clientManager.get(language, workspace);
 
+    // TypeScript language server needs at least one file opened to understand the project
+    // Find and open a TypeScript/JavaScript file first
+    if (language === 'typescript' || language === 'javascript') {
+      try {
+        const fs = await import('fs/promises');
+        const path = await import('path');
+
+        // Try to find a main file to open
+        const possibleFiles = [
+          'src/index.ts',
+          'src/index.js',
+          'index.ts',
+          'index.js',
+          'src/main.ts',
+          'src/main.js',
+          'main.ts',
+          'main.js',
+        ];
+
+        let fileToOpen: string | null = null;
+        for (const file of possibleFiles) {
+          const fullPath = path.join(workspace, file);
+          try {
+            await fs.access(fullPath);
+            fileToOpen = fullPath;
+            break;
+          } catch {
+            // File doesn't exist, try next
+          }
+        }
+
+        // If no standard file found, find any TS/JS file
+        if (!fileToOpen) {
+          const glob = (await import('glob')).glob;
+          const files = await glob('**/*.{ts,js}', {
+            cwd: workspace,
+            ignore: ['node_modules/**', 'dist/**', 'build/**'],
+            absolute: true,
+            maxDepth: 3,
+          });
+
+          if (files.length > 0) {
+            fileToOpen = files[0] ?? null;
+          }
+        }
+
+        // Open the file to initialize the project
+        if (fileToOpen) {
+          const content = await fs.readFile(fileToOpen, 'utf-8');
+          const fileUri = this.toFileUri(fileToOpen);
+
+          client.sendNotification('textDocument/didOpen', {
+            textDocument: {
+              uri: fileUri,
+              languageId: language,
+              version: 1,
+              text: content,
+            },
+          });
+
+          this.logger?.debug({ file: fileToOpen }, 'Opened file to initialize TypeScript project');
+
+          // Wait for TypeScript server to process the file
+          // We'll implement a retry mechanism for better reliability
+          await new Promise((resolve) => setTimeout(resolve, 500));
+        }
+      } catch (error) {
+        this.logger?.warn({ error }, 'Failed to open initial file for TypeScript project');
+      }
+    }
+
     const wsParams: WorkspaceSymbolParams = {
       query: params.query,
     };
 
-    const response = await client.sendRequest<SymbolInformation[] | null>(
-      'workspace/symbol',
-      wsParams
-    );
+    // Implement retry logic for TypeScript language server
+    // The server may need time to build its symbol index
+    let attempts = 0;
+    const maxAttempts = 3;
+    const retryDelay = 1000; // 1 second between retries
 
-    if (!response || !Array.isArray(response)) {
-      return [];
+    while (attempts < maxAttempts) {
+      const response = await client.sendRequest<SymbolInformation[] | null>(
+        'workspace/symbol',
+        wsParams
+      );
+
+      if (response && Array.isArray(response) && response.length > 0) {
+        return this.convertSymbolInformation(response);
+      }
+
+      attempts++;
+
+      // If this is an exact match query and we got no results, retry
+      // The TypeScript server might still be indexing
+      if (attempts < maxAttempts && !params.query.includes('*')) {
+        this.logger?.debug(
+          { query: params.query, attempt: attempts },
+          'No symbols found, retrying after delay'
+        );
+        await new Promise((resolve) => setTimeout(resolve, retryDelay));
+      } else {
+        // For pattern queries or after max attempts, return what we have
+        return response && Array.isArray(response) ? this.convertSymbolInformation(response) : [];
+      }
     }
 
-    return this.convertSymbolInformation(response);
+    return [];
   }
 
   private flattenDocumentSymbols(
@@ -283,6 +427,14 @@ export class SymbolSearchTool extends BatchableTool<SymbolSearchParams, SymbolSe
   }
 
   private scoreAndFilter(symbols: SymbolResult[], query: string): SymbolResult[] {
+    // If query is empty, return all symbols with a default score
+    if (!query || query.trim() === '') {
+      return symbols.map((symbol) => ({
+        ...symbol,
+        score: 50, // Default score for all symbols when no query
+      }));
+    }
+
     // Handle special patterns
     if (query.includes('*')) {
       return this.patternMatch(symbols, query);
@@ -335,6 +487,9 @@ export class SymbolSearchTool extends BatchableTool<SymbolSearchParams, SymbolSe
   private camelCaseCache = new Map<string, { camelAbbrev: string; firstPlusCaps: string }>();
 
   private fuzzyMatch(query: string, symbol: string): number {
+    // Handle empty query
+    if (!query || query.trim() === '') return 50;
+
     const lowerQuery = query.toLowerCase();
     const lowerSymbol = symbol.toLowerCase();
 
@@ -495,6 +650,25 @@ export class SymbolSearchTool extends BatchableTool<SymbolSearchParams, SymbolSe
   private escapeShell(string: string): string {
     // Escape shell metacharacters to prevent command injection
     return string.replace(/["'`\\$]/g, '\\$&');
+  }
+
+  private toFileUri(filePath: string): string {
+    // Convert file path to file:// URI
+    if (filePath.startsWith('file://')) {
+      return filePath;
+    }
+
+    // Use the path module we already import at the top
+    const absolutePath = resolve(filePath);
+
+    // Convert to file URI
+    if (process.platform === 'win32') {
+      // Windows: file:///C:/path/to/file
+      return `file:///${absolutePath.replace(/\\/g, '/')}`;
+    } else {
+      // Unix: file:///path/to/file
+      return `file://${absolutePath}`;
+    }
   }
 
   private extractWorkspaceFromUri(uri: string): string {

@@ -12,6 +12,8 @@ import { pathToFileUri } from '../utils/logger.js';
 import { readFile } from 'fs/promises';
 import { fileURLToPath } from 'url';
 import { relative, dirname } from 'path';
+import { createPositionSchema, NAVIGATION_POSITION_DESCRIPTION } from './position-schema.js';
+import { NAVIGATION_FILE_URI_DESCRIPTION } from './file-uri-description.js';
 
 // Configuration
 const CACHE_SIZE = 200;
@@ -19,31 +21,50 @@ const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 const DEFAULT_MAX_RESULTS = 100;
 
 // Schema definitions
-const PositionSchema = z.object({
-  line: z.number().describe('Zero-based line number'),
-  character: z.number().describe('Zero-based character offset'),
-});
+const PositionSchema = createPositionSchema();
 
 const NavigateTargetSchema = z
   .enum(['definition', 'implementation', 'typeDefinition'])
-  .describe('Navigation target type');
+  .describe(
+    'Navigation type: definition (declaration), implementation (concrete impl), typeDefinition (type decl)'
+  );
 
 const SingleNavigateSchema = z.object({
-  uri: z.string().describe('File URI to navigate from'),
-  position: PositionSchema,
+  uri: z.string().describe(NAVIGATION_FILE_URI_DESCRIPTION),
+  position: PositionSchema.describe(NAVIGATION_POSITION_DESCRIPTION),
   target: NavigateTargetSchema,
 });
 
 const NavigateParamsSchema = z.object({
-  uri: z.string().optional().describe('File URI for single navigation'),
-  position: PositionSchema.optional(),
-  target: NavigateTargetSchema.optional(),
-  batch: z.array(SingleNavigateSchema).optional().describe('Batch navigation requests'),
+  uri: z
+    .string()
+    .optional()
+    .describe(
+      NAVIGATION_FILE_URI_DESCRIPTION +
+        ' ' +
+        'Required when not using batch mode. ' +
+        'For batch navigation, use the batch parameter instead.'
+    ),
+  position: PositionSchema.optional().describe(
+    NAVIGATION_POSITION_DESCRIPTION + ' Required unless using batch mode.'
+  ),
+  target: NavigateTargetSchema.optional().describe(
+    'Navigation type (required for single mode, specify in batch items for batch mode)'
+  ),
+  batch: z
+    .array(SingleNavigateSchema)
+    .optional()
+    .describe(
+      'Batch navigation requests. Each item: uri, position, target. Results maintain order.'
+    ),
   maxResults: z
     .number()
+    .min(1)
     .default(DEFAULT_MAX_RESULTS)
     .optional()
-    .describe('Maximum results per navigation request'),
+    .describe(
+      'Max results per request. Sorted by relevance. 20-50 focused, 100-200 comprehensive. Default: 100'
+    ),
 });
 
 type NavigateParams = z.infer<typeof NavigateParamsSchema>;
@@ -66,7 +87,14 @@ interface NavigateResult {
 
 export class NavigateTool extends BatchableTool<NavigateParams, NavigateResult> {
   readonly name = 'navigate';
-  readonly description = 'Navigate to definitions, implementations, or type definitions';
+  readonly description = `Navigate to symbol definitions, implementations, or type definitions.
+
+Targets:
+- definition: Where symbol is declared
+- implementation: Concrete implementations of interfaces/abstract classes
+- typeDefinition: Type declarations
+
+Features: Batch support, relevance sorting, grep fallback suggestions.`;
   readonly inputSchema = NavigateParamsSchema;
 
   private cache: FileAwareLRUCache<NavigateResultItem[]>;

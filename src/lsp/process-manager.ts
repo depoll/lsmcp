@@ -3,7 +3,7 @@ import { EventEmitter } from 'events';
 import { Readable, Writable } from 'stream';
 import { LanguageServerConfig } from '../types/lsp.js';
 import { ConnectionError, ServerCrashError } from '../utils/errors.js';
-import pino from 'pino';
+import { logger } from '../utils/logger.js';
 
 export interface ProcessStreams {
   reader: Readable;
@@ -12,7 +12,7 @@ export interface ProcessStreams {
 
 export class ProcessManager extends EventEmitter {
   private process: ChildProcess | null = null;
-  private logger = pino({ level: 'info' });
+  private logger = logger;
 
   constructor(
     private readonly config: LanguageServerConfig,

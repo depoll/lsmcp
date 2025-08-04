@@ -11,7 +11,7 @@ import { LanguageServerConfig } from '../types/lsp.js';
 import { ProcessManager } from './process-manager.js';
 import { ProtocolHandler } from './protocol-handler.js';
 import { ServerCrashError } from '../utils/errors.js';
-import pino from 'pino';
+import { logger } from '../utils/logger.js';
 
 export interface LSPClientOptions {
   startTimeout?: number;
@@ -24,7 +24,7 @@ export class LSPClientV2 extends EventEmitter {
   private protocolHandler: ProtocolHandler | null = null;
   private connection: ProtocolConnection | null = null;
   private capabilities: ServerCapabilities | null = null;
-  private logger = pino({ level: 'info' });
+  private logger = logger;
   private connected = false;
   private startTime: number = Date.now();
 
