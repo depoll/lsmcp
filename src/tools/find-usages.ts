@@ -268,7 +268,13 @@ Required parameters:
             );
           },
         }
-      ).catch(() => null); // Fall back to null if all retries fail
+      ).catch((error: unknown) => {
+        // Don't swallow LSP errors - let them propagate
+        if (!(error instanceof Error) || !error.message.includes('No references found')) {
+          throw error;
+        }
+        return null; // Only return null for "no references" case
+      });
 
       logger.info('LSP references response', {
         locationsCount: locations?.length || 0,
@@ -351,7 +357,13 @@ Required parameters:
             );
           },
         }
-      ).catch(() => null); // Fall back to null if all retries fail
+      ).catch((error: unknown) => {
+        // Don't swallow LSP errors - let them propagate
+        if (!(error instanceof Error) || !error.message.includes('No call hierarchy items')) {
+          throw error;
+        }
+        return null; // Only return null for "no call hierarchy" case
+      });
 
       if (!items || items.length === 0) {
         logger.info('No call hierarchy items found');

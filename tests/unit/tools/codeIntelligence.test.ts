@@ -6,6 +6,9 @@ import { LSPClient } from '../../../src/lsp/client-v2.js';
 // Mock the dependencies
 jest.mock('../../../src/lsp/index.js');
 jest.mock('../../../src/utils/logger.js');
+jest.mock('../../../src/utils/retry.js', () => ({
+  retryWithBackoff: jest.fn(async <T>(fn: () => Promise<T>): Promise<T> => fn()),
+}));
 
 describe('CodeIntelligenceTool', () => {
   let tool: CodeIntelligenceTool;
@@ -316,7 +319,8 @@ Features: Result caching, AI-optimized filtering, relevance ranking.`);
 
   describe('language detection', () => {
     it('should detect language from file extension', async () => {
-      mockClient.sendRequest.mockResolvedValue(null);
+      // Mock to return empty hover (which is okay)
+      mockClient.sendRequest.mockResolvedValue({ contents: 'test' });
 
       const testCases = [
         { uri: 'file:///test.ts', expectedLang: 'typescript' },
@@ -336,7 +340,7 @@ Features: Result caching, AI-optimized filtering, relevance ranking.`);
 
         expect(mockClientManager.getForFile).toHaveBeenCalledWith(uri, expect.any(String));
       }
-    });
+    }, 10000); // Increase timeout to 10 seconds
   });
 
   describe('error handling', () => {

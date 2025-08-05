@@ -194,7 +194,13 @@ Features: Result caching, AI-optimized filtering, relevance ranking.`;
           );
         },
       }
-    ).catch(() => null); // Fall back to null if all retries fail
+    ).catch((error: unknown) => {
+      // Don't swallow LSP errors - let them propagate
+      if (error instanceof Error && !error.message.includes('No hover information available')) {
+        throw error;
+      }
+      return null; // Only return null for "no hover" case
+    });
 
     if (hover) {
       await this.hoverCache.set(cacheKey, hover, uri);
@@ -325,7 +331,13 @@ Features: Result caching, AI-optimized filtering, relevance ranking.`;
           );
         },
       }
-    ).catch(() => null); // Fall back to null if all retries fail
+    ).catch((error: unknown) => {
+      // Don't swallow LSP errors - let them propagate
+      if (error instanceof Error && !error.message.includes('No signature help available')) {
+        throw error;
+      }
+      return null; // Only return null for "no signature" case
+    });
 
     if (signatureHelp) {
       await this.signatureCache.set(cacheKey, signatureHelp, uri);
@@ -442,7 +454,13 @@ Features: Result caching, AI-optimized filtering, relevance ranking.`;
           );
         },
       }
-    ).catch(() => null); // Fall back to null if all retries fail
+    ).catch((error: unknown) => {
+      // Don't swallow LSP errors - let them propagate
+      if (error instanceof Error && !error.message.includes('No completions available')) {
+        throw error;
+      }
+      return null; // Only return null for "no completions" case
+    });
 
     if (!completions) {
       return {
