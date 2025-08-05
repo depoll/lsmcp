@@ -46,11 +46,14 @@ describe('ApplyEditTool', () => {
 
       const result = await tool.execute({ edit });
 
-      expect(result).toEqual({
+      expect(result).toMatchObject({
         applied: true,
         failureReason: undefined,
         failedChange: undefined,
       });
+      expect(result.summary).toBe('1 edit in 1 file');
+      expect(result.diff).toContain('File: ');
+      expect(result.diff).toContain('@ Line 1');
 
       expect(jest.mocked(mockClient.sendRequest)).toHaveBeenCalledWith('workspace/applyEdit', {
         label: undefined,
@@ -77,6 +80,8 @@ describe('ApplyEditTool', () => {
       const result = await tool.execute({ edit, label: 'Test Edit' });
 
       expect(result.applied).toBe(true);
+      expect(result.summary).toBe('1 edit in 1 file');
+      expect(result.diff).toBeDefined();
       expect(jest.mocked(mockClient.sendRequest)).toHaveBeenCalledWith('workspace/applyEdit', {
         label: 'Test Edit',
         edit,
@@ -102,11 +107,14 @@ describe('ApplyEditTool', () => {
 
       const result = await tool.execute({ edit });
 
-      expect(result).toEqual({
+      expect(result).toMatchObject({
         applied: false,
         failureReason: 'File not found',
         failedChange: undefined,
       });
+      expect(result.summary).toBe('1 edit in 1 file');
+      expect(result.diff).toContain('File: ');
+      expect(result.diff).toContain('@ Line 1');
     });
 
     it('should throw error when no URI found in edit', async () => {
