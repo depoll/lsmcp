@@ -26,7 +26,7 @@ interface DiffEntry {
  */
 export function formatWorkspaceEditAsDiff(edit: WorkspaceEdit): string {
   const diffs: DiffEntry[] = [];
-  
+
   // Process document changes
   if (edit.documentChanges) {
     for (const change of edit.documentChanges) {
@@ -34,15 +34,15 @@ export function formatWorkspaceEditAsDiff(edit: WorkspaceEdit): string {
         // Text document edit
         const uri = change.textDocument.uri;
         const filePath = getRelativePath(uri);
-        
+
         const entry: DiffEntry = {
           file: filePath,
-          changes: change.edits.map(edit => ({
+          changes: change.edits.map((edit) => ({
             type: 'edit' as const,
             oldText: getOriginalText(uri, edit.range),
             newText: edit.newText,
             range: edit.range,
-          }))
+          })),
         };
         diffs.push(entry);
       } else if ('kind' in change) {
@@ -51,45 +51,47 @@ export function formatWorkspaceEditAsDiff(edit: WorkspaceEdit): string {
           const createOp = change;
           diffs.push({
             file: getRelativePath(createOp.uri),
-            changes: [{ type: 'create', newText: '' }]
+            changes: [{ type: 'create', newText: '' }],
           });
         } else if (change.kind === 'rename') {
           const renameOp = change;
           diffs.push({
             file: getRelativePath(renameOp.oldUri),
-            changes: [{ 
-              type: 'rename',
-              newUri: getRelativePath(renameOp.newUri)
-            }]
+            changes: [
+              {
+                type: 'rename',
+                newUri: getRelativePath(renameOp.newUri),
+              },
+            ],
           });
         } else if (change.kind === 'delete') {
           const deleteOp = change;
           diffs.push({
             file: getRelativePath(deleteOp.uri),
-            changes: [{ type: 'delete' }]
+            changes: [{ type: 'delete' }],
           });
         }
       }
     }
   }
-  
+
   // Process changes map (legacy format)
   if (edit.changes) {
     for (const [uri, edits] of Object.entries(edit.changes)) {
       const filePath = getRelativePath(uri);
       const entry: DiffEntry = {
         file: filePath,
-        changes: edits.map(edit => ({
+        changes: edits.map((edit) => ({
           type: 'edit' as const,
           oldText: getOriginalText(uri, edit.range),
           newText: edit.newText,
           range: edit.range,
-        }))
+        })),
       };
       diffs.push(entry);
     }
   }
-  
+
   return formatDiffs(diffs);
 }
 
@@ -115,14 +117,14 @@ function getOriginalText(uri: string, range: Range | undefined): string {
     const filePath = fileURLToPath(uri);
     const content = readFileSync(filePath, 'utf-8');
     const lines = content.split('\n');
-    
+
     if (!range) return '';
-    
+
     const startLine = range.start.line;
     const endLine = range.end.line;
     const startChar = range.start.character;
     const endChar = range.end.character;
-    
+
     if (startLine === endLine) {
       // Single line edit
       const line = lines[startLine] || '';
@@ -153,12 +155,12 @@ function getOriginalText(uri: string, range: Range | undefined): string {
  */
 function formatDiffs(diffs: DiffEntry[]): string {
   const output: string[] = [];
-  
+
   for (const diff of diffs) {
     output.push(`\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
     output.push(`File: ${diff.file}`);
     output.push(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
-    
+
     for (const change of diff.changes) {
       if (change.type === 'create') {
         output.push(`\n✅ Created new file`);
@@ -170,24 +172,32 @@ function formatDiffs(diffs: DiffEntry[]): string {
         if (change.range) {
           const startLine = change.range.start.line + 1; // Convert to 1-indexed
           const endLine = change.range.end.line + 1;
-          
+
           if (startLine === endLine) {
             output.push(`\n@ Line ${startLine}`);
           } else {
             output.push(`\n@ Lines ${startLine}-${endLine}`);
           }
-          
+
           // Show the diff
           if (change.oldText && change.oldText.trim()) {
-            output.push('- ' + change.oldText.split('\n').map((line, i) => 
-              i === 0 ? line : '  ' + line
-            ).join('\n'));
+            output.push(
+              '- ' +
+                change.oldText
+                  .split('\n')
+                  .map((line, i) => (i === 0 ? line : '  ' + line))
+                  .join('\n')
+            );
           }
-          
+
           if (change.newText && change.newText.trim()) {
-            output.push('+ ' + change.newText.split('\n').map((line, i) => 
-              i === 0 ? line : '  ' + line
-            ).join('\n'));
+            output.push(
+              '+ ' +
+                change.newText
+                  .split('\n')
+                  .map((line, i) => (i === 0 ? line : '  ' + line))
+                  .join('\n')
+            );
           } else if (!change.newText) {
             output.push('  <deleted>');
           }
@@ -195,11 +205,11 @@ function formatDiffs(diffs: DiffEntry[]): string {
       }
     }
   }
-  
+
   if (output.length === 0) {
     return 'No changes to display';
   }
-  
+
   return output.join('\n');
 }
 
@@ -212,7 +222,7 @@ export function formatWorkspaceEditSummary(edit: WorkspaceEdit): string {
   let createCount = 0;
   let deleteCount = 0;
   let renameCount = 0;
-  
+
   if (edit.documentChanges) {
     for (const change of edit.documentChanges) {
       if ('textDocument' in change) {
@@ -225,19 +235,22 @@ export function formatWorkspaceEditSummary(edit: WorkspaceEdit): string {
       }
     }
   }
-  
+
   if (edit.changes) {
     for (const edits of Object.values(edit.changes)) {
       fileCount++;
       editCount += edits.length;
     }
   }
-  
+
   const parts: string[] = [];
-  if (editCount > 0) parts.push(`${editCount} edit${editCount !== 1 ? 's' : ''} in ${fileCount} file${fileCount !== 1 ? 's' : ''}`);
+  if (editCount > 0)
+    parts.push(
+      `${editCount} edit${editCount !== 1 ? 's' : ''} in ${fileCount} file${fileCount !== 1 ? 's' : ''}`
+    );
   if (createCount > 0) parts.push(`${createCount} file${createCount !== 1 ? 's' : ''} created`);
   if (deleteCount > 0) parts.push(`${deleteCount} file${deleteCount !== 1 ? 's' : ''} deleted`);
   if (renameCount > 0) parts.push(`${renameCount} file${renameCount !== 1 ? 's' : ''} renamed`);
-  
+
   return parts.length > 0 ? parts.join(', ') : 'No changes';
 }

@@ -16,7 +16,7 @@ export type ApplyEditParams = z.infer<typeof ApplyEditParamsSchema>;
 
 /**
  * Result of applying a workspace edit
- * 
+ *
  * @property applied - Whether the edit was successfully applied
  * @property failureReason - Reason for failure if applied is false
  * @property failedChange - Specific change that failed (if available)
@@ -35,7 +35,8 @@ export interface ApplyEditResult {
 
 export class ApplyEditTool extends BatchableTool<ApplyEditParams, ApplyEditResult> {
   readonly name = 'applyEdit';
-  readonly description = 'Apply a WorkspaceEdit via LSP workspace/applyEdit method. Returns a diff showing changes made - display the diff field to users for visibility.';
+  readonly description =
+    'Apply a WorkspaceEdit via LSP workspace/applyEdit method. Returns a diff showing changes made - display the diff field to users for visibility.';
   readonly inputSchema = ApplyEditParamsSchema;
 
   constructor(clientManager: ConnectionPool) {
@@ -87,7 +88,7 @@ export class ApplyEditTool extends BatchableTool<ApplyEditParams, ApplyEditResul
       failureReason: result.failureReason,
       failedChange: result.failedChange,
       summary, // Human-readable summary of changes
-      diff,    // IMPORTANT: Display this to show what was changed
+      diff, // IMPORTANT: Display this to show what was changed
     };
   }
 
