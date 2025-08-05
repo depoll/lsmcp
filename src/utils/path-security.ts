@@ -20,7 +20,7 @@ export function validateFilePath(filePath: string, workspaceRoot: string): strin
   }
 
   // Resolve to absolute path
-  const absolutePath = isAbsolute(normalizedPath) 
+  const absolutePath = isAbsolute(normalizedPath)
     ? normalize(normalizedPath)
     : resolve(workspaceRoot, normalizedPath);
 
@@ -36,9 +36,10 @@ export function validateFilePath(filePath: string, workspaceRoot: string): strin
 
   // Additional checks for suspicious patterns
   const suspiciousPatterns = [
-    /\.\.[\\/]/,  // Parent directory traversal
-    /^\//,        // Absolute paths on Unix that might escape
-    /^[A-Za-z]:[\\\/]/, // Absolute paths on Windows
+    /\.\.[\\/]/, // Parent directory traversal
+    /^\//, // Absolute paths on Unix that might escape
+    /^[A-Za-z]:[\\/]/, // Absolute paths on Windows
+    // eslint-disable-next-line no-control-regex
     /[\x00-\x1f]/, // Control characters
   ];
 
@@ -61,11 +62,11 @@ export function validateFilePath(filePath: string, workspaceRoot: string): strin
 export function validateGlobPattern(pattern: string): void {
   // Disallow patterns that could match system files
   const dangerousPatterns = [
-    /^\//,           // Absolute paths
-    /^[A-Za-z]:/,    // Windows absolute paths
-    /\.\.[\/\\]/,    // Parent directory traversal
-    /^\*\*$/,        // Match everything recursively
-    /^\/\*\*/,       // Match from root
+    /^\//, // Absolute paths
+    /^[A-Za-z]:/, // Windows absolute paths
+    /\.\.[/\\]/, // Parent directory traversal
+    /^\*\*$/, // Match everything recursively
+    /^\/\*\*/, // Match from root
   ];
 
   for (const dangerous of dangerousPatterns) {
@@ -93,8 +94,9 @@ export function validateGlobPattern(pattern: string): void {
  */
 export function sanitizeFileURI(uri: string): string {
   // Remove any null bytes or control characters
+  // eslint-disable-next-line no-control-regex
   let sanitized = uri.replace(/[\x00-\x1f]/g, '');
-  
+
   // Ensure it's a proper file:// URI
   if (!sanitized.startsWith('file://')) {
     throw new Error('Invalid file URI: must start with file://');
@@ -106,7 +108,7 @@ export function sanitizeFileURI(uri: string): string {
     if (decoded.includes('../') || decoded.includes('..\\')) {
       throw new Error('Path traversal detected in URI');
     }
-  } catch (e) {
+  } catch {
     throw new Error('Invalid URI encoding');
   }
 

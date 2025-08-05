@@ -22,113 +22,106 @@ export async function executeBatchOperations(
   const allEdits: WorkspaceEdit[] = [];
 
   for (const operation of operations) {
-    try {
-      let edits: WorkspaceEdit[] = [];
+    let edits: WorkspaceEdit[] = [];
 
-      switch (operation.type) {
-        case 'codeAction':
-          edits = await executeCodeActions(
-            {
-              type: 'codeAction',
-              actions: operation.actions,
-              dryRun: false,
-              atomic: false,
-            },
-            getClient
-          );
-          break;
-
-        case 'rename':
-          edits = await executeRename(
-            {
-              type: 'rename',
-              rename: operation.rename,
-              dryRun: false,
-              atomic: false,
-            },
-            getClient
-          );
-          break;
-
-        case 'format':
-          edits = await executeFormat(
-            {
-              type: 'format',
-              format: operation.format,
-              dryRun: false,
-              atomic: false,
-            },
-            getClient
-          );
-          break;
-
-        case 'organizeImports':
-          edits = await executeOrganizeImports(
-            {
-              type: 'organizeImports',
-              format: operation.format,
-              dryRun: false,
-              atomic: false,
-            },
-            (params) => executeCodeActions(params, getClient)
-          );
-          break;
-
-        case 'textEdit':
-          edits = executeTextEdit({
-            type: 'textEdit',
-            textEdit: operation.textEdit,
+    switch (operation.type) {
+      case 'codeAction':
+        edits = await executeCodeActions(
+          {
+            type: 'codeAction',
+            actions: operation.actions,
             dryRun: false,
             atomic: false,
-          });
-          break;
+          },
+          getClient
+        );
+        break;
 
-        case 'multiFileEdit':
-          edits = executeMultiFileEdit({
-            type: 'multiFileEdit',
-            multiFileEdit: operation.multiFileEdit,
+      case 'rename':
+        edits = await executeRename(
+          {
+            type: 'rename',
+            rename: operation.rename,
             dryRun: false,
             atomic: false,
-          });
-          break;
+          },
+          getClient
+        );
+        break;
 
-        case 'searchReplace':
-          edits = await executeSearchReplace({
-            type: 'searchReplace',
-            searchReplace: operation.searchReplace,
+      case 'format':
+        edits = await executeFormat(
+          {
+            type: 'format',
+            format: operation.format,
             dryRun: false,
             atomic: false,
-          });
-          break;
+          },
+          getClient
+        );
+        break;
 
-        case 'fileOperation':
-          edits = executeFileOperations({
-            type: 'fileOperation',
-            fileOperation: operation.fileOperation,
+      case 'organizeImports':
+        edits = await executeOrganizeImports(
+          {
+            type: 'organizeImports',
             dryRun: false,
             atomic: false,
-          });
-          break;
+          },
+          (params) => executeCodeActions(params, getClient)
+        );
+        break;
 
-        case 'smartInsert':
-          edits = await executeSmartInsert(
-            {
-              type: 'smartInsert',
-              smartInsert: operation.smartInsert,
-              dryRun: false,
-              atomic: false,
-            },
-            readFileFn
-          );
-          break;
-      }
+      case 'textEdit':
+        edits = executeTextEdit({
+          type: 'textEdit',
+          textEdit: operation.textEdit,
+          dryRun: false,
+          atomic: false,
+        });
+        break;
 
-      allEdits.push(...edits);
-    } catch (error) {
-      // In batch mode, we might want to continue or stop on error
-      // For now, we'll throw and let the transaction manager handle it
-      throw error;
+      case 'multiFileEdit':
+        edits = executeMultiFileEdit({
+          type: 'multiFileEdit',
+          multiFileEdit: operation.multiFileEdit,
+          dryRun: false,
+          atomic: false,
+        });
+        break;
+
+      case 'searchReplace':
+        edits = await executeSearchReplace({
+          type: 'searchReplace',
+          searchReplace: operation.searchReplace,
+          dryRun: false,
+          atomic: false,
+        });
+        break;
+
+      case 'fileOperation':
+        edits = executeFileOperations({
+          type: 'fileOperation',
+          fileOperation: operation.fileOperation,
+          dryRun: false,
+          atomic: false,
+        });
+        break;
+
+      case 'smartInsert':
+        edits = await executeSmartInsert(
+          {
+            type: 'smartInsert',
+            smartInsert: operation.smartInsert,
+            dryRun: false,
+            atomic: false,
+          },
+          readFileFn
+        );
+        break;
     }
+
+    allEdits.push(...edits);
   }
 
   return allEdits;

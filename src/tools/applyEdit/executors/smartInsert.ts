@@ -41,7 +41,11 @@ export async function executeSmartInsert(
         break;
       }
       case 'comment': {
-        const commentEdit = createCommentEdit(lines, insertion.content, insertion.preferredLocation);
+        const commentEdit = createCommentEdit(
+          lines,
+          insertion.content,
+          insertion.preferredLocation
+        );
         if (commentEdit) edits.push(commentEdit);
         break;
       }
@@ -66,7 +70,7 @@ export async function executeSmartInsert(
 function createImportEdit(
   lines: string[],
   importStatement: string,
-  sortOrder?: 'alphabetical' | 'dependency' | 'none'
+  _sortOrder?: 'alphabetical' | 'dependency' | 'none'
 ): TextEdit | null {
   // Find existing imports
   let firstImportLine = -1;
@@ -74,11 +78,15 @@ function createImportEdit(
   const imports: { line: number; text: string }[] = [];
 
   for (let i = 0; i < lines.length; i++) {
-    const line = lines[i].trim();
-    if (line.startsWith('import ') || line.startsWith('from ') || line.startsWith('const ') && line.includes('require')) {
+    const line = (lines[i] ?? '').trim();
+    if (
+      line.startsWith('import ') ||
+      line.startsWith('from ') ||
+      (line.startsWith('const ') && line.includes('require'))
+    ) {
       if (firstImportLine === -1) firstImportLine = i;
       lastImportLine = i;
-      imports.push({ line: i, text: lines[i] });
+      imports.push({ line: i, text: lines[i] ?? '' });
     } else if (firstImportLine !== -1 && line && !line.startsWith('//')) {
       // Stop when we hit non-import, non-comment, non-empty line
       break;
@@ -107,7 +115,7 @@ function createClassMemberEdit(
   lines: string[],
   className: string,
   content: string,
-  type: 'method' | 'property',
+  _type: 'method' | 'property',
   preferredLocation?: 'top' | 'bottom' | 'beforeClass' | 'afterImports' | 'insideClass'
 ): TextEdit | null {
   // Find the class
@@ -117,7 +125,7 @@ function createClassMemberEdit(
   let foundClass = false;
 
   for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
+    const line = lines[i] ?? '';
     if (line.includes(`class ${className}`) || line.includes(`export class ${className}`)) {
       classStartLine = i;
       foundClass = true;
@@ -146,7 +154,7 @@ function createClassMemberEdit(
   if (preferredLocation === 'top' || preferredLocation === 'insideClass') {
     // Insert after the opening brace
     for (let i = classStartLine; i <= classEndLine; i++) {
-      if (lines[i].includes('{')) {
+      if ((lines[i] ?? '').includes('{')) {
         insertLine = i + 1;
         break;
       }
@@ -154,7 +162,7 @@ function createClassMemberEdit(
   }
 
   // Determine indentation
-  const classIndent = lines[classStartLine].match(/^\s*/)?.[0] || '';
+  const classIndent = (lines[classStartLine] ?? '').match(/^\s*/)?.[0] || '';
   const memberIndent = classIndent + '  ';
 
   return {
@@ -183,7 +191,7 @@ function createCommentEdit(
     case 'afterImports': {
       // Find last import
       for (let i = 0; i < lines.length; i++) {
-        const line = lines[i].trim();
+        const line = (lines[i] ?? '').trim();
         if (line.startsWith('import ') || line.startsWith('from ')) {
           insertLine = i + 1;
         }

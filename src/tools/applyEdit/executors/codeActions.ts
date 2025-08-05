@@ -38,7 +38,10 @@ export async function executeCodeActions(
     };
 
     try {
-      const codeActions = await client.sendRequest('textDocument/codeAction', codeActionParams);
+      const codeActions = await client.sendRequest<Array<CodeAction | Command> | null>(
+        'textDocument/codeAction',
+        codeActionParams
+      );
 
       if (!codeActions || codeActions.length === 0) {
         logger.warn({ uri: action.uri }, 'No code actions available');
@@ -64,7 +67,7 @@ export async function executeCodeActions(
 
 function selectCodeActions(
   codeActions: Array<CodeAction | Command>,
-  params: ApplyEditParams['actions'][0]
+  params: NonNullable<ApplyEditParams['actions']>[0]
 ): Array<CodeAction | Command> {
   // Filter out commands that aren't code actions
   const validActions = codeActions.filter(
@@ -82,27 +85,28 @@ function selectCodeActions(
     case 'preferred':
       if (params.preferredKinds && params.preferredKinds.length > 0) {
         for (const kind of params.preferredKinds) {
-          const matching = validActions.find((a) => a.kind === kind);
+          const matching = validActions.find((a) => 'kind' in a && a.kind === kind);
           if (matching) return [matching];
         }
       }
-      return [validActions[0]];
+      return validActions[0] ? [validActions[0]] : [];
 
     case 'best-match':
       if (params.diagnostic) {
         const diagnosticMatching = validActions.find((action) => {
-          if (!action.diagnostics || action.diagnostics.length === 0) return false;
+          if (!('diagnostics' in action) || !action.diagnostics || action.diagnostics.length === 0)
+            return false;
           return action.diagnostics.some(
-            (d) => d.message === params.diagnostic.message && d.code === params.diagnostic.code
+            (d) => d.message === params.diagnostic!.message && d.code === params.diagnostic!.code
           );
         });
         if (diagnosticMatching) return [diagnosticMatching];
       }
-      return [validActions[0]];
+      return validActions[0] ? [validActions[0]] : [];
 
     case 'first':
     default:
-      return [validActions[0]];
+      return validActions[0] ? [validActions[0]] : [];
   }
 }
 
@@ -115,7 +119,8 @@ async function applyCodeAction(
   }
 
   if ('command' in codeAction && codeAction.command) {
-    const command = typeof codeAction.command === 'string' ? { command: codeAction.command } : codeAction.command;
+    const command =
+      typeof codeAction.command === 'string' ? { command: codeAction.command } : codeAction.command;
     try {
       const result = await client.sendRequest('workspace/executeCommand', command);
       if (result && typeof result === 'object' && 'documentChanges' in result) {

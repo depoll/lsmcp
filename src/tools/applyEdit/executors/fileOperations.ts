@@ -24,7 +24,7 @@ export function executeFileOperations(params: ApplyEditParams): WorkspaceEdit[] 
         // Validate and sanitize URI
         const sanitizedUri = sanitizeFileURI(operation.uri);
         validateFilePath(fileURLToPath(sanitizedUri), workspaceRoot);
-        
+
         const createOp: CreateFile = {
           kind: 'create',
           uri: sanitizedUri,
@@ -58,7 +58,7 @@ export function executeFileOperations(params: ApplyEditParams): WorkspaceEdit[] 
         // Validate and sanitize URI
         const sanitizedUri = sanitizeFileURI(operation.uri);
         validateFilePath(fileURLToPath(sanitizedUri), workspaceRoot);
-        
+
         const deleteOp: DeleteFile = {
           kind: 'delete',
           uri: sanitizedUri,
@@ -77,7 +77,7 @@ export function executeFileOperations(params: ApplyEditParams): WorkspaceEdit[] 
         const sanitizedNewUri = sanitizeFileURI(operation.newUri);
         validateFilePath(fileURLToPath(sanitizedOldUri), workspaceRoot);
         validateFilePath(fileURLToPath(sanitizedNewUri), workspaceRoot);
-        
+
         const renameOp: RenameFile = {
           kind: 'rename',
           oldUri: sanitizedOldUri,

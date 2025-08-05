@@ -21,10 +21,7 @@ export const CodeActionParamsSchema = z.object({
     .optional()
     .describe('Filter code actions by kind'),
   position: createPositionSchema().optional().describe('Position for context-aware code actions'),
-  selectionStrategy: z
-    .enum(['first', 'preferred', 'all', 'best-match'])
-    .default('first')
-    .optional()
+  selectionStrategy: z.enum(['first', 'preferred', 'all', 'best-match']).default('first').optional()
     .describe(`Strategy for selecting from multiple available code actions:
 • first: Apply the first available action (default, fastest)
 • preferred: Select action matching preferredKinds order
@@ -68,7 +65,10 @@ export const RenameParamsSchema = z.object({
 
 export const FormatParamsSchema = z.object({
   uris: z
-    .union([z.array(z.string()).describe('File URIs to format'), z.string().describe('Single file URI to format')])
+    .union([
+      z.array(z.string()).describe('File URIs to format'),
+      z.string().describe('Single file URI to format'),
+    ])
     .describe('File URIs to format'),
   range: z
     .object({
@@ -159,7 +159,10 @@ export const SmartInsertParamsSchema = z.object({
       z.object({
         type: z.enum(['import', 'method', 'property', 'comment']).describe('Type of insertion'),
         content: z.string().describe('Content to insert'),
-        className: z.string().optional().describe('Target class name for method/property insertions'),
+        className: z
+          .string()
+          .optional()
+          .describe('Target class name for method/property insertions'),
         preferredLocation: z
           .enum(['top', 'bottom', 'beforeClass', 'afterImports', 'insideClass'])
           .optional()
@@ -209,24 +212,24 @@ const BatchOperationItemSchema = z.union([
 ]);
 
 export const BatchOperationSchema = z.object({
-  operations: z.array(BatchOperationItemSchema).describe('List of operations to execute in sequence'),
+  operations: z
+    .array(BatchOperationItemSchema)
+    .describe('List of operations to execute in sequence'),
 });
 
 export const ApplyEditParamsSchema = z.object({
-  type: z
-    .enum([
-      'codeAction',
-      'rename',
-      'format',
-      'organizeImports',
-      'textEdit',
-      'multiFileEdit',
-      'searchReplace',
-      'fileOperation',
-      'smartInsert',
-      'batch',
-    ])
-    .describe(`Type of edit operation to perform:
+  type: z.enum([
+    'codeAction',
+    'rename',
+    'format',
+    'organizeImports',
+    'textEdit',
+    'multiFileEdit',
+    'searchReplace',
+    'fileOperation',
+    'smartInsert',
+    'batch',
+  ]).describe(`Type of edit operation to perform:
 • codeAction: Apply fixes, refactors, or source actions (e.g., fix errors, extract method)
 • rename: Rename symbols across the codebase (variables, functions, classes)
 • format: Format code according to language rules

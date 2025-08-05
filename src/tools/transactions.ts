@@ -134,7 +134,7 @@ export class EditTransactionManager {
     for (const uri of affectedUris) {
       try {
         const filePath = fileURLToPath(uri);
-        
+
         // Validate path is within workspace
         validateFilePath(filePath, this.workspaceRoot);
 
@@ -373,7 +373,9 @@ export class EditTransactionManager {
     // Each result may contain multiple edits (editCount property)
     const totalChanges = results.reduce((sum, result) => {
       // If editCount is available, use it; otherwise count as 1 edit
-      return sum + ((result as any).editCount || 1);
+      return (
+        sum + ('editCount' in result && typeof result.editCount === 'number' ? result.editCount : 1)
+      );
     }, 0);
 
     return {

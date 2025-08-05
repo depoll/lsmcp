@@ -153,10 +153,10 @@ part fails, all changes are rolled back to maintain consistency.`;
     }
   }
 
-  private validateParams(params: ApplyEditParams): ApplyEditParams {
+  protected validateParams(params: ApplyEditParams): ApplyEditParams {
     const result = this.inputSchema.safeParse(params);
     if (!result.success) {
-      throw new MCPError(MCPErrorCode.InvalidParams, result.error.message);
+      throw new MCPError(MCPErrorCode.INVALID_PARAMS, result.error.message);
     }
     return result.data;
   }
@@ -165,8 +165,18 @@ part fails, all changes are rolled back to maintain consistency.`;
     const language = getLanguageFromUri(uri);
     const client = await this.clientManager.get(language, uri);
 
+    if (!client) {
+      throw new MCPError(
+        MCPErrorCode.InternalError,
+        `No language server available for ${language}`
+      );
+    }
+
     if (!client.isConnected()) {
-      throw new MCPError(MCPErrorCode.InternalError, `Language server not connected for ${language}`);
+      throw new MCPError(
+        MCPErrorCode.InternalError,
+        `Language server not connected for ${language}`
+      );
     }
 
     return client;
@@ -224,10 +234,11 @@ part fails, all changes are rolled back to maintain consistency.`;
     };
   }
 
-  private generatePreview(edits: any[]): string {
+  private generatePreview(edits: { newText: string }[]): string {
     if (edits.length === 0) return 'No changes';
     if (edits.length === 1) {
       const edit = edits[0];
+      if (!edit) return 'No changes';
       if (edit.newText.length < 100) {
         return edit.newText || '[deletion]';
       }
@@ -236,9 +247,27 @@ part fails, all changes are rolled back to maintain consistency.`;
     return `${edits.length} edits`;
   }
 
-  protected async executeBatch(
-    operations: ApplyEditParams[]
-  ): Promise<Array<ApplyEditResult | MCPError>> {
-    return Promise.all(operations.map((op) => this.execute(op).catch((error) => error)));
+  async executeBatch(operations: ApplyEditParams[]): Promise<ApplyEditResult[]> {
+    const results = await Promise.all(
+      operations.map(async (op) => {
+        try {
+          return await this.execute(op);
+        } catch (error) {
+          // Return error result instead of throwing
+          return {
+            success: false,
+            error:
+              error instanceof MCPError
+                ? error
+                : new MCPError(
+                    MCPErrorCode.InternalError,
+                    error instanceof Error ? error.message : 'Unknown error'
+                  ),
+            duration: 0,
+          };
+        }
+      })
+    );
+    return results;
   }
 }

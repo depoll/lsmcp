@@ -29,7 +29,7 @@ export async function executeRename(
   const client = await getClient(uri);
 
   // Ensure the file is opened in the language server
-  await client.sendNotification('textDocument/didOpen', {
+  client.sendNotification('textDocument/didOpen', {
     textDocument: {
       uri,
       languageId: getLanguageId(uri),
@@ -64,7 +64,7 @@ export async function executeRename(
   const workspaceEdit = await client.sendRequest('textDocument/rename', renameParams);
 
   if (!workspaceEdit) {
-    throw new Error('No rename edits returned from language server');
+    throw new Error('Rename failed - no edits returned from language server');
   }
 
   // Apply file limits if specified
@@ -144,7 +144,7 @@ function countAffectedFiles(edit: WorkspaceEdit): number {
   return files.size;
 }
 
-function filterWorkspaceEdit(edit: WorkspaceEdit, excludePatterns: string[]): void {
+function filterWorkspaceEdit(_edit: WorkspaceEdit, excludePatterns: string[]): void {
   // Implementation would use minimatch or similar to filter out excluded files
   // For now, this is a placeholder
   logger.warn({ excludePatterns }, 'Exclude patterns not yet implemented');

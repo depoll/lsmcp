@@ -113,18 +113,6 @@ export enum MCPErrorCode {
 }
 
 /**
- * Standard MCP error structure
- */
-export interface MCPError {
-  /** Error code for programmatic handling */
-  code: MCPErrorCode;
-  /** Human-readable error message */
-  message: string;
-  /** Additional error details */
-  details?: unknown;
-}
-
-/**
  * MCPError class for creating error instances
  */
 export class MCPError extends Error {
