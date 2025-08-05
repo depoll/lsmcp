@@ -10,6 +10,10 @@ import {
   Command,
   TextEdit,
   Range,
+  CreateFile,
+  DeleteFile,
+  RenameFile,
+  TextDocumentEdit,
 } from 'vscode-languageserver-protocol';
 import { z } from 'zod';
 import { BatchableTool } from './base.js';
@@ -20,6 +24,9 @@ import { getLanguageFromUri } from '../utils/languages.js';
 import { EditTransactionManager, TransactionOptions } from './transactions.js';
 import type { LSPClient } from '../lsp/client-v2.js';
 import { MCPError, MCPErrorCode } from './common-types.js';
+import { readFile } from 'fs/promises';
+import path from 'path';
+import { glob } from 'glob';
 
 // Sub-schemas for better organization and readability
 const CodeActionParamsSchema = z.object({
@@ -127,6 +134,71 @@ const MultiFileEditParamsSchema = z.object({
   edits: z.array(TextEditParamsSchema).describe('Text edits to apply across multiple files'),
 });
 
+const SearchReplaceParamsSchema = z.object({
+  pattern: z.string().describe('Search pattern (supports regex when prefixed with /)'),
+  replacement: z.string().describe('Replacement text (supports $1, $2 for regex groups)'),
+  scope: z.enum(['file', 'directory', 'workspace']).describe('Scope of the search'),
+  uri: z.string().optional().describe('File URI for file scope, directory URI for directory scope'),
+  filePattern: z.string().optional().describe('Glob pattern to filter files (e.g., **/*.ts)'),
+  excludePatterns: z.array(z.string()).optional().describe('Glob patterns to exclude'),
+  caseSensitive: z.boolean().default(true).optional().describe('Case sensitive search'),
+  wholeWord: z.boolean().default(false).optional().describe('Match whole words only'),
+  maxReplacements: z
+    .number()
+    .min(1)
+    .default(1000)
+    .optional()
+    .describe('Maximum replacements (safety limit)'),
+});
+
+const FileOperationParamsSchema = z.object({
+  operations: z
+    .array(
+      z.discriminatedUnion('type', [
+        z.object({
+          type: z.literal('create'),
+          uri: z.string().describe('File URI to create'),
+          content: z.string().optional().describe('Initial file content'),
+          overwrite: z.boolean().default(false).optional(),
+        }),
+        z.object({
+          type: z.literal('delete'),
+          uri: z.string().describe('File URI to delete'),
+          recursive: z.boolean().default(false).optional(),
+          ignoreIfNotExists: z.boolean().default(false).optional(),
+        }),
+        z.object({
+          type: z.literal('rename'),
+          oldUri: z.string().describe('Current file URI'),
+          newUri: z.string().describe('New file URI'),
+          overwrite: z.boolean().default(false).optional(),
+        }),
+      ])
+    )
+    .describe('File operations to perform'),
+});
+
+const SmartInsertParamsSchema = z.object({
+  uri: z.string().describe(FILE_URI_DESCRIPTION),
+  insertions: z
+    .array(
+      z.object({
+        type: z.enum(['import', 'method', 'property', 'comment']).describe('Type of insertion'),
+        content: z.string().describe('Content to insert'),
+        className: z
+          .string()
+          .optional()
+          .describe('Target class name for method/property insertions'),
+        preferredLocation: z
+          .enum(['top', 'bottom', 'beforeClass', 'afterImports', 'insideClass'])
+          .optional()
+          .describe('Preferred insertion location'),
+        sortOrder: z.enum(['alphabetical', 'dependency', 'none']).default('none').optional(),
+      })
+    )
+    .describe('Smart insertions to perform'),
+});
+
 const BatchOperationSchema = z.object({
   operations: z
     .array(
@@ -155,6 +227,18 @@ const BatchOperationSchema = z.object({
           type: z.literal('multiFileEdit'),
           multiFileEdit: MultiFileEditParamsSchema,
         }),
+        z.object({
+          type: z.literal('searchReplace'),
+          searchReplace: SearchReplaceParamsSchema,
+        }),
+        z.object({
+          type: z.literal('fileOperation'),
+          fileOperation: FileOperationParamsSchema,
+        }),
+        z.object({
+          type: z.literal('smartInsert'),
+          smartInsert: SmartInsertParamsSchema,
+        }),
       ])
     )
     .describe('List of operations to execute in sequence'),
@@ -168,6 +252,9 @@ const ApplyEditParamsSchema = z.object({
     'organizeImports',
     'textEdit',
     'multiFileEdit',
+    'searchReplace',
+    'fileOperation',
+    'smartInsert',
     'batch',
   ]).describe(`Type of edit operation to perform:
 • codeAction: Apply fixes, refactors, or source actions (e.g., fix errors, extract method)
@@ -176,6 +263,9 @@ const ApplyEditParamsSchema = z.object({
 • organizeImports: Sort and optimize import statements
 • textEdit: Apply direct text edits to a single file
 • multiFileEdit: Apply text edits across multiple files
+• searchReplace: Search and replace text across files
+• fileOperation: Create, delete, or rename files
+• smartInsert: Context-aware insertions (imports, methods, etc.)
 • batch: Execute multiple operations in a single transaction`),
 
   actions: z
@@ -194,6 +284,16 @@ const ApplyEditParamsSchema = z.object({
   ),
 
   batchOperations: BatchOperationSchema.optional().describe('Parameters for batch operations'),
+
+  searchReplace: SearchReplaceParamsSchema.optional().describe(
+    'Parameters for search and replace operations'
+  ),
+
+  fileOperation: FileOperationParamsSchema.optional().describe('Parameters for file operations'),
+
+  smartInsert: SmartInsertParamsSchema.optional().describe(
+    'Parameters for smart insert operations'
+  ),
 
   dryRun: z
     .boolean()
@@ -231,16 +331,18 @@ export interface ApplyEditResult {
 export class ApplyEditTool extends BatchableTool<ApplyEditParams, ApplyEditResult> {
   readonly name = 'applyEdit';
   readonly description = `Apply code modifications via LSP with automatic rollback on failure.
-Supports code actions (quickfixes, refactors), symbol renaming, code formatting,
-import organization, and direct text editing. All operations are transactional - 
-if any part fails, all changes are rolled back to maintain consistency.`;
+Supports code actions, symbol renaming, formatting, text editing, search/replace,
+file operations, and smart insertions. All operations are transactional - if any
+part fails, all changes are rolled back to maintain consistency.`;
   readonly inputSchema = ApplyEditParamsSchema;
 
   private transactionManager: EditTransactionManager;
+  private readFileFn: typeof readFile;
 
-  constructor(clientManager: ConnectionPool) {
+  constructor(clientManager: ConnectionPool, readFileFn?: typeof readFile) {
     super(clientManager);
     this.transactionManager = new EditTransactionManager();
+    this.readFileFn = readFileFn || readFile;
   }
 
   async execute(params: ApplyEditParams): Promise<ApplyEditResult> {
@@ -268,6 +370,15 @@ if any part fails, all changes are rolled back to maintain consistency.`;
           break;
         case 'multiFileEdit':
           edits = this.executeMultiFileEdit(validatedParams);
+          break;
+        case 'searchReplace':
+          edits = await this.executeSearchReplace(validatedParams);
+          break;
+        case 'fileOperation':
+          edits = this.executeFileOperations(validatedParams);
+          break;
+        case 'smartInsert':
+          edits = await this.executeSmartInsert(validatedParams);
           break;
         case 'batch':
           edits = await this.executeBatchOperations(validatedParams);
@@ -672,6 +783,393 @@ if any part fails, all changes are rolled back to maintain consistency.`;
     return [workspaceEdit];
   }
 
+  private async executeSearchReplace(params: ApplyEditParams): Promise<WorkspaceEdit[]> {
+    if (!params.searchReplace) {
+      throw new Error('No search replace parameters specified');
+    }
+
+    const {
+      pattern,
+      replacement,
+      scope,
+      uri,
+      filePattern,
+      excludePatterns,
+      caseSensitive,
+      wholeWord,
+    } = params.searchReplace;
+
+    // Create regex from pattern
+    let regex: RegExp;
+    if (pattern.startsWith('/') && pattern.lastIndexOf('/') > 0) {
+      // Parse regex pattern
+      const lastSlash = pattern.lastIndexOf('/');
+      const regexPattern = pattern.slice(1, lastSlash);
+      const flags = pattern.slice(lastSlash + 1);
+      regex = new RegExp(regexPattern, flags + (caseSensitive ? '' : 'i'));
+    } else {
+      // Escape special regex characters for literal search
+      const escapedPattern = pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const wordBoundary = wholeWord ? '\\b' : '';
+      regex = new RegExp(
+        `${wordBoundary}${escapedPattern}${wordBoundary}`,
+        caseSensitive ? 'g' : 'gi'
+      );
+    }
+
+    // Determine files to search
+    let filesToSearch: string[] = [];
+
+    if (scope === 'file') {
+      if (!uri) throw new Error('URI required for file scope');
+      filesToSearch = [new URL(uri).pathname];
+    } else {
+      // Get base directory
+      const baseDir = scope === 'directory' && uri ? new URL(uri).pathname : process.cwd();
+
+      // Apply file pattern
+      const globPattern = filePattern || '**/*';
+      const fullPattern = path.join(baseDir, globPattern);
+
+      filesToSearch = await glob(fullPattern, {
+        ignore: excludePatterns || ['**/node_modules/**', '**/.git/**'],
+        nodir: true,
+      });
+    }
+
+    // Collect all edits
+    const documentChanges: Array<{
+      textDocument: { uri: string; version: null };
+      edits: TextEdit[];
+    }> = [];
+    let totalReplacements = 0;
+    const maxReplacements = params.searchReplace.maxReplacements || 1000;
+
+    for (const filePath of filesToSearch) {
+      try {
+        const content = await this.readFileFn(filePath, 'utf-8');
+        const lines = content.split('\n');
+        const edits: TextEdit[] = [];
+
+        for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
+          const line = lines[lineIndex];
+          if (!line) continue;
+
+          let match: RegExpExecArray | null;
+
+          regex.lastIndex = 0; // Reset regex state
+          while ((match = regex.exec(line)) !== null && totalReplacements < maxReplacements) {
+            const startChar = match.index;
+            const endChar = match.index + match[0].length;
+
+            // Apply replacement (handle regex groups)
+            const newText = replacement.replace(/\$(\d+)/g, (_, group) => {
+              const groupIndex = parseInt(group as string);
+              return (match && match[groupIndex]) || '';
+            });
+
+            edits.push({
+              range: {
+                start: { line: lineIndex, character: startChar },
+                end: { line: lineIndex, character: endChar },
+              },
+              newText,
+            });
+
+            totalReplacements++;
+
+            // Prevent infinite loop for zero-width matches
+            if (match[0].length === 0) {
+              regex.lastIndex++;
+            }
+
+            if (!regex.global) break;
+          }
+        }
+
+        if (edits.length > 0) {
+          documentChanges.push({
+            textDocument: {
+              uri: `file://${filePath}`,
+              version: null,
+            },
+            edits,
+          });
+        }
+      } catch (error) {
+        this.logger.warn({ error, filePath }, 'Failed to process file for search/replace');
+      }
+    }
+
+    if (documentChanges.length === 0) {
+      return [];
+    }
+
+    return [{ documentChanges }];
+  }
+
+  private executeFileOperations(params: ApplyEditParams): WorkspaceEdit[] {
+    if (!params.fileOperation) {
+      throw new Error('No file operation parameters specified');
+    }
+
+    const { operations } = params.fileOperation;
+    const documentChanges: Array<CreateFile | DeleteFile | RenameFile | TextDocumentEdit> = [];
+
+    for (const operation of operations) {
+      switch (operation.type) {
+        case 'create': {
+          const createOp: CreateFile = {
+            kind: 'create',
+            uri: operation.uri,
+            options: {
+              overwrite: operation.overwrite,
+              ignoreIfExists: !operation.overwrite,
+            },
+          };
+          documentChanges.push(createOp);
+
+          // If content is provided, add it as a text edit
+          if (operation.content) {
+            documentChanges.push({
+              textDocument: { uri: operation.uri, version: null },
+              edits: [
+                {
+                  range: {
+                    start: { line: 0, character: 0 },
+                    end: { line: 0, character: 0 },
+                  },
+                  newText: operation.content,
+                },
+              ],
+            } as TextDocumentEdit);
+          }
+          break;
+        }
+
+        case 'delete': {
+          const deleteOp: DeleteFile = {
+            kind: 'delete',
+            uri: operation.uri,
+            options: {
+              recursive: operation.recursive,
+              ignoreIfNotExists: operation.ignoreIfNotExists,
+            },
+          };
+          documentChanges.push(deleteOp);
+          break;
+        }
+
+        case 'rename': {
+          const renameOp: RenameFile = {
+            kind: 'rename',
+            oldUri: operation.oldUri,
+            newUri: operation.newUri,
+            options: {
+              overwrite: operation.overwrite,
+              ignoreIfExists: !operation.overwrite,
+            },
+          };
+          documentChanges.push(renameOp);
+          break;
+        }
+      }
+    }
+
+    return [{ documentChanges }];
+  }
+
+  private async executeSmartInsert(params: ApplyEditParams): Promise<WorkspaceEdit[]> {
+    if (!params.smartInsert) {
+      throw new Error('No smart insert parameters specified');
+    }
+
+    const { uri, insertions } = params.smartInsert;
+    const filePath = new URL(uri).pathname;
+    const content = await this.readFileFn(filePath, 'utf-8');
+    const lines = content.split('\n');
+
+    const edits: TextEdit[] = [];
+
+    for (const insertion of insertions) {
+      switch (insertion.type) {
+        case 'import': {
+          const importEdit = this.createImportEdit(lines, insertion.content, insertion.sortOrder);
+          if (importEdit) edits.push(importEdit);
+          break;
+        }
+
+        case 'method':
+        case 'property': {
+          const classEdit = this.createClassMemberEdit(
+            lines,
+            insertion.content,
+            insertion.className || '',
+            insertion.type,
+            insertion.preferredLocation
+          );
+          if (classEdit) edits.push(classEdit);
+          break;
+        }
+
+        case 'comment': {
+          const commentEdit = this.createCommentEdit(
+            lines,
+            insertion.content,
+            insertion.preferredLocation || 'top'
+          );
+          if (commentEdit) edits.push(commentEdit);
+          break;
+        }
+      }
+    }
+
+    if (edits.length === 0) {
+      return [];
+    }
+
+    return [
+      {
+        documentChanges: [
+          {
+            textDocument: { uri, version: null },
+            edits,
+          },
+        ],
+      },
+    ];
+  }
+
+  private createImportEdit(lines: string[], content: string, _sortOrder?: string): TextEdit | null {
+    // Find the last import line
+    let lastImportLine = -1;
+    let firstImportLine = -1;
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i]?.trim();
+      if (line && line.startsWith('import ')) {
+        if (firstImportLine === -1) firstImportLine = i;
+        lastImportLine = i;
+      } else if (firstImportLine !== -1 && line && !line.startsWith('//')) {
+        // Stop at first non-import, non-comment line
+        break;
+      }
+    }
+
+    const insertLine = lastImportLine >= 0 ? lastImportLine + 1 : 0;
+
+    // Add proper formatting
+    const formattedContent = content.trim();
+    const newText = lastImportLine >= 0 ? `\n${formattedContent}` : `${formattedContent}\n`;
+
+    return {
+      range: {
+        start: { line: insertLine, character: 0 },
+        end: { line: insertLine, character: 0 },
+      },
+      newText,
+    };
+  }
+
+  private createClassMemberEdit(
+    lines: string[],
+    content: string,
+    className: string,
+    memberType: 'method' | 'property',
+    preferredLocation?: string
+  ): TextEdit | null {
+    // Find the class
+    let classStartLine = -1;
+    let classEndLine = -1;
+    let braceCount = 0;
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      if (!line) continue;
+
+      if (classStartLine === -1) {
+        // Look for class declaration
+        const classMatch = line.match(
+          new RegExp(`class\\s+${className}\\s*(?:extends|implements|{)`)
+        );
+        if (classMatch) {
+          classStartLine = i;
+          braceCount = 0;
+        }
+      }
+
+      if (classStartLine !== -1) {
+        // Count braces to find class end
+        for (const char of line) {
+          if (char === '{') braceCount++;
+          else if (char === '}') {
+            braceCount--;
+            if (braceCount === 0) {
+              classEndLine = i;
+              break;
+            }
+          }
+        }
+        if (classEndLine !== -1) break;
+      }
+    }
+
+    if (classStartLine === -1 || classEndLine === -1) {
+      return null;
+    }
+
+    // Determine insertion point
+    let insertLine = classEndLine;
+    if (preferredLocation === 'top' || memberType === 'property') {
+      // Find first line after class opening brace
+      for (let i = classStartLine; i < classEndLine; i++) {
+        const currentLine = lines[i];
+        if (currentLine && currentLine.includes('{')) {
+          insertLine = i + 1;
+          break;
+        }
+      }
+    }
+
+    // Get indentation from neighboring lines
+    const indentMatch = lines[insertLine - 1]?.match(/^(\s*)/);
+    const indent = indentMatch ? indentMatch[1] + '  ' : '  ';
+
+    const formattedContent = content
+      .split('\n')
+      .map((line) => (line.trim() ? indent + line : line))
+      .join('\n');
+
+    return {
+      range: {
+        start: { line: insertLine, character: 0 },
+        end: { line: insertLine, character: 0 },
+      },
+      newText: `${formattedContent}\n`,
+    };
+  }
+
+  private createCommentEdit(lines: string[], content: string, location: string): TextEdit | null {
+    let insertLine = 0;
+
+    if (location === 'bottom') {
+      insertLine = lines.length;
+    }
+
+    const formattedContent = content
+      .split('\n')
+      .map((line) => (line.trim() ? `// ${line}` : '//'))
+      .join('\n');
+
+    return {
+      range: {
+        start: { line: insertLine, character: 0 },
+        end: { line: insertLine, character: 0 },
+      },
+      newText: location === 'bottom' ? `\n${formattedContent}` : `${formattedContent}\n`,
+    };
+  }
+
   private async executeBatchOperations(params: ApplyEditParams): Promise<WorkspaceEdit[]> {
     if (!params.batchOperations) {
       throw new Error('No batch operations specified');
@@ -729,6 +1227,30 @@ if any part fails, all changes are rolled back to maintain consistency.`;
             edits = this.executeMultiFileEdit({
               type: 'multiFileEdit',
               multiFileEdit: operation.multiFileEdit,
+              dryRun: false,
+              atomic: false,
+            });
+            break;
+          case 'searchReplace':
+            edits = await this.executeSearchReplace({
+              type: 'searchReplace',
+              searchReplace: operation.searchReplace,
+              dryRun: false,
+              atomic: false,
+            });
+            break;
+          case 'fileOperation':
+            edits = this.executeFileOperations({
+              type: 'fileOperation',
+              fileOperation: operation.fileOperation,
+              dryRun: false,
+              atomic: false,
+            });
+            break;
+          case 'smartInsert':
+            edits = await this.executeSmartInsert({
+              type: 'smartInsert',
+              smartInsert: operation.smartInsert,
               dryRun: false,
               atomic: false,
             });

@@ -5,8 +5,20 @@
 
 import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
 import { jest } from '@jest/globals';
+
+// Create mock before importing
+const mockReadFile = jest.fn<typeof import('fs/promises').readFile>();
+
+// Mock fs/promises module
+jest.unstable_mockModule('fs/promises', () => ({
+  readFile: mockReadFile,
+}));
+
+jest.mock('../../../src/lsp/index.js');
+jest.mock('../../../src/tools/transactions.js');
 import { ApplyEditTool } from '../../../src/tools/applyEdit.js';
 import { ConnectionPool } from '../../../src/lsp/index.js';
+import type { readFile } from 'fs/promises';
 // Types are only used for mocking, not directly imported
 // import { LSPClientV2 } from '../../../src/lsp/client-v2.js';
 // import { EditTransactionManager } from '../../../src/tools/transactions.js';
@@ -17,9 +29,6 @@ import {
   TextEdit,
   Diagnostic,
 } from 'vscode-languageserver-protocol';
-
-jest.mock('../../../src/lsp/index.js');
-jest.mock('../../../src/tools/transactions.js');
 
 describe('ApplyEditTool', () => {
   let tool: ApplyEditTool;
@@ -43,7 +52,7 @@ describe('ApplyEditTool', () => {
       executeTransaction: jest.fn(),
     };
 
-    tool = new ApplyEditTool(mockClientManager);
+    tool = new ApplyEditTool(mockClientManager, mockReadFile as typeof readFile);
     // Replace the transaction manager with our mock
     const toolWithMock = tool as any;
     toolWithMock.transactionManager = mockTransactionManager;
@@ -58,9 +67,9 @@ describe('ApplyEditTool', () => {
       expect(tool.name).toBe('applyEdit');
       expect(tool.description).toBe(
         'Apply code modifications via LSP with automatic rollback on failure.\n' +
-          'Supports code actions (quickfixes, refactors), symbol renaming, code formatting,\n' +
-          'import organization, and direct text editing. All operations are transactional - \n' +
-          'if any part fails, all changes are rolled back to maintain consistency.'
+          'Supports code actions, symbol renaming, formatting, text editing, search/replace,\n' +
+          'file operations, and smart insertions. All operations are transactional - if any\n' +
+          'part fails, all changes are rolled back to maintain consistency.'
       );
     });
   });
@@ -768,6 +777,281 @@ describe('ApplyEditTool', () => {
 
       expect(result.success).toBe(true);
       expect(result.totalChanges).toBe(3);
+    });
+  });
+
+  describe('searchReplace', () => {
+    it('should execute search and replace with regex', async () => {
+      mockTransactionManager.executeTransaction.mockResolvedValue({
+        success: true,
+        transactionId: 'test-id',
+        filesModified: 3,
+        totalChanges: 5,
+        changes: [
+          { uri: 'file:///test/file1.ts', edits: 2 },
+          { uri: 'file:///test/file2.ts', edits: 2 },
+          { uri: 'file:///test/file3.ts', edits: 1 },
+        ],
+      });
+
+      const result = await tool.execute({
+        type: 'searchReplace',
+        searchReplace: {
+          pattern: '/oldPattern(\\w+)/g',
+          replacement: 'newPattern$1',
+          filePattern: '**/*.ts',
+          excludePatterns: ['node_modules/**'],
+          scope: 'workspace',
+        },
+      });
+
+      expect(mockTransactionManager.executeTransaction).toHaveBeenCalled();
+      expect(result.success).toBe(true);
+      expect(result.filesModified).toBe(3);
+      expect(result.totalChanges).toBe(5);
+    });
+
+    it('should execute search and replace with literal string', async () => {
+      mockTransactionManager.executeTransaction.mockResolvedValue({
+        success: true,
+        transactionId: 'test-id',
+        filesModified: 1,
+        totalChanges: 3,
+        changes: [{ uri: 'file:///test/file.ts', edits: 3 }],
+      });
+
+      const result = await tool.execute({
+        type: 'searchReplace',
+        searchReplace: {
+          pattern: 'oldName',
+          replacement: 'newName',
+          filePattern: 'src/**/*.ts',
+          scope: 'directory',
+          uri: 'file:///test/src',
+        },
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.filesModified).toBe(1);
+    });
+  });
+
+  describe('fileOperation', () => {
+    it('should create files with content', async () => {
+      mockTransactionManager.executeTransaction.mockResolvedValue({
+        success: true,
+        transactionId: 'test-id',
+        filesModified: 2,
+        totalChanges: 2,
+        changes: [
+          { uri: 'file:///test/new-file1.ts', edits: 1 },
+          { uri: 'file:///test/new-file2.ts', edits: 1 },
+        ],
+      });
+
+      const result = await tool.execute({
+        type: 'fileOperation',
+        fileOperation: {
+          operations: [
+            {
+              type: 'create',
+              uri: 'file:///test/new-file1.ts',
+              content: 'export const foo = "bar";',
+              overwrite: false,
+            },
+            {
+              type: 'create',
+              uri: 'file:///test/new-file2.ts',
+              content: 'export const baz = "qux";',
+              overwrite: true,
+            },
+          ],
+        },
+      });
+
+      expect(mockTransactionManager.executeTransaction).toHaveBeenCalled();
+      const calls = mockTransactionManager.executeTransaction.mock.calls;
+      const workspaceEdits = calls[0][0];
+      expect(workspaceEdits).toHaveLength(1);
+      expect(workspaceEdits[0].documentChanges).toHaveLength(4); // 2 create + 2 text edits
+      expect(result.success).toBe(true);
+      expect(result.filesModified).toBe(2);
+    });
+
+    it('should delete files', async () => {
+      mockTransactionManager.executeTransaction.mockResolvedValue({
+        success: true,
+        transactionId: 'test-id',
+        filesModified: 2,
+        totalChanges: 2,
+        changes: [],
+      });
+
+      const result = await tool.execute({
+        type: 'fileOperation',
+        fileOperation: {
+          operations: [
+            {
+              type: 'delete',
+              uri: 'file:///test/old-file1.ts',
+              recursive: false,
+              ignoreIfNotExists: true,
+            },
+            {
+              type: 'delete',
+              uri: 'file:///test/old-dir',
+              recursive: true,
+              ignoreIfNotExists: false,
+            },
+          ],
+        },
+      });
+
+      const calls = mockTransactionManager.executeTransaction.mock.calls;
+      const workspaceEdits = calls[0][0];
+      expect(workspaceEdits).toHaveLength(1);
+      expect(workspaceEdits[0].documentChanges).toHaveLength(2);
+      expect(result.success).toBe(true);
+    });
+
+    it('should rename files', async () => {
+      mockTransactionManager.executeTransaction.mockResolvedValue({
+        success: true,
+        transactionId: 'test-id',
+        filesModified: 1,
+        totalChanges: 1,
+        changes: [],
+      });
+
+      const result = await tool.execute({
+        type: 'fileOperation',
+        fileOperation: {
+          operations: [
+            {
+              type: 'rename',
+              oldUri: 'file:///test/old-name.ts',
+              newUri: 'file:///test/new-name.ts',
+              overwrite: false,
+            },
+          ],
+        },
+      });
+
+      const calls = mockTransactionManager.executeTransaction.mock.calls;
+      const workspaceEdits = calls[0][0];
+      expect(workspaceEdits[0].documentChanges).toHaveLength(1);
+      expect(workspaceEdits[0].documentChanges[0]).toHaveProperty('kind', 'rename');
+      expect(result.success).toBe(true);
+    });
+  });
+
+  describe('smartInsert', () => {
+    beforeEach(() => {
+      // Reset fs mock
+      mockReadFile.mockClear();
+    });
+
+    it('should insert imports at the correct location', async () => {
+      mockReadFile.mockResolvedValue(
+        'import { useState } from "react";\n' +
+          'import { useEffect } from "react";\n' +
+          '\n' +
+          'const MyComponent = () => {\n' +
+          '  return <div>Hello</div>;\n' +
+          '};'
+      );
+      mockTransactionManager.executeTransaction.mockResolvedValue({
+        success: true,
+        transactionId: 'test-id',
+        filesModified: 1,
+        totalChanges: 1,
+        changes: [{ uri: 'file:///test/file.ts', edits: 1 }],
+      });
+
+      const result = await tool.execute({
+        type: 'smartInsert',
+        smartInsert: {
+          uri: 'file:///test/file.ts',
+          insertions: [
+            {
+              type: 'import',
+              content: "import { Component } from '@angular/core';",
+              preferredLocation: 'afterImports',
+              sortOrder: 'alphabetical',
+            },
+          ],
+        },
+      });
+
+      expect(mockTransactionManager.executeTransaction).toHaveBeenCalled();
+      expect(result.success).toBe(true);
+      expect(result.filesModified).toBe(1);
+    });
+
+    it('should insert methods into classes', async () => {
+      mockReadFile.mockResolvedValue('export class MyClass {\n' + '  constructor() {}\n' + '}');
+      mockTransactionManager.executeTransaction.mockResolvedValue({
+        success: true,
+        transactionId: 'test-id',
+        filesModified: 1,
+        totalChanges: 2,
+        changes: [{ uri: 'file:///test/class.ts', edits: 2 }],
+      });
+
+      const result = await tool.execute({
+        type: 'smartInsert',
+        smartInsert: {
+          uri: 'file:///test/class.ts',
+          insertions: [
+            {
+              type: 'method',
+              content: 'public getName(): string { return this.name; }',
+              className: 'MyClass',
+              preferredLocation: 'insideClass',
+            },
+            {
+              type: 'property',
+              content: 'private name: string;',
+              className: 'MyClass',
+              preferredLocation: 'insideClass',
+            },
+          ],
+        },
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.filesModified).toBe(1);
+      expect(result.totalChanges).toBe(2);
+    });
+
+    it('should add comments at specific locations', async () => {
+      mockReadFile.mockResolvedValue(
+        'function doSomething() {\n' + '  console.log("doing something");\n' + '}'
+      );
+      mockTransactionManager.executeTransaction.mockResolvedValue({
+        success: true,
+        transactionId: 'test-id',
+        filesModified: 1,
+        totalChanges: 1,
+        changes: [{ uri: 'file:///test/file.ts', edits: 1 }],
+      });
+
+      const result = await tool.execute({
+        type: 'smartInsert',
+        smartInsert: {
+          uri: 'file:///test/file.ts',
+          insertions: [
+            {
+              type: 'comment',
+              content: '// TODO: Implement error handling',
+              preferredLocation: 'top',
+            },
+          ],
+        },
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.filesModified).toBe(1);
     });
   });
 });
