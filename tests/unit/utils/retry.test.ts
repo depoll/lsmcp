@@ -59,7 +59,9 @@ describe('retryWithBackoff', () => {
   });
 
   it('should not retry if shouldRetry returns false', async () => {
-    const mockOperation = jest.fn<() => Promise<string>>().mockRejectedValue(new Error('Different error'));
+    const mockOperation = jest
+      .fn<() => Promise<string>>()
+      .mockRejectedValue(new Error('Different error'));
 
     await expect(
       retryWithBackoff(mockOperation, {
