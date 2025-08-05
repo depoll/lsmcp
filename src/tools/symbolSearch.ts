@@ -251,12 +251,12 @@ Features: Fuzzy matching, kind filtering, relevance scoring, grep fallback.`;
           'textDocument/documentSymbol',
           docParams
         );
-        
+
         // If we get null or empty symbols, it might be due to indexing lag
         if (!result || (Array.isArray(result) && result.length === 0)) {
           throw new Error('No symbols found - possible indexing lag');
         }
-        
+
         return result;
       },
       {
@@ -384,12 +384,12 @@ Features: Fuzzy matching, kind filtering, relevance scoring, grep fallback.`;
           'workspace/symbol',
           wsParams
         );
-        
+
         // If we get null or empty symbols, it might be due to indexing lag
         if (!result || result.length === 0) {
           throw new Error('No workspace symbols found - possible indexing lag');
         }
-        
+
         return result;
       },
       {

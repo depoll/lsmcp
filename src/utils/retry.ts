@@ -48,7 +48,7 @@ export async function retryWithBackoff<T>(
   for (let attempt = 1; attempt <= opts.maxAttempts; attempt++) {
     try {
       const result = await operation();
-      
+
       // Check for empty results that might indicate indexing lag
       if (isEmptyResult(result) && attempt < opts.maxAttempts) {
         const error = new Error('Empty result, possibly due to indexing lag');
@@ -58,17 +58,17 @@ export async function retryWithBackoff<T>(
           continue;
         }
       }
-      
+
       return result;
     } catch (error) {
       lastError = error;
-      
+
       if (attempt < opts.maxAttempts && opts.shouldRetry(error, attempt)) {
         opts.onRetry(error, attempt);
         await delay(opts.delayMs * Math.pow(opts.backoffMultiplier, attempt - 1));
         continue;
       }
-      
+
       throw error;
     }
   }
@@ -80,11 +80,7 @@ export async function retryWithBackoff<T>(
  * Check if a result is empty (null, undefined, or empty array)
  */
 function isEmptyResult(result: unknown): boolean {
-  return (
-    result === null ||
-    result === undefined ||
-    (Array.isArray(result) && result.length === 0)
-  );
+  return result === null || result === undefined || (Array.isArray(result) && result.length === 0);
 }
 
 /**
@@ -98,16 +94,17 @@ function delay(ms: number): Promise<void> {
  * Create a retry wrapper for LSP read operations
  * Specifically tuned for LSP indexing lag scenarios
  */
-export function createLSPRetryWrapper<T extends (...args: any[]) => Promise<any>>(
+export function createLSPRetryWrapper<T extends (...args: unknown[]) => Promise<unknown>>(
   operation: T,
   customOptions?: RetryOptions
 ): T {
-  return (async (...args: Parameters<T>) => {
-    return retryWithBackoff(() => operation(...args), {
+  return (async (...args: Parameters<T>): Promise<ReturnType<T>> => {
+    const result = await retryWithBackoff(() => operation(...args), {
       maxAttempts: 3,
       delayMs: 1000, // Start with 1 second for LSP indexing
       backoffMultiplier: 2, // Double the delay each time
       ...customOptions,
     });
+    return result as ReturnType<T>;
   }) as T;
 }

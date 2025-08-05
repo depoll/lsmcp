@@ -243,12 +243,12 @@ Required parameters:
             'textDocument/references',
             referenceParams
           );
-          
+
           // If we get null or empty references, it might be due to indexing lag
           if (!result || result.length === 0) {
             throw new Error('No references found - possible indexing lag');
           }
-          
+
           return result;
         },
         {
@@ -326,12 +326,12 @@ Required parameters:
             'textDocument/prepareCallHierarchy',
             prepareParams
           );
-          
+
           // If we get null or empty items, it might be due to indexing lag
           if (!result || result.length === 0) {
             throw new Error('No call hierarchy items found - possible indexing lag');
           }
-          
+
           return result;
         },
         {

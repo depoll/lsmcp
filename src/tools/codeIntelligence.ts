@@ -169,12 +169,12 @@ Features: Result caching, AI-optimized filtering, relevance ranking.`;
           textDocument: { uri },
           position,
         });
-        
+
         // If we get null or empty hover, it might be due to indexing lag
         if (!result || !result.contents) {
           throw new Error('No hover information available - possible indexing lag');
         }
-        
+
         return result;
       },
       {
@@ -300,12 +300,12 @@ Features: Result caching, AI-optimized filtering, relevance ranking.`;
             position,
           }
         );
-        
+
         // If we get null or no signatures, it might be due to indexing lag
         if (!result || !result.signatures || result.signatures.length === 0) {
           throw new Error('No signature help available - possible indexing lag');
         }
-        
+
         return result;
       },
       {
@@ -416,13 +416,13 @@ Features: Result caching, AI-optimized filtering, relevance ranking.`;
         const result = await client.sendRequest<
           CompletionItem[] | { items: CompletionItem[] } | null
         >('textDocument/completion', completionParams);
-        
+
         // If we get null or empty completions, it might be due to indexing lag
-        const items = result ? (Array.isArray(result) ? result : result.items ?? []) : [];
+        const items = result ? (Array.isArray(result) ? result : (result.items ?? [])) : [];
         if (items.length === 0) {
           throw new Error('No completions available - possible indexing lag');
         }
-        
+
         return result;
       },
       {

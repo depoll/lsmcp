@@ -225,12 +225,12 @@ Features: Batch support, relevance sorting, grep fallback suggestions.`;
           );
 
           const processedResults = await this.processNavigationResponse(response, uri, maxResults);
-          
+
           // If we get no results, it might be due to indexing lag
           if (processedResults.length === 0) {
             throw new Error('No results found - possible indexing lag');
           }
-          
+
           return processedResults;
         },
         {
