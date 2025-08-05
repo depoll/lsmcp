@@ -18,6 +18,7 @@ import {
 import { logger as rootLogger } from '../utils/logger.js';
 import { createPositionSchema, USAGE_POSITION_DESCRIPTION } from './position-schema.js';
 import { FILE_URI_DESCRIPTION, BATCH_FILE_URI_DESCRIPTION } from './file-uri-description.js';
+import { retryWithBackoff } from '../utils/retry.js';
 
 // Configuration constants
 const DEFAULT_STREAM_BATCH_SIZE = 20;
@@ -236,10 +237,38 @@ Required parameters:
     });
 
     try {
-      const locations = await connection.sendRequest<Location[]>(
-        'textDocument/references',
-        referenceParams
-      );
+      const locations = await retryWithBackoff(
+        async () => {
+          const result = await connection.sendRequest<Location[]>(
+            'textDocument/references',
+            referenceParams
+          );
+          
+          // If we get null or empty references, it might be due to indexing lag
+          if (!result || result.length === 0) {
+            throw new Error('No references found - possible indexing lag');
+          }
+          
+          return result;
+        },
+        {
+          maxAttempts: 3,
+          delayMs: 1000,
+          backoffMultiplier: 2,
+          shouldRetry: (error: unknown) => {
+            if (error instanceof Error) {
+              return error.message.includes('No references found');
+            }
+            return false;
+          },
+          onRetry: (error: unknown, attempt: number) => {
+            logger.info(
+              { error, uri: params.uri, position: params.position, attempt },
+              'Retrying references due to possible indexing lag'
+            );
+          },
+        }
+      ).catch(() => null); // Fall back to null if all retries fail
 
       logger.info('LSP references response', {
         locationsCount: locations?.length || 0,
@@ -291,10 +320,38 @@ Required parameters:
 
     try {
       // First, prepare the call hierarchy
-      const items = await connection.sendRequest<CallHierarchyItem[] | null>(
-        'textDocument/prepareCallHierarchy',
-        prepareParams
-      );
+      const items = await retryWithBackoff(
+        async () => {
+          const result = await connection.sendRequest<CallHierarchyItem[] | null>(
+            'textDocument/prepareCallHierarchy',
+            prepareParams
+          );
+          
+          // If we get null or empty items, it might be due to indexing lag
+          if (!result || result.length === 0) {
+            throw new Error('No call hierarchy items found - possible indexing lag');
+          }
+          
+          return result;
+        },
+        {
+          maxAttempts: 3,
+          delayMs: 1000,
+          backoffMultiplier: 2,
+          shouldRetry: (error: unknown) => {
+            if (error instanceof Error) {
+              return error.message.includes('No call hierarchy items');
+            }
+            return false;
+          },
+          onRetry: (error: unknown, attempt: number) => {
+            logger.info(
+              { error, uri: params.uri, position: params.position, attempt },
+              'Retrying call hierarchy preparation due to possible indexing lag'
+            );
+          },
+        }
+      ).catch(() => null); // Fall back to null if all retries fail
 
       if (!items || items.length === 0) {
         logger.info('No call hierarchy items found');

@@ -22,6 +22,7 @@ import { createHash } from 'crypto';
 import { dirname, resolve } from 'path';
 import type { Logger } from 'pino';
 import { DOCUMENT_SCOPE_URI_DESCRIPTION } from './file-uri-description.js';
+import { retryWithBackoff } from '../utils/retry.js';
 
 // User-friendly symbol kinds
 export const USER_SYMBOL_KINDS = [
@@ -244,10 +245,38 @@ Features: Fuzzy matching, kind filtering, relevance scoring, grep fallback.`;
       textDocument: { uri: params.uri! },
     };
 
-    const response = await client.sendRequest<DocumentSymbol[] | SymbolInformation[] | null>(
-      'textDocument/documentSymbol',
-      docParams
-    );
+    const response = await retryWithBackoff(
+      async () => {
+        const result = await client.sendRequest<DocumentSymbol[] | SymbolInformation[] | null>(
+          'textDocument/documentSymbol',
+          docParams
+        );
+        
+        // If we get null or empty symbols, it might be due to indexing lag
+        if (!result || (Array.isArray(result) && result.length === 0)) {
+          throw new Error('No symbols found - possible indexing lag');
+        }
+        
+        return result;
+      },
+      {
+        maxAttempts: 3,
+        delayMs: 1000,
+        backoffMultiplier: 2,
+        shouldRetry: (error: unknown) => {
+          if (error instanceof Error) {
+            return error.message.includes('No symbols found');
+          }
+          return false;
+        },
+        onRetry: (error: unknown, attempt: number) => {
+          this.logger?.info(
+            { error, uri: params.uri, attempt },
+            'Retrying document symbols due to possible indexing lag'
+          );
+        },
+      }
+    ).catch(() => null); // Fall back to null if all retries fail
 
     if (!response) {
       return [];
@@ -349,78 +378,41 @@ Features: Fuzzy matching, kind filtering, relevance scoring, grep fallback.`;
       query: params.query,
     };
 
-    // Implement retry logic for TypeScript language server
-    // The server may need time to build its symbol index
-    let attempts = 0;
-    const maxAttempts = 5; // Increased from 3 for better resilience
-    const baseDelay = 500; // Start with 500ms
-    let lastError: unknown = null;
-    let foundAnySymbols = false;
-
-    while (attempts < maxAttempts) {
-      try {
-        const response = await client.sendRequest<SymbolInformation[] | null>(
+    const response = await retryWithBackoff(
+      async () => {
+        const result = await client.sendRequest<SymbolInformation[] | null>(
           'workspace/symbol',
           wsParams
         );
-
-        if (response && Array.isArray(response) && response.length > 0) {
-          return this.convertSymbolInformation(response);
+        
+        // If we get null or empty symbols, it might be due to indexing lag
+        if (!result || result.length === 0) {
+          throw new Error('No workspace symbols found - possible indexing lag');
         }
-
-        // Track if we've ever found symbols (helps distinguish between "not ready" vs "no matches")
-        if (response && Array.isArray(response)) {
-          foundAnySymbols = true;
-        }
-      } catch (error) {
-        lastError = error;
-        this.logger?.debug(
-          { query: params.query, attempt: attempts, error },
-          'Symbol search request failed'
-        );
+        
+        return result;
+      },
+      {
+        maxAttempts: 5, // Increased for workspace symbols which may take longer to index
+        delayMs: 500,
+        backoffMultiplier: 2,
+        shouldRetry: (error: unknown) => {
+          if (error instanceof Error) {
+            return error.message.includes('No workspace symbols found');
+          }
+          return false;
+        },
+        onRetry: (error: unknown, attempt: number) => {
+          this.logger?.info(
+            { error, query: params.query, attempt },
+            'Retrying workspace symbols due to possible indexing lag'
+          );
+        },
       }
+    ).catch(() => null); // Fall back to null if all retries fail
 
-      attempts++;
-
-      // Decide whether to retry
-      const shouldRetry =
-        attempts < maxAttempts &&
-        // Always retry on errors
-        (lastError !== null ||
-          // Retry if we haven't found any symbols yet (server might still be initializing)
-          !foundAnySymbols ||
-          // For exact queries, retry even if we got empty results
-          (!params.query.includes('*') && !params.query.includes('?')));
-
-      if (shouldRetry) {
-        // Exponential backoff: 500ms, 1s, 2s, 4s
-        const delay = baseDelay * Math.pow(2, attempts - 1);
-        this.logger?.debug(
-          {
-            query: params.query,
-            attempt: attempts,
-            nextDelay: delay,
-            hadError: lastError !== null,
-            foundAnySymbols,
-          },
-          'No symbols found, retrying after delay'
-        );
-        await new Promise((resolve) => setTimeout(resolve, delay));
-
-        // Clear error for next attempt
-        lastError = null;
-      } else {
-        // We've exhausted retries or got a definitive empty result
-        break;
-      }
-    }
-
-    // Log final outcome
-    if (attempts >= maxAttempts) {
-      this.logger?.warn(
-        { query: params.query, attempts, foundAnySymbols },
-        'Symbol search reached max retry attempts'
-      );
+    if (response && Array.isArray(response) && response.length > 0) {
+      return this.convertSymbolInformation(response);
     }
 
     return [];

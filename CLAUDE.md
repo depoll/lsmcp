@@ -178,3 +178,7 @@ Every PR must include:
 ## Version Control and Branching Strategy
 
 - **New work that will ultimately become a PR should happen in a branch**
+
+## Tooling Considerations
+
+- All of the idempotent (e.g. read-only) LSP tools should have retries built in to account for LSP indexing lag

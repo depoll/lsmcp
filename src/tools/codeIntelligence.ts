@@ -16,6 +16,7 @@ import { BatchableTool } from './base.js';
 import { createPositionSchema, SYMBOL_POSITION_DESCRIPTION } from './position-schema.js';
 import { FILE_URI_DESCRIPTION } from './file-uri-description.js';
 import type { LSPClient } from '../lsp/client-v2.js';
+import { retryWithBackoff } from '../utils/retry.js';
 
 // Configuration constants
 const CACHE_SIZE = 100;
@@ -162,10 +163,38 @@ Features: Result caching, AI-optimized filtering, relevance ranking.`;
       await this.ensureFileOpened(client, uri, language);
     }
 
-    const hover = await client.sendRequest<Hover | null>('textDocument/hover', {
-      textDocument: { uri },
-      position,
-    });
+    const hover = await retryWithBackoff(
+      async () => {
+        const result = await client.sendRequest<Hover | null>('textDocument/hover', {
+          textDocument: { uri },
+          position,
+        });
+        
+        // If we get null or empty hover, it might be due to indexing lag
+        if (!result || !result.contents) {
+          throw new Error('No hover information available - possible indexing lag');
+        }
+        
+        return result;
+      },
+      {
+        maxAttempts: 3,
+        delayMs: 1000,
+        backoffMultiplier: 2,
+        shouldRetry: (error: unknown) => {
+          if (error instanceof Error) {
+            return error.message.includes('No hover information');
+          }
+          return false;
+        },
+        onRetry: (error: unknown, attempt: number) => {
+          this.logger.info(
+            { error, uri, position, attempt },
+            'Retrying hover due to possible indexing lag'
+          );
+        },
+      }
+    ).catch(() => null); // Fall back to null if all retries fail
 
     if (hover) {
       await this.hoverCache.set(cacheKey, hover, uri);
@@ -262,13 +291,41 @@ Features: Result caching, AI-optimized filtering, relevance ranking.`;
     if (language === 'typescript' || language === 'javascript') {
       await this.ensureFileOpened(client, uri, language);
     }
-    const signatureHelp = await client.sendRequest<SignatureHelp | null>(
-      'textDocument/signatureHelp',
+    const signatureHelp = await retryWithBackoff(
+      async () => {
+        const result = await client.sendRequest<SignatureHelp | null>(
+          'textDocument/signatureHelp',
+          {
+            textDocument: { uri },
+            position,
+          }
+        );
+        
+        // If we get null or no signatures, it might be due to indexing lag
+        if (!result || !result.signatures || result.signatures.length === 0) {
+          throw new Error('No signature help available - possible indexing lag');
+        }
+        
+        return result;
+      },
       {
-        textDocument: { uri },
-        position,
+        maxAttempts: 3,
+        delayMs: 1000,
+        backoffMultiplier: 2,
+        shouldRetry: (error: unknown) => {
+          if (error instanceof Error) {
+            return error.message.includes('No signature help');
+          }
+          return false;
+        },
+        onRetry: (error: unknown, attempt: number) => {
+          this.logger.info(
+            { error, uri, position, attempt },
+            'Retrying signature help due to possible indexing lag'
+          );
+        },
       }
-    );
+    ).catch(() => null); // Fall back to null if all retries fail
 
     if (signatureHelp) {
       await this.signatureCache.set(cacheKey, signatureHelp, uri);
@@ -354,9 +411,38 @@ Features: Result caching, AI-optimized filtering, relevance ranking.`;
       };
     }
 
-    const completions = await client.sendRequest<
-      CompletionItem[] | { items: CompletionItem[] } | null
-    >('textDocument/completion', completionParams);
+    const completions = await retryWithBackoff(
+      async () => {
+        const result = await client.sendRequest<
+          CompletionItem[] | { items: CompletionItem[] } | null
+        >('textDocument/completion', completionParams);
+        
+        // If we get null or empty completions, it might be due to indexing lag
+        const items = result ? (Array.isArray(result) ? result : result.items ?? []) : [];
+        if (items.length === 0) {
+          throw new Error('No completions available - possible indexing lag');
+        }
+        
+        return result;
+      },
+      {
+        maxAttempts: 3,
+        delayMs: 1000,
+        backoffMultiplier: 2,
+        shouldRetry: (error: unknown) => {
+          if (error instanceof Error) {
+            return error.message.includes('No completions');
+          }
+          return false;
+        },
+        onRetry: (error: unknown, attempt: number) => {
+          this.logger.info(
+            { error, uri, position, attempt },
+            'Retrying completions due to possible indexing lag'
+          );
+        },
+      }
+    ).catch(() => null); // Fall back to null if all retries fail
 
     if (!completions) {
       return {

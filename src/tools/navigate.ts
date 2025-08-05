@@ -14,6 +14,7 @@ import { fileURLToPath } from 'url';
 import { relative, dirname } from 'path';
 import { createPositionSchema, NAVIGATION_POSITION_DESCRIPTION } from './position-schema.js';
 import { NAVIGATION_FILE_URI_DESCRIPTION } from './file-uri-description.js';
+import { retryWithBackoff } from '../utils/retry.js';
 
 // Configuration
 const CACHE_SIZE = 200;
@@ -213,15 +214,48 @@ Features: Batch support, relevance sorting, grep fallback suggestions.`;
     };
 
     try {
-      const response = await client.sendRequest<Location | Location[] | LocationLink[] | null>(
-        method,
+      const results = await retryWithBackoff(
+        async () => {
+          const response = await client.sendRequest<Location | Location[] | LocationLink[] | null>(
+            method,
+            {
+              textDocument: { uri },
+              position: lspPosition,
+            }
+          );
+
+          const processedResults = await this.processNavigationResponse(response, uri, maxResults);
+          
+          // If we get no results, it might be due to indexing lag
+          if (processedResults.length === 0) {
+            throw new Error('No results found - possible indexing lag');
+          }
+          
+          return processedResults;
+        },
         {
-          textDocument: { uri },
-          position: lspPosition,
+          maxAttempts: 3,
+          delayMs: 1000,
+          backoffMultiplier: 2,
+          shouldRetry: (error: unknown) => {
+            if (error instanceof Error) {
+              const message = error.message.toLowerCase();
+              return (
+                message.includes('no results') ||
+                message.includes('not indexed') ||
+                message.includes('indexing')
+              );
+            }
+            return false;
+          },
+          onRetry: (error: unknown, attempt: number) => {
+            this.logger.info(
+              { error, uri, position, target, attempt },
+              'Retrying navigation due to possible indexing lag'
+            );
+          },
         }
       );
-
-      const results = await this.processNavigationResponse(response, uri, maxResults);
 
       // Cache results
       if (results.length > 0) {
