@@ -106,6 +106,10 @@ export enum MCPErrorCode {
   NOT_SUPPORTED = 'ERR_NOT_SUPPORTED',
   /** Invalid parameters */
   INVALID_PARAMS = 'ERR_INVALID_PARAMS',
+  /** Internal server error */
+  InternalError = 'ERR_INTERNAL',
+  /** Invalid request */
+  InvalidRequest = 'ERR_INVALID_REQUEST',
 }
 
 /**
@@ -118,6 +122,21 @@ export interface MCPError {
   message: string;
   /** Additional error details */
   details?: unknown;
+}
+
+/**
+ * MCPError class for creating error instances
+ */
+export class MCPError extends Error {
+  code: MCPErrorCode;
+  details?: unknown;
+
+  constructor(code: MCPErrorCode, message: string, details?: unknown) {
+    super(message);
+    this.name = 'MCPError';
+    this.code = code;
+    this.details = details;
+  }
 }
 
 /**

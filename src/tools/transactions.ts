@@ -12,6 +12,7 @@ import { readFile, writeFile, mkdir, unlink, rename, stat } from 'fs/promises';
 import { dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { logger as baseLogger } from '../utils/logger.js';
+import { validateFilePath } from '../utils/path-security.js';
 
 const logger = baseLogger.child({ component: 'EditTransactionManager' });
 
@@ -63,6 +64,7 @@ export class TransactionError extends Error {
 export class EditTransactionManager {
   private activeTransactions = new Map<string, TransactionBackup>();
   private logger = logger;
+  private workspaceRoot = process.cwd();
 
   async executeTransaction(
     edits: WorkspaceEdit[],
@@ -132,8 +134,11 @@ export class EditTransactionManager {
     for (const uri of affectedUris) {
       try {
         const filePath = fileURLToPath(uri);
-        const exists = await this.fileExists(filePath);
+        
+        // Validate path is within workspace
+        validateFilePath(filePath, this.workspaceRoot);
 
+        const exists = await this.fileExists(filePath);
         if (exists) {
           const content = await readFile(filePath, 'utf-8');
           backup.files.set(uri, {
@@ -364,11 +369,18 @@ export class EditTransactionManager {
     results: ApplyWorkspaceEditResult[],
     transactionId: string
   ): TransactionResult {
+    // Calculate the actual number of edits from the results
+    // Each result may contain multiple edits (editCount property)
+    const totalChanges = results.reduce((sum, result) => {
+      // If editCount is available, use it; otherwise count as 1 edit
+      return sum + ((result as any).editCount || 1);
+    }, 0);
+
     return {
       success: true,
       transactionId,
       filesModified: results.filter((r) => r.applied).length,
-      totalChanges: results.length,
+      totalChanges,
       changes: [],
     };
   }
