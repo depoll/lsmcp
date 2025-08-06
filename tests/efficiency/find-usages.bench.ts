@@ -378,8 +378,8 @@ describe('AuthService', () => {
     const result = await tool.execute(params);
     const endTime = Date.now();
 
-    expect(result.references).toBeDefined();
-    expect(result.references!.length).toBeGreaterThan(0);
+    expect(result.data.references).toBeDefined();
+    expect(result.data.references!.length).toBeGreaterThan(0);
 
     // Calculate efficiency metrics
     const comparison: EfficiencyComparison = {
@@ -398,7 +398,7 @@ describe('AuthService', () => {
       },
       lspApproach: {
         operations: ['findUsages({ type: "references" })'],
-        contextTokens: result.references!.length * 50, // ~50 tokens per reference
+        contextTokens: result.data.references!.length * 50, // ~50 tokens per reference
         accuracy: 1.0,
         timeEstimate: `${endTime - startTime}ms`,
       },
@@ -429,7 +429,7 @@ describe('AuthService', () => {
 
     // Verify results include various types of references
     const fileTypes = new Set(
-      result.references!.map((ref) => ref.uri.split('/').pop()!.split('.')[0])
+      result.data.references!.map((ref) => ref.uri.split('/').pop()!.split('.')[0])
     );
     expect(fileTypes.size).toBeGreaterThan(1); // References in multiple files
   }, 30000);
@@ -447,7 +447,7 @@ describe('AuthService', () => {
     const result = await tool.execute(params);
     const endTime = Date.now();
 
-    expect(result.hierarchy).toBeDefined();
+    expect(result.data.hierarchy).toBeDefined();
 
     // Count total calls in hierarchy
     const countCalls = (hierarchy: { calls?: unknown[] }): number => {
@@ -460,7 +460,7 @@ describe('AuthService', () => {
       return count;
     };
 
-    const totalCalls = countCalls(result.hierarchy!) - 1; // Subtract the root
+    const totalCalls = countCalls(result.data.hierarchy!) - 1; // Subtract the root
 
     const comparison: EfficiencyComparison = {
       scenario: 'Find call hierarchy for authenticate method',
@@ -534,8 +534,8 @@ describe('AuthService', () => {
     const result = await tool.execute(params);
     const endTime = Date.now();
 
-    expect(result.references).toBeDefined();
-    expect(result.references!.length).toBeGreaterThan(0);
+    expect(result.data.references).toBeDefined();
+    expect(result.data.references!.length).toBeGreaterThan(0);
 
     const comparison: EfficiencyComparison = {
       scenario: 'Batch find references for JWT utilities',
@@ -554,7 +554,7 @@ describe('AuthService', () => {
       },
       lspApproach: {
         operations: ['findUsages({ batch: [...] })'],
-        contextTokens: result.references!.length * 50,
+        contextTokens: result.data.references!.length * 50,
         accuracy: 1.0,
         timeEstimate: `${endTime - startTime}ms`,
       },
@@ -585,11 +585,11 @@ describe('AuthService', () => {
 
     // Verify deduplication worked
     const uniqueLocations = new Set(
-      result.references!.map(
+      result.data.references!.map(
         (ref) => `${ref.uri}:${ref.range.start.line}:${ref.range.start.character}`
       )
     );
-    expect(uniqueLocations.size).toBe(result.references!.length);
+    expect(uniqueLocations.size).toBe(result.data.references!.length);
   }, 30000);
 
   it('should stream large reference results efficiently', async () => {

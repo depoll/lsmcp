@@ -1,4 +1,4 @@
-import { LSPClientV2 as LSPClient } from './client-v2.js';
+import { LSPClient } from './client-v2.js';
 import { LanguageServerConfig, HealthStatus, ConnectionPoolOptions } from '../types/lsp.js';
 import { LanguageDetector, createLanguageServerProvider } from '../languages/index.js';
 import { existsSync } from 'fs';

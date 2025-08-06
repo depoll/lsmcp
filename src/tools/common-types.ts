@@ -106,18 +106,25 @@ export enum MCPErrorCode {
   NOT_SUPPORTED = 'ERR_NOT_SUPPORTED',
   /** Invalid parameters */
   INVALID_PARAMS = 'ERR_INVALID_PARAMS',
+  /** Internal server error */
+  InternalError = 'ERR_INTERNAL',
+  /** Invalid request */
+  InvalidRequest = 'ERR_INVALID_REQUEST',
 }
 
 /**
- * Standard MCP error structure
+ * MCPError class for creating error instances
  */
-export interface MCPError {
-  /** Error code for programmatic handling */
+export class MCPError extends Error {
   code: MCPErrorCode;
-  /** Human-readable error message */
-  message: string;
-  /** Additional error details */
   details?: unknown;
+
+  constructor(code: MCPErrorCode, message: string, details?: unknown) {
+    super(message);
+    this.name = 'MCPError';
+    this.code = code;
+    this.details = details;
+  }
 }
 
 /**
@@ -178,4 +185,20 @@ export function isRange(value: unknown): value is Range {
     isPosition((value as Range).start) &&
     isPosition((value as Range).end)
   );
+}
+
+/**
+ * MCP Tool Annotations for tool metadata
+ */
+export interface ToolAnnotations {
+  /** Human-readable title for the tool */
+  title: string;
+  /** Whether this tool only reads data */
+  readOnlyHint: boolean;
+  /** Whether this tool modifies or deletes data */
+  destructiveHint: boolean;
+  /** Whether multiple calls produce the same result */
+  idempotentHint: boolean;
+  /** Whether this tool accesses external resources */
+  openWorldHint: boolean;
 }

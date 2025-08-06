@@ -171,20 +171,20 @@ export function ackermann(m: number, n: number): number {
 
       const result = await tool.execute(params);
 
-      expect(result.references).toBeDefined();
+      expect(result.data.references).toBeDefined();
 
-      expect(result.references!.length).toBeGreaterThan(0);
+      expect(result.data.references!.length).toBeGreaterThan(0);
 
       // Should find references in both math.ts and app.ts
-      const fileUris = new Set(result.references!.map((ref) => ref.uri));
+      const fileUris = new Set(result.data.references!.map((ref) => ref.uri));
       expect(fileUris.size).toBe(2);
 
       // Verify we found the declaration
-      const declaration = result.references!.find((ref) => ref.kind === 'declaration');
+      const declaration = result.data.references!.find((ref) => ref.kind === 'declaration');
       expect(declaration).toBeDefined();
 
       // Verify we found usage in app.ts
-      const appUsages = result.references!.filter((ref) => ref.uri.endsWith('app.ts'));
+      const appUsages = result.data.references!.filter((ref) => ref.uri.endsWith('app.ts'));
       expect(appUsages.length).toBeGreaterThan(0);
     }, 30000);
 
@@ -199,7 +199,7 @@ export function ackermann(m: number, n: number): number {
       const result = await tool.execute(params);
 
       // Should not include the declaration itself
-      const declaration = result.references!.find(
+      const declaration = result.data.references!.find(
         (ref) => ref.uri.endsWith('math.ts') && ref.range.start.line === 0
       );
       expect(declaration).toBeUndefined();
@@ -215,10 +215,10 @@ export function ackermann(m: number, n: number): number {
 
       const result = await tool.execute(params);
 
-      expect(result.references).toBeDefined();
+      expect(result.data.references).toBeDefined();
 
       // Should find the class instantiation in app.ts
-      const instantiation = result.references!.find(
+      const instantiation = result.data.references!.find(
         (ref) => ref.uri.endsWith('app.ts') && ref.preview?.includes('new Calculator')
       );
       expect(instantiation).toBeDefined();
@@ -234,8 +234,8 @@ export function ackermann(m: number, n: number): number {
 
       const result = await tool.execute(params);
 
-      expect(result.references!.length).toBeLessThanOrEqual(3);
-      expect(result.total).toBeLessThanOrEqual(3);
+      expect(result.data.references!.length).toBeLessThanOrEqual(3);
+      expect(result.data.total).toBeLessThanOrEqual(3);
     }, 30000);
   });
 
@@ -251,13 +251,13 @@ export function ackermann(m: number, n: number): number {
 
       const result = await tool.execute(params);
 
-      expect(result.hierarchy).toBeDefined();
-      expect(result.hierarchy!.name).toBe('add');
-      expect(result.hierarchy!.calls).toBeDefined();
-      expect(result.hierarchy!.calls!.length).toBeGreaterThan(0);
+      expect(result.data.hierarchy).toBeDefined();
+      expect(result.data.hierarchy!.name).toBe('add');
+      expect(result.data.hierarchy!.calls).toBeDefined();
+      expect(result.data.hierarchy!.calls!.length).toBeGreaterThan(0);
 
       // Should find calls from calculate function and Calculator.add method
-      const callerNames = result.hierarchy!.calls!.map((call) => call.name);
+      const callerNames = result.data.hierarchy!.calls!.map((call) => call.name);
       expect(callerNames).toContain('calculate');
     }, 30000);
 
@@ -272,12 +272,12 @@ export function ackermann(m: number, n: number): number {
 
       const result = await tool.execute(params);
 
-      expect(result.hierarchy).toBeDefined();
-      expect(result.hierarchy!.name).toBe('calculate');
-      expect(result.hierarchy!.calls).toBeDefined();
+      expect(result.data.hierarchy).toBeDefined();
+      expect(result.data.hierarchy!.name).toBe('calculate');
+      expect(result.data.hierarchy!.calls).toBeDefined();
 
       // Should find calls to add and multiply
-      const calleeNames = result.hierarchy!.calls!.map((call) => call.name);
+      const calleeNames = result.data.hierarchy!.calls!.map((call) => call.name);
       expect(calleeNames).toContain('add');
       expect(calleeNames).toContain('multiply');
     }, 30000);
@@ -293,11 +293,11 @@ export function ackermann(m: number, n: number): number {
 
       const result = await tool.execute(params);
 
-      expect(result.hierarchy).toBeDefined();
-      expect(result.hierarchy!.name).toBe('factorial');
+      expect(result.data.hierarchy).toBeDefined();
+      expect(result.data.hierarchy!.name).toBe('factorial');
 
       // Should find the recursive call but not infinitely recurse
-      const recursiveCall = result.hierarchy!.calls!.find((call) => call.name === 'factorial');
+      const recursiveCall = result.data.hierarchy!.calls!.find((call) => call.name === 'factorial');
       expect(recursiveCall).toBeDefined();
 
       // The recursive call should not have more recursive calls (cycle detection)
@@ -325,14 +325,14 @@ export function ackermann(m: number, n: number): number {
 
       const result = await tool.execute(params);
 
-      expect(result.references).toBeDefined();
+      expect(result.data.references).toBeDefined();
 
       // Should find references for both functions
-      const uniqueUris = new Set(result.references!.map((ref) => ref.uri));
+      const uniqueUris = new Set(result.data.references!.map((ref) => ref.uri));
       expect(uniqueUris.size).toBeGreaterThanOrEqual(2);
 
       // Should deduplicate if same location appears for both
-      const locationKeys = result.references!.map(
+      const locationKeys = result.data.references!.map(
         (ref) => `${ref.uri}:${ref.range.start.line}:${ref.range.start.character}`
       );
       const uniqueLocations = new Set(locationKeys);
@@ -402,7 +402,7 @@ export function ackermann(m: number, n: number): number {
       // Should either return empty results or throw a meaningful error
       try {
         const result = await tool.execute(params);
-        expect(result.references).toHaveLength(0);
+        expect(result.data.references).toHaveLength(0);
       } catch (error) {
         expect(error).toBeDefined();
       }
@@ -416,7 +416,7 @@ export function ackermann(m: number, n: number): number {
       });
 
       const result = await tool.execute(params);
-      expect(result.references).toHaveLength(0);
+      expect(result.data.references).toHaveLength(0);
     }, 30000);
   });
 });

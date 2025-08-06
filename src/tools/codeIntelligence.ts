@@ -15,7 +15,9 @@ import { getLanguageFromUri } from '../utils/languages.js';
 import { BatchableTool } from './base.js';
 import { createPositionSchema, SYMBOL_POSITION_DESCRIPTION } from './position-schema.js';
 import { FILE_URI_DESCRIPTION } from './file-uri-description.js';
-import type { LSPClientV2 } from '../lsp/client-v2.js';
+import type { LSPClient } from '../lsp/client-v2.js';
+import { retryWithBackoff } from '../utils/retry.js';
+import { StandardResult, MCPError, MCPErrorCode, ToolAnnotations } from './common-types.js';
 
 // Configuration constants
 const CACHE_SIZE = 100;
@@ -85,7 +87,8 @@ interface CompletionResult {
   }>;
 }
 
-type CodeIntelligenceResult = HoverResult | SignatureResult | CompletionResult;
+type CodeIntelligenceResultData = HoverResult | SignatureResult | CompletionResult;
+type CodeIntelligenceResult = StandardResult<CodeIntelligenceResultData>;
 
 export class CodeIntelligenceTool extends BatchableTool<
   CodeIntelligenceParams,
@@ -102,6 +105,64 @@ Types:
 Features: Result caching, AI-optimized filtering, relevance ranking.`;
   readonly inputSchema = CodeIntelligenceParamsSchema;
 
+  /** Output schema for MCP tool discovery */
+  readonly outputSchema = z.object({
+    data: z.discriminatedUnion('type', [
+      z.object({
+        type: z.literal('hover'),
+        content: z.object({
+          type: z.string().optional(),
+          documentation: z.string().optional(),
+          examples: z.string().optional(),
+        }),
+      }),
+      z.object({
+        type: z.literal('signature'),
+        signatures: z.array(
+          z.object({
+            label: z.string(),
+            parameters: z.array(
+              z.object({
+                label: z.string(),
+                doc: z.string().optional(),
+              })
+            ),
+            activeParameter: z.number().optional(),
+          })
+        ),
+      }),
+      z.object({
+        type: z.literal('completion'),
+        items: z.array(
+          z.object({
+            label: z.string(),
+            kind: z.string(),
+            detail: z.string().optional(),
+            documentation: z.string().optional(),
+            insertText: z.string().optional(),
+          })
+        ),
+      }),
+    ]),
+    metadata: z
+      .object({
+        processingTime: z.number().optional(),
+        cached: z.boolean().optional(),
+      })
+      .optional(),
+    fallback: z.string().optional(),
+    error: z.string().optional(),
+  });
+
+  /** MCP tool annotations */
+  readonly annotations: ToolAnnotations = {
+    title: 'Get Code Intelligence',
+    readOnlyHint: true,
+    destructiveHint: false,
+    idempotentHint: true,
+    openWorldHint: false,
+  };
+
   private hoverCache: FileAwareLRUCache<Hover>;
   private signatureCache: FileAwareLRUCache<SignatureHelp>;
 
@@ -113,6 +174,7 @@ Features: Result caching, AI-optimized filtering, relevance ranking.`;
   }
 
   async execute(params: CodeIntelligenceParams): Promise<CodeIntelligenceResult> {
+    const startTime = Date.now();
     const { uri, position, type } = params;
     const lspPosition: Position = {
       line: position.line,
@@ -122,19 +184,80 @@ Features: Result caching, AI-optimized filtering, relevance ranking.`;
     this.logger.info({ uri, position, type }, 'Executing code intelligence request');
 
     try {
+      let result: CodeIntelligenceResultData;
+      let cached = false;
+
       switch (type) {
-        case 'hover':
-          return await this.getHover(uri, lspPosition);
-        case 'signature':
-          return await this.getSignatureHelp(uri, lspPosition);
+        case 'hover': {
+          const cacheKey = `${uri}:${position.line}:${position.character}`;
+          const cachedHover = await this.hoverCache.get(cacheKey, uri);
+          cached = !!cachedHover;
+          result = await this.getHover(uri, lspPosition);
+          break;
+        }
+        case 'signature': {
+          const cacheKey = `${uri}:${position.line}:${position.character}`;
+          const cachedSig = await this.signatureCache.get(cacheKey, uri);
+          cached = !!cachedSig;
+          result = await this.getSignatureHelp(uri, lspPosition);
+          break;
+        }
         case 'completion':
-          return await this.getCompletions(uri, lspPosition, params);
+          result = await this.getCompletions(uri, lspPosition, params);
+          break;
         default:
-          throw new Error(`Unknown intelligence type: ${String(type)}`);
+          throw new MCPError(
+            MCPErrorCode.INVALID_PARAMS,
+            `Unknown intelligence type: ${String(type)}`
+          );
       }
+
+      return {
+        data: result,
+        metadata: {
+          processingTime: Date.now() - startTime,
+          cached,
+        },
+      };
     } catch (error) {
       this.logger.error({ error, uri, position, type }, 'Code intelligence request failed');
-      throw error;
+
+      return {
+        data: this.getEmptyResult(type),
+        metadata: {
+          processingTime: Date.now() - startTime,
+          cached: false,
+        },
+        error: error instanceof Error ? error.message : String(error),
+        fallback: this.getFallbackSuggestion(type, uri),
+      };
+    }
+  }
+
+  private getEmptyResult(type: string): CodeIntelligenceResultData {
+    switch (type) {
+      case 'hover':
+        return { type: 'hover', content: {} };
+      case 'signature':
+        return { type: 'signature', signatures: [] };
+      case 'completion':
+        return { type: 'completion', items: [] };
+      default:
+        return { type: 'hover', content: {} };
+    }
+  }
+
+  private getFallbackSuggestion(type: string, uri: string): string {
+    const filename = uri.split('/').pop() || 'file';
+    switch (type) {
+      case 'hover':
+        return `No hover information available. Try: grep -n "symbol_name" ${filename}`;
+      case 'signature':
+        return `No signature help available. Try: grep -A 5 "function_name" ${filename}`;
+      case 'completion':
+        return `No completions available. Try: grep "^\\s*(function|class|const|let|var)" ${filename}`;
+      default:
+        return 'Code intelligence unavailable. Consider using grep or manual inspection.';
     }
   }
 
@@ -162,9 +285,43 @@ Features: Result caching, AI-optimized filtering, relevance ranking.`;
       await this.ensureFileOpened(client, uri, language);
     }
 
-    const hover = await client.sendRequest<Hover | null>('textDocument/hover', {
-      textDocument: { uri },
-      position,
+    const hover = await retryWithBackoff(
+      async () => {
+        const result = await client.sendRequest<Hover | null>('textDocument/hover', {
+          textDocument: { uri },
+          position,
+        });
+
+        // If we get null or empty hover, it might be due to indexing lag
+        if (!result || !result.contents) {
+          throw new Error('No hover information available - possible indexing lag');
+        }
+
+        return result;
+      },
+      {
+        maxAttempts: 3,
+        delayMs: 1000,
+        backoffMultiplier: 2,
+        shouldRetry: (error: unknown) => {
+          if (error instanceof Error) {
+            return error.message.includes('No hover information');
+          }
+          return false;
+        },
+        onRetry: (error: unknown, attempt: number) => {
+          this.logger.info(
+            { error, uri, position, attempt },
+            'Retrying hover due to possible indexing lag'
+          );
+        },
+      }
+    ).catch((error: unknown) => {
+      // Don't swallow LSP errors - let them propagate
+      if (error instanceof Error && !error.message.includes('No hover information available')) {
+        throw error;
+      }
+      return null; // Only return null for "no hover" case
     });
 
     if (hover) {
@@ -262,13 +419,47 @@ Features: Result caching, AI-optimized filtering, relevance ranking.`;
     if (language === 'typescript' || language === 'javascript') {
       await this.ensureFileOpened(client, uri, language);
     }
-    const signatureHelp = await client.sendRequest<SignatureHelp | null>(
-      'textDocument/signatureHelp',
+    const signatureHelp = await retryWithBackoff(
+      async () => {
+        const result = await client.sendRequest<SignatureHelp | null>(
+          'textDocument/signatureHelp',
+          {
+            textDocument: { uri },
+            position,
+          }
+        );
+
+        // If we get null or no signatures, it might be due to indexing lag
+        if (!result || !result.signatures || result.signatures.length === 0) {
+          throw new Error('No signature help available - possible indexing lag');
+        }
+
+        return result;
+      },
       {
-        textDocument: { uri },
-        position,
+        maxAttempts: 3,
+        delayMs: 1000,
+        backoffMultiplier: 2,
+        shouldRetry: (error: unknown) => {
+          if (error instanceof Error) {
+            return error.message.includes('No signature help');
+          }
+          return false;
+        },
+        onRetry: (error: unknown, attempt: number) => {
+          this.logger.info(
+            { error, uri, position, attempt },
+            'Retrying signature help due to possible indexing lag'
+          );
+        },
       }
-    );
+    ).catch((error: unknown) => {
+      // Don't swallow LSP errors - let them propagate
+      if (error instanceof Error && !error.message.includes('No signature help available')) {
+        throw error;
+      }
+      return null; // Only return null for "no signature" case
+    });
 
     if (signatureHelp) {
       await this.signatureCache.set(cacheKey, signatureHelp, uri);
@@ -354,9 +545,44 @@ Features: Result caching, AI-optimized filtering, relevance ranking.`;
       };
     }
 
-    const completions = await client.sendRequest<
-      CompletionItem[] | { items: CompletionItem[] } | null
-    >('textDocument/completion', completionParams);
+    const completions = await retryWithBackoff(
+      async () => {
+        const result = await client.sendRequest<
+          CompletionItem[] | { items: CompletionItem[] } | null
+        >('textDocument/completion', completionParams);
+
+        // If we get null or empty completions, it might be due to indexing lag
+        const items = result ? (Array.isArray(result) ? result : (result.items ?? [])) : [];
+        if (items.length === 0) {
+          throw new Error('No completions available - possible indexing lag');
+        }
+
+        return result;
+      },
+      {
+        maxAttempts: 3,
+        delayMs: 1000,
+        backoffMultiplier: 2,
+        shouldRetry: (error: unknown) => {
+          if (error instanceof Error) {
+            return error.message.includes('No completions');
+          }
+          return false;
+        },
+        onRetry: (error: unknown, attempt: number) => {
+          this.logger.info(
+            { error, uri, position, attempt },
+            'Retrying completions due to possible indexing lag'
+          );
+        },
+      }
+    ).catch((error: unknown) => {
+      // Don't swallow LSP errors - let them propagate
+      if (error instanceof Error && !error.message.includes('No completions available')) {
+        throw error;
+      }
+      return null; // Only return null for "no completions" case
+    });
 
     if (!completions) {
       return {
@@ -507,11 +733,7 @@ Features: Result caching, AI-optimized filtering, relevance ranking.`;
     }
   }
 
-  private async ensureFileOpened(
-    client: LSPClientV2,
-    uri: string,
-    language: string
-  ): Promise<void> {
+  private async ensureFileOpened(client: LSPClient, uri: string, language: string): Promise<void> {
     try {
       const filePath = uri.replace('file://', '');
       const fs = await import('fs/promises');

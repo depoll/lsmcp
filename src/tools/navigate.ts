@@ -14,6 +14,8 @@ import { fileURLToPath } from 'url';
 import { relative, dirname } from 'path';
 import { createPositionSchema, NAVIGATION_POSITION_DESCRIPTION } from './position-schema.js';
 import { NAVIGATION_FILE_URI_DESCRIPTION } from './file-uri-description.js';
+import { retryWithBackoff } from '../utils/retry.js';
+import { StandardResult, MCPError, MCPErrorCode, ToolAnnotations } from './common-types.js';
 
 // Configuration
 const CACHE_SIZE = 200;
@@ -80,10 +82,11 @@ interface NavigateResultItem {
   kind?: string; // 'definition' | 'implementation' | 'type'
 }
 
-interface NavigateResult {
+interface NavigateResultData {
   results: NavigateResultItem[];
-  fallbackSuggestion?: string;
 }
+
+type NavigateResult = StandardResult<NavigateResultData>;
 
 export class NavigateTool extends BatchableTool<NavigateParams, NavigateResult> {
   readonly name = 'navigate';
@@ -97,6 +100,46 @@ Targets:
 Features: Batch support, relevance sorting, grep fallback suggestions.`;
   readonly inputSchema = NavigateParamsSchema;
 
+  /** Output schema for MCP tool discovery */
+  readonly outputSchema = z.object({
+    data: z.object({
+      results: z.array(
+        z.object({
+          uri: z.string().describe('File URI of the navigation target'),
+          range: z.object({
+            start: z.object({
+              line: z.number(),
+              character: z.number(),
+            }),
+            end: z.object({
+              line: z.number(),
+              character: z.number(),
+            }),
+          }),
+          preview: z.string().optional().describe('Code preview at the target location'),
+          kind: z.string().optional().describe('Type of navigation result'),
+        })
+      ),
+    }),
+    metadata: z
+      .object({
+        processingTime: z.number().optional(),
+        cached: z.boolean().optional(),
+      })
+      .optional(),
+    fallback: z.string().optional(),
+    error: z.string().optional(),
+  });
+
+  /** MCP tool annotations */
+  readonly annotations: ToolAnnotations = {
+    title: 'Navigate to Symbol',
+    readOnlyHint: true,
+    destructiveHint: false,
+    idempotentHint: true,
+    openWorldHint: false,
+  };
+
   private cache: FileAwareLRUCache<NavigateResultItem[]>;
 
   constructor(clientManager: ConnectionPool) {
@@ -105,46 +148,80 @@ Features: Batch support, relevance sorting, grep fallback suggestions.`;
   }
 
   async execute(params: NavigateParams): Promise<NavigateResult> {
-    // Handle batch requests
-    if (params.batch !== undefined) {
-      if (params.batch.length === 0) {
-        throw new Error('Batch navigation requires at least one navigation request');
-      }
-      return this.executeBatchNavigation(params.batch, params.maxResults);
-    }
-
-    // Single navigation request
-    if (!params.uri || !params.position || !params.target) {
-      throw new Error('Single navigation requires uri, position, and target');
-    }
-
-    const singleParams: SingleNavigateParams = {
-      uri: params.uri,
-      position: params.position,
-      target: params.target,
-    };
+    const startTime = Date.now();
 
     try {
-      const results = await this.navigateSingle(singleParams, params.maxResults);
+      // Handle batch requests
+      if (params.batch !== undefined) {
+        if (params.batch.length === 0) {
+          throw new MCPError(
+            MCPErrorCode.INVALID_PARAMS,
+            'Batch navigation requires at least one navigation request'
+          );
+        }
+        return this.executeBatchNavigation(params.batch, params.maxResults, startTime);
+      }
+
+      // Single navigation request
+      if (!params.uri || !params.position || !params.target) {
+        throw new MCPError(
+          MCPErrorCode.INVALID_PARAMS,
+          'Single navigation requires uri, position, and target'
+        );
+      }
+
+      const singleParams: SingleNavigateParams = {
+        uri: params.uri,
+        position: params.position,
+        target: params.target,
+      };
+
+      const cacheKey = `${singleParams.uri}:${singleParams.position.line}:${singleParams.position.character}:${singleParams.target}`;
+      const cached = await this.cache.get(cacheKey, singleParams.uri);
+
+      let results: NavigateResultItem[];
+      let isCached = false;
+
+      if (cached) {
+        results = cached;
+        isCached = true;
+      } else {
+        results = await this.navigateSingle(singleParams, params.maxResults);
+        // Cache will be set inside navigateSingle
+      }
 
       return {
-        results,
-        fallbackSuggestion:
-          results.length === 0 ? this.getFallbackSuggestion(singleParams) : undefined,
+        data: { results },
+        metadata: {
+          processingTime: Date.now() - startTime,
+          cached: isCached,
+        },
+        fallback: results.length === 0 ? this.getFallbackSuggestion(singleParams) : undefined,
       };
     } catch (error) {
-      // For single navigation, return empty results with fallback suggestion
-      this.logger.debug({ error, params: singleParams }, 'Single navigation failed');
+      this.logger.debug({ error, params }, 'Navigation failed');
       return {
-        results: [],
-        fallbackSuggestion: this.getFallbackSuggestion(singleParams),
+        data: { results: [] },
+        metadata: {
+          processingTime: Date.now() - startTime,
+          cached: false,
+        },
+        error: error instanceof Error ? error.message : String(error),
+        fallback: this.getFallbackSuggestion(
+          params.batch?.[0] || {
+            uri: params.uri || '',
+            position: params.position || { line: 0, character: 0 },
+            target: params.target || 'definition',
+          }
+        ),
       };
     }
   }
 
   private async executeBatchNavigation(
     batch: SingleNavigateParams[],
-    maxResults?: number
+    maxResults: number | undefined,
+    startTime: number
   ): Promise<NavigateResult> {
     this.logger.info({ count: batch.length }, 'Executing batch navigation');
 
@@ -173,8 +250,12 @@ Features: Batch support, relevance sorting, grep fallback suggestions.`;
       failedRequests.length > 0 || (allResults.length === 0 && batch.length > 0);
 
     return {
-      results: allResults,
-      fallbackSuggestion: shouldProvideFallback
+      data: { results: allResults },
+      metadata: {
+        processingTime: Date.now() - startTime,
+        cached: false,
+      },
+      fallback: shouldProvideFallback
         ? this.getFallbackSuggestion(failedRequests[0] || batch[0]!)
         : undefined,
     };
@@ -213,15 +294,48 @@ Features: Batch support, relevance sorting, grep fallback suggestions.`;
     };
 
     try {
-      const response = await client.sendRequest<Location | Location[] | LocationLink[] | null>(
-        method,
+      const results = await retryWithBackoff(
+        async () => {
+          const response = await client.sendRequest<Location | Location[] | LocationLink[] | null>(
+            method,
+            {
+              textDocument: { uri },
+              position: lspPosition,
+            }
+          );
+
+          const processedResults = await this.processNavigationResponse(response, uri, maxResults);
+
+          // If we get no results, it might be due to indexing lag
+          if (processedResults.length === 0) {
+            throw new Error('No results found - possible indexing lag');
+          }
+
+          return processedResults;
+        },
         {
-          textDocument: { uri },
-          position: lspPosition,
+          maxAttempts: 3,
+          delayMs: 1000,
+          backoffMultiplier: 2,
+          shouldRetry: (error: unknown) => {
+            if (error instanceof Error) {
+              const message = error.message.toLowerCase();
+              return (
+                message.includes('no results') ||
+                message.includes('not indexed') ||
+                message.includes('indexing')
+              );
+            }
+            return false;
+          },
+          onRetry: (error: unknown, attempt: number) => {
+            this.logger.info(
+              { error, uri, position, target, attempt },
+              'Retrying navigation due to possible indexing lag'
+            );
+          },
         }
       );
-
-      const results = await this.processNavigationResponse(response, uri, maxResults);
 
       // Cache results
       if (results.length > 0) {

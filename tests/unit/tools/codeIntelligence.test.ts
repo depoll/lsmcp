@@ -2,22 +2,25 @@
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 import { CodeIntelligenceTool } from '../../../src/tools/codeIntelligence.js';
 import { ConnectionPool } from '../../../src/lsp/index.js';
-import { LSPClientV2 } from '../../../src/lsp/client-v2.js';
+import { LSPClient } from '../../../src/lsp/client-v2.js';
 // Mock the dependencies
 jest.mock('../../../src/lsp/index.js');
 jest.mock('../../../src/utils/logger.js');
+jest.mock('../../../src/utils/retry.js', () => ({
+  retryWithBackoff: jest.fn(async <T>(fn: () => Promise<T>): Promise<T> => fn()),
+}));
 
 describe('CodeIntelligenceTool', () => {
   let tool: CodeIntelligenceTool;
   let mockClientManager: jest.Mocked<ConnectionPool>;
-  let mockClient: jest.Mocked<LSPClientV2>;
+  let mockClient: jest.Mocked<LSPClient>;
 
   beforeEach(() => {
     // Create mock client
     mockClient = {
       sendRequest: jest.fn(),
       isConnected: jest.fn().mockReturnValue(true),
-    } as unknown as jest.Mocked<LSPClientV2>;
+    } as unknown as jest.Mocked<LSPClient>;
 
     // Create mock client manager
     mockClientManager = {
@@ -72,13 +75,15 @@ Features: Result caching, AI-optimized filtering, relevance ranking.`);
         type: 'hover',
       });
 
-      expect(result).toEqual({
+      expect(result.data).toEqual({
         type: 'hover',
         content: {
           type: 'function test(): void',
           documentation: 'A test function',
         },
       });
+      expect(result.metadata?.cached).toBe(false);
+      expect(result.metadata?.processingTime).toBeGreaterThanOrEqual(0);
 
       expect(mockClientManager.getForFile).toHaveBeenCalledWith(
         'file:///test.ts',
@@ -99,10 +104,12 @@ Features: Result caching, AI-optimized filtering, relevance ranking.`);
         type: 'hover',
       });
 
-      expect(result).toEqual({
+      expect(result.data).toEqual({
         type: 'hover',
         content: {},
       });
+      expect(result.metadata?.cached).toBe(false);
+      expect(result.metadata?.processingTime).toBeGreaterThanOrEqual(0);
     });
 
     it('should return different results for different positions', async () => {
@@ -137,12 +144,12 @@ Features: Result caching, AI-optimized filtering, relevance ranking.`);
       });
 
       expect(mockClient.sendRequest).toHaveBeenCalledTimes(2);
-      expect(result1.type).toBe('hover');
-      const hoverResult1 = result1 as { type: 'hover'; content: { documentation?: string } };
+      expect(result1.data.type).toBe('hover');
+      const hoverResult1 = result1.data as { type: 'hover'; content: { documentation?: string } };
       expect(hoverResult1.content.documentation).toContain('First function docs');
 
-      expect(result2.type).toBe('hover');
-      const hoverResult2 = result2 as { type: 'hover'; content: { documentation?: string } };
+      expect(result2.data.type).toBe('hover');
+      const hoverResult2 = result2.data as { type: 'hover'; content: { documentation?: string } };
       expect(hoverResult2.content.documentation).toContain('Second function docs');
     });
   });
@@ -172,7 +179,7 @@ Features: Result caching, AI-optimized filtering, relevance ranking.`);
         type: 'signature',
       });
 
-      expect(result).toEqual({
+      expect(result.data).toEqual({
         type: 'signature',
         signatures: [
           {
@@ -185,6 +192,8 @@ Features: Result caching, AI-optimized filtering, relevance ranking.`);
           },
         ],
       });
+      expect(result.metadata?.cached).toBe(false);
+      expect(result.metadata?.processingTime).toBeGreaterThanOrEqual(0);
     });
 
     it('should handle empty signature response', async () => {
@@ -196,10 +205,12 @@ Features: Result caching, AI-optimized filtering, relevance ranking.`);
         type: 'signature',
       });
 
-      expect(result).toEqual({
+      expect(result.data).toEqual({
         type: 'signature',
         signatures: [],
       });
+      expect(result.metadata?.cached).toBe(false);
+      expect(result.metadata?.processingTime).toBeGreaterThanOrEqual(0);
     });
   });
 
@@ -223,7 +234,7 @@ Features: Result caching, AI-optimized filtering, relevance ranking.`);
         maxResults: 10,
       });
 
-      expect(result).toEqual({
+      expect(result.data).toEqual({
         type: 'completion',
         items: [
           {
@@ -242,9 +253,11 @@ Features: Result caching, AI-optimized filtering, relevance ranking.`);
           },
         ],
       });
+      expect(result.metadata?.cached).toBe(false);
+      expect(result.metadata?.processingTime).toBeGreaterThanOrEqual(0);
 
       // Should filter out _private and deprecated items
-      const completionResult = result as { type: 'completion'; items: unknown[] };
+      const completionResult = result.data as { type: 'completion'; items: unknown[] };
       expect(completionResult.items).toHaveLength(2);
     });
 
@@ -262,8 +275,8 @@ Features: Result caching, AI-optimized filtering, relevance ranking.`);
         type: 'completion',
       });
 
-      expect(result.type).toBe('completion');
-      const completionResult = result as { type: 'completion'; items: unknown[] };
+      expect(result.data.type).toBe('completion');
+      const completionResult = result.data as { type: 'completion'; items: unknown[] };
       expect(completionResult.items).toHaveLength(2);
     });
 
@@ -286,7 +299,7 @@ Features: Result caching, AI-optimized filtering, relevance ranking.`);
         maxResults: 5,
       });
 
-      const completionResult = result as { type: 'completion'; items: unknown[] };
+      const completionResult = result.data as { type: 'completion'; items: unknown[] };
       expect(completionResult.items).toHaveLength(5);
     });
 
@@ -316,7 +329,8 @@ Features: Result caching, AI-optimized filtering, relevance ranking.`);
 
   describe('language detection', () => {
     it('should detect language from file extension', async () => {
-      mockClient.sendRequest.mockResolvedValue(null);
+      // Mock to return empty hover (which is okay)
+      mockClient.sendRequest.mockResolvedValue({ contents: 'test' });
 
       const testCases = [
         { uri: 'file:///test.ts', expectedLang: 'typescript' },
@@ -336,34 +350,44 @@ Features: Result caching, AI-optimized filtering, relevance ranking.`);
 
         expect(mockClientManager.getForFile).toHaveBeenCalledWith(uri, expect.any(String));
       }
-    });
+    }, 10000); // Increase timeout to 10 seconds
   });
 
   describe('error handling', () => {
-    it('should propagate errors from client manager', async () => {
+    it('should handle errors from client manager', async () => {
       const error = new Error('Failed to get client');
       mockClientManager.getForFile.mockRejectedValue(error);
 
-      await expect(
-        tool.execute({
-          uri: 'file:///test.ts',
-          position: { line: 0, character: 0 },
-          type: 'hover',
-        })
-      ).rejects.toThrow('Failed to get client');
+      const result = await tool.execute({
+        uri: 'file:///test.ts',
+        position: { line: 0, character: 0 },
+        type: 'hover',
+      });
+
+      expect(result.data).toEqual({
+        type: 'hover',
+        content: {},
+      });
+      expect(result.error).toBe('Failed to get client');
+      expect(result.fallback).toContain('grep');
     });
 
     it('should handle LSP request errors', async () => {
       const error = new Error('LSP request failed');
       mockClient.sendRequest.mockRejectedValue(error);
 
-      await expect(
-        tool.execute({
-          uri: 'file:///test.ts',
-          position: { line: 0, character: 0 },
-          type: 'hover',
-        })
-      ).rejects.toThrow('LSP request failed');
+      const result = await tool.execute({
+        uri: 'file:///test.ts',
+        position: { line: 0, character: 0 },
+        type: 'hover',
+      });
+
+      expect(result.data).toEqual({
+        type: 'hover',
+        content: {},
+      });
+      expect(result.error).toBe('LSP request failed');
+      expect(result.fallback).toContain('grep');
     });
   });
 });

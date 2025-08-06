@@ -18,6 +18,8 @@ import {
 import { logger as rootLogger } from '../utils/logger.js';
 import { createPositionSchema, USAGE_POSITION_DESCRIPTION } from './position-schema.js';
 import { FILE_URI_DESCRIPTION, BATCH_FILE_URI_DESCRIPTION } from './file-uri-description.js';
+import { retryWithBackoff } from '../utils/retry.js';
+import { StandardResult, ToolAnnotations } from './common-types.js';
 
 // Configuration constants
 const DEFAULT_STREAM_BATCH_SIZE = 20;
@@ -79,11 +81,13 @@ export interface CallHierarchyResult {
   calls?: CallHierarchyResult[];
 }
 
-export interface FindUsagesResult {
+export interface FindUsagesResultData {
   references?: ReferenceResult[];
   hierarchy?: CallHierarchyResult;
   total?: number;
 }
+
+export type FindUsagesResult = StandardResult<FindUsagesResultData>;
 
 export interface StreamingFindUsagesResult {
   type: 'progress' | 'partial' | 'complete';
@@ -126,6 +130,50 @@ Required parameters:
 - maxDepth: Call hierarchy depth (1-10)
 - includeDeclaration: Include declaration in references (boolean)`;
   inputSchema = findUsagesParamsSchema;
+
+  /** Output schema for MCP tool discovery */
+  readonly outputSchema = z.object({
+    data: z.object({
+      references: z
+        .array(
+          z.object({
+            uri: z.string(),
+            range: z.object({
+              start: z.object({
+                line: z.number(),
+                character: z.number(),
+              }),
+              end: z.object({
+                line: z.number(),
+                character: z.number(),
+              }),
+            }),
+            preview: z.string().optional(),
+            kind: z.enum(['read', 'write', 'call', 'declaration', 'import']).optional(),
+          })
+        )
+        .optional(),
+      hierarchy: z.any().optional(), // Complex recursive type
+      total: z.number().optional(),
+    }),
+    metadata: z
+      .object({
+        processingTime: z.number().optional(),
+        cached: z.boolean().optional(),
+      })
+      .optional(),
+    fallback: z.string().optional(),
+    error: z.string().optional(),
+  });
+
+  /** MCP tool annotations */
+  readonly annotations: ToolAnnotations = {
+    title: 'Find Usages',
+    readOnlyHint: true,
+    destructiveHint: false,
+    idempotentHint: true,
+    openWorldHint: false,
+  };
   private config: FindUsagesConfig;
 
   constructor(connectionPool: ConnectionPool, config: FindUsagesConfig = {}) {
@@ -154,40 +202,86 @@ Required parameters:
    * ```
    */
   async execute(params: FindUsagesParams): Promise<FindUsagesResult> {
-    // Validate parameters
-    const validatedParams = this.validateParams(params);
+    const startTime = Date.now();
 
-    if (validatedParams.type === 'references') {
-      if (validatedParams.batch && validatedParams.batch.length > 0) {
-        // Process batch requests and deduplicate results
-        const allReferences: ReferenceResult[] = [];
-        const seen = new Set<string>();
+    try {
+      // Validate parameters
+      const validatedParams = this.validateParams(params);
 
-        for (const batchItem of validatedParams.batch) {
-          const batchParams = {
-            ...validatedParams,
-            uri: batchItem.uri,
-            position: batchItem.position,
-          };
-          const references = await this.findReferences(batchParams);
+      if (validatedParams.type === 'references') {
+        if (validatedParams.batch && validatedParams.batch.length > 0) {
+          // Process batch requests and deduplicate results
+          const allReferences: ReferenceResult[] = [];
+          const seen = new Set<string>();
 
-          for (const ref of references) {
-            const key = `${ref.uri}:${ref.range.start.line}:${ref.range.start.character}`;
-            if (!seen.has(key)) {
-              seen.add(key);
-              allReferences.push(ref);
+          for (const batchItem of validatedParams.batch) {
+            const batchParams = {
+              ...validatedParams,
+              uri: batchItem.uri,
+              position: batchItem.position,
+            };
+            const references = await this.findReferences(batchParams);
+
+            for (const ref of references) {
+              const key = `${ref.uri}:${ref.range.start.line}:${ref.range.start.character}`;
+              if (!seen.has(key)) {
+                seen.add(key);
+                allReferences.push(ref);
+              }
             }
           }
-        }
 
-        return { references: allReferences, total: allReferences.length };
+          return {
+            data: { references: allReferences, total: allReferences.length },
+            metadata: {
+              processingTime: Date.now() - startTime,
+              cached: false,
+            },
+          };
+        } else {
+          const references = await this.findReferences(validatedParams);
+          return {
+            data: { references, total: references.length },
+            metadata: {
+              processingTime: Date.now() - startTime,
+              cached: false,
+            },
+          };
+        }
       } else {
-        const references = await this.findReferences(validatedParams);
-        return { references, total: references.length };
+        const hierarchy = await this.findCallHierarchy(validatedParams);
+        return {
+          data: { hierarchy },
+          metadata: {
+            processingTime: Date.now() - startTime,
+            cached: false,
+          },
+        };
       }
+    } catch (error) {
+      logger.error({ error, params }, 'Find usages failed');
+
+      return {
+        data: {
+          references: [],
+          total: 0,
+        },
+        metadata: {
+          processingTime: Date.now() - startTime,
+          cached: false,
+        },
+        error: error instanceof Error ? error.message : String(error),
+        fallback: this.generateFallback(params),
+      };
+    }
+  }
+
+  private generateFallback(params: FindUsagesParams): string {
+    const filename = params.uri.split('/').pop() || 'file';
+    if (params.type === 'references') {
+      return `No references found. Try: grep -r "symbol_name" --include="*.${filename.split('.').pop()}"`;
     } else {
-      const hierarchy = await this.findCallHierarchy(validatedParams);
-      return { hierarchy };
+      return `Call hierarchy unavailable. Try: grep -r "function_name" --include="*.${filename.split('.').pop()}"`;
     }
   }
 
@@ -236,10 +330,44 @@ Required parameters:
     });
 
     try {
-      const locations = await connection.sendRequest<Location[]>(
-        'textDocument/references',
-        referenceParams
-      );
+      const locations = await retryWithBackoff(
+        async () => {
+          const result = await connection.sendRequest<Location[]>(
+            'textDocument/references',
+            referenceParams
+          );
+
+          // If we get null or empty references, it might be due to indexing lag
+          if (!result || result.length === 0) {
+            throw new Error('No references found - possible indexing lag');
+          }
+
+          return result;
+        },
+        {
+          maxAttempts: 3,
+          delayMs: 1000,
+          backoffMultiplier: 2,
+          shouldRetry: (error: unknown) => {
+            if (error instanceof Error) {
+              return error.message.includes('No references found');
+            }
+            return false;
+          },
+          onRetry: (error: unknown, attempt: number) => {
+            logger.info(
+              { error, uri: params.uri, position: params.position, attempt },
+              'Retrying references due to possible indexing lag'
+            );
+          },
+        }
+      ).catch((error: unknown) => {
+        // Don't swallow LSP errors - let them propagate
+        if (!(error instanceof Error) || !error.message.includes('No references found')) {
+          throw error;
+        }
+        return null; // Only return null for "no references" case
+      });
 
       logger.info('LSP references response', {
         locationsCount: locations?.length || 0,
@@ -291,10 +419,44 @@ Required parameters:
 
     try {
       // First, prepare the call hierarchy
-      const items = await connection.sendRequest<CallHierarchyItem[] | null>(
-        'textDocument/prepareCallHierarchy',
-        prepareParams
-      );
+      const items = await retryWithBackoff(
+        async () => {
+          const result = await connection.sendRequest<CallHierarchyItem[] | null>(
+            'textDocument/prepareCallHierarchy',
+            prepareParams
+          );
+
+          // If we get null or empty items, it might be due to indexing lag
+          if (!result || result.length === 0) {
+            throw new Error('No call hierarchy items found - possible indexing lag');
+          }
+
+          return result;
+        },
+        {
+          maxAttempts: 3,
+          delayMs: 1000,
+          backoffMultiplier: 2,
+          shouldRetry: (error: unknown) => {
+            if (error instanceof Error) {
+              return error.message.includes('No call hierarchy items');
+            }
+            return false;
+          },
+          onRetry: (error: unknown, attempt: number) => {
+            logger.info(
+              { error, uri: params.uri, position: params.position, attempt },
+              'Retrying call hierarchy preparation due to possible indexing lag'
+            );
+          },
+        }
+      ).catch((error: unknown) => {
+        // Don't swallow LSP errors - let them propagate
+        if (!(error instanceof Error) || !error.message.includes('No call hierarchy items')) {
+          throw error;
+        }
+        return null; // Only return null for "no call hierarchy" case
+      });
 
       if (!items || items.length === 0) {
         logger.info('No call hierarchy items found');

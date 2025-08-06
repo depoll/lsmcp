@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { glob } from 'glob';
 import { BatchableTool } from './base.js';
 import type { ConnectionPool } from '../lsp/manager.js';
 import {
@@ -8,6 +9,7 @@ import {
   type DocumentSymbolParams,
   type WorkspaceSymbolParams,
 } from 'vscode-languageserver-protocol';
+import { StandardResult, MCPError, MCPErrorCode, ToolAnnotations } from './common-types.js';
 // Simple TTL-based cache implementation
 // We use a basic Map with TTL instead of LRU because:
 // 1. Symbol search patterns are often repeated in short bursts
@@ -21,6 +23,7 @@ import { createHash } from 'crypto';
 import { dirname, resolve } from 'path';
 import type { Logger } from 'pino';
 import { DOCUMENT_SCOPE_URI_DESCRIPTION } from './file-uri-description.js';
+import { retryWithBackoff } from '../utils/retry.js';
 
 // User-friendly symbol kinds
 export const USER_SYMBOL_KINDS = [
@@ -97,13 +100,13 @@ export interface SymbolResult {
   score?: number;
 }
 
-export interface SymbolSearchResult {
+export interface SymbolSearchResultData {
   symbols: SymbolResult[];
   truncated?: boolean;
   totalFound?: number;
-  error?: string;
-  fallback?: string;
 }
+
+export type SymbolSearchResult = StandardResult<SymbolSearchResultData>;
 
 export class SymbolSearchTool extends BatchableTool<SymbolSearchParams, SymbolSearchResult> {
   readonly name = 'findSymbols';
@@ -121,7 +124,53 @@ Features: Fuzzy matching, kind filtering, relevance scoring, grep fallback.`;
     return symbolSearchParamsSchema as unknown as z.ZodType<SymbolSearchParams>;
   }
 
-  private cache = new Map<string, CacheEntry<SymbolSearchResult>>();
+  /** Output schema for MCP tool discovery */
+  readonly outputSchema = z.object({
+    data: z.object({
+      symbols: z.array(
+        z.object({
+          name: z.string(),
+          kind: z.enum(USER_SYMBOL_KINDS),
+          location: z.object({
+            uri: z.string(),
+            range: z.object({
+              start: z.object({
+                line: z.number(),
+                character: z.number(),
+              }),
+              end: z.object({
+                line: z.number(),
+                character: z.number(),
+              }),
+            }),
+          }),
+          containerName: z.string().optional(),
+          score: z.number().optional(),
+        })
+      ),
+      truncated: z.boolean().optional(),
+      totalFound: z.number().optional(),
+    }),
+    metadata: z
+      .object({
+        processingTime: z.number().optional(),
+        cached: z.boolean().optional(),
+      })
+      .optional(),
+    fallback: z.string().optional(),
+    error: z.string().optional(),
+  });
+
+  /** MCP tool annotations */
+  readonly annotations: ToolAnnotations = {
+    title: 'Find Symbols',
+    readOnlyHint: true,
+    destructiveHint: false,
+    idempotentHint: true,
+    openWorldHint: false,
+  };
+
+  private cache = new Map<string, CacheEntry<SymbolSearchResultData>>();
   private readonly CACHE_MAX_SIZE = 100;
   private readonly CACHE_TTL_MS = 1000 * 60 * 10; // 10 minutes
   private readonly MAX_SYMBOL_DEPTH = 10;
@@ -136,25 +185,36 @@ Features: Fuzzy matching, kind filtering, relevance scoring, grep fallback.`;
   }
 
   async execute(params: SymbolSearchParams): Promise<SymbolSearchResult> {
-    // Validate params
-    if (params.scope === 'document' && !params.uri) {
-      throw new Error('uri is required for document scope');
-    }
-
-    // Input validation to prevent DoS
-    if (params.query.length > this.MAX_QUERY_LENGTH) {
-      throw new Error(`Query too long (max ${this.MAX_QUERY_LENGTH} characters)`);
-    }
-
-    // Check cache
-    const cacheKey = this.getCacheKey(params);
-    const cached = this.getFromCache(cacheKey);
-    if (cached) {
-      this.logger?.debug({ cacheKey }, 'Symbol search cache hit');
-      return cached;
-    }
+    const startTime = Date.now();
 
     try {
+      // Validate params
+      if (params.scope === 'document' && !params.uri) {
+        throw new MCPError(MCPErrorCode.INVALID_PARAMS, 'uri is required for document scope');
+      }
+
+      // Input validation to prevent DoS
+      if (params.query.length > this.MAX_QUERY_LENGTH) {
+        throw new MCPError(
+          MCPErrorCode.INVALID_PARAMS,
+          `Query too long (max ${this.MAX_QUERY_LENGTH} characters)`
+        );
+      }
+
+      // Check cache
+      const cacheKey = this.getCacheKey(params);
+      const cached = this.getFromCache(cacheKey);
+      if (cached) {
+        this.logger?.debug({ cacheKey }, 'Symbol search cache hit');
+        return {
+          data: cached,
+          metadata: {
+            processingTime: Date.now() - startTime,
+            cached: true,
+          },
+        };
+      }
+
       let symbols: SymbolResult[];
 
       if (params.scope === 'document') {
@@ -174,9 +234,15 @@ Features: Fuzzy matching, kind filtering, relevance scoring, grep fallback.`;
       const limited = sorted.slice(0, params.maxResults);
 
       const result: SymbolSearchResult = {
-        symbols: limited,
-        truncated: sorted.length > params.maxResults,
-        totalFound: sorted.length,
+        data: {
+          symbols: limited,
+          truncated: sorted.length > params.maxResults,
+          totalFound: sorted.length,
+        },
+        metadata: {
+          processingTime: Date.now() - startTime,
+          cached: false,
+        },
       };
 
       this.setInCache(cacheKey, result);
@@ -188,7 +254,13 @@ Features: Fuzzy matching, kind filtering, relevance scoring, grep fallback.`;
       const fallback = this.generateFallback(params);
 
       return {
-        symbols: [],
+        data: {
+          symbols: [],
+        },
+        metadata: {
+          processingTime: Date.now() - startTime,
+          cached: false,
+        },
         error: this.formatError(error),
         fallback,
       };
@@ -243,10 +315,38 @@ Features: Fuzzy matching, kind filtering, relevance scoring, grep fallback.`;
       textDocument: { uri: params.uri! },
     };
 
-    const response = await client.sendRequest<DocumentSymbol[] | SymbolInformation[] | null>(
-      'textDocument/documentSymbol',
-      docParams
-    );
+    const response = await retryWithBackoff(
+      async () => {
+        const result = await client.sendRequest<DocumentSymbol[] | SymbolInformation[] | null>(
+          'textDocument/documentSymbol',
+          docParams
+        );
+
+        // If we get null or empty symbols, it might be due to indexing lag
+        if (!result || (Array.isArray(result) && result.length === 0)) {
+          throw new Error('No symbols found - possible indexing lag');
+        }
+
+        return result;
+      },
+      {
+        maxAttempts: 3,
+        delayMs: 1000,
+        backoffMultiplier: 2,
+        shouldRetry: (error: unknown) => {
+          if (error instanceof Error) {
+            return error.message.includes('No symbols found');
+          }
+          return false;
+        },
+        onRetry: (error: unknown, attempt: number) => {
+          this.logger?.info(
+            { error, uri: params.uri, attempt },
+            'Retrying document symbols due to possible indexing lag'
+          );
+        },
+      }
+    ).catch(() => null); // Fall back to null if all retries fail
 
     if (!response) {
       return [];
@@ -307,7 +407,6 @@ Features: Fuzzy matching, kind filtering, relevance scoring, grep fallback.`;
 
         // If no standard file found, find any TS/JS file
         if (!fileToOpen) {
-          const glob = (await import('glob')).glob;
           const files = await glob('**/*.{ts,js}', {
             cwd: workspace,
             ignore: ['node_modules/**', 'dist/**', 'build/**'],
@@ -349,78 +448,41 @@ Features: Fuzzy matching, kind filtering, relevance scoring, grep fallback.`;
       query: params.query,
     };
 
-    // Implement retry logic for TypeScript language server
-    // The server may need time to build its symbol index
-    let attempts = 0;
-    const maxAttempts = 5; // Increased from 3 for better resilience
-    const baseDelay = 500; // Start with 500ms
-    let lastError: unknown = null;
-    let foundAnySymbols = false;
-
-    while (attempts < maxAttempts) {
-      try {
-        const response = await client.sendRequest<SymbolInformation[] | null>(
+    const response = await retryWithBackoff(
+      async () => {
+        const result = await client.sendRequest<SymbolInformation[] | null>(
           'workspace/symbol',
           wsParams
         );
 
-        if (response && Array.isArray(response) && response.length > 0) {
-          return this.convertSymbolInformation(response);
+        // If we get null or empty symbols, it might be due to indexing lag
+        if (!result || result.length === 0) {
+          throw new Error('No workspace symbols found - possible indexing lag');
         }
 
-        // Track if we've ever found symbols (helps distinguish between "not ready" vs "no matches")
-        if (response && Array.isArray(response)) {
-          foundAnySymbols = true;
-        }
-      } catch (error) {
-        lastError = error;
-        this.logger?.debug(
-          { query: params.query, attempt: attempts, error },
-          'Symbol search request failed'
-        );
+        return result;
+      },
+      {
+        maxAttempts: 5, // Increased for workspace symbols which may take longer to index
+        delayMs: 500,
+        backoffMultiplier: 2,
+        shouldRetry: (error: unknown) => {
+          if (error instanceof Error) {
+            return error.message.includes('No workspace symbols found');
+          }
+          return false;
+        },
+        onRetry: (error: unknown, attempt: number) => {
+          this.logger?.info(
+            { error, query: params.query, attempt },
+            'Retrying workspace symbols due to possible indexing lag'
+          );
+        },
       }
+    ).catch(() => null); // Fall back to null if all retries fail
 
-      attempts++;
-
-      // Decide whether to retry
-      const shouldRetry =
-        attempts < maxAttempts &&
-        // Always retry on errors
-        (lastError !== null ||
-          // Retry if we haven't found any symbols yet (server might still be initializing)
-          !foundAnySymbols ||
-          // For exact queries, retry even if we got empty results
-          (!params.query.includes('*') && !params.query.includes('?')));
-
-      if (shouldRetry) {
-        // Exponential backoff: 500ms, 1s, 2s, 4s
-        const delay = baseDelay * Math.pow(2, attempts - 1);
-        this.logger?.debug(
-          {
-            query: params.query,
-            attempt: attempts,
-            nextDelay: delay,
-            hadError: lastError !== null,
-            foundAnySymbols,
-          },
-          'No symbols found, retrying after delay'
-        );
-        await new Promise((resolve) => setTimeout(resolve, delay));
-
-        // Clear error for next attempt
-        lastError = null;
-      } else {
-        // We've exhausted retries or got a definitive empty result
-        break;
-      }
-    }
-
-    // Log final outcome
-    if (attempts >= maxAttempts) {
-      this.logger?.warn(
-        { query: params.query, attempts, foundAnySymbols },
-        'Symbol search reached max retry attempts'
-      );
+    if (response && Array.isArray(response) && response.length > 0) {
+      return this.convertSymbolInformation(response);
     }
 
     return [];
@@ -608,7 +670,7 @@ Features: Fuzzy matching, kind filtering, relevance scoring, grep fallback.`;
     return createHash('sha256').update(key).digest('hex');
   }
 
-  private getFromCache(key: string): SymbolSearchResult | undefined {
+  private getFromCache(key: string): SymbolSearchResultData | undefined {
     const entry = this.cache.get(key);
     if (!entry) return undefined;
 
@@ -635,6 +697,8 @@ Features: Fuzzy matching, kind filtering, relevance scoring, grep fallback.`;
   }
 
   private setInCache(key: string, value: SymbolSearchResult): void {
+    // Extract data portion to cache
+    const dataToCache = value.data;
     // Enforce max size
     if (this.cache.size >= this.CACHE_MAX_SIZE) {
       const firstKey = this.cache.keys().next().value;
@@ -648,7 +712,7 @@ Features: Fuzzy matching, kind filtering, relevance scoring, grep fallback.`;
     }
 
     this.cache.set(key, {
-      value,
+      value: dataToCache,
       expires: Date.now() + this.CACHE_TTL_MS,
     });
   }

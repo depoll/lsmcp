@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeEach } from '@jest/globals';
-import { LSPClientV2 } from '../../../src/lsp/client-v2.js';
+import { LSPClient } from '../../../src/lsp/client-v2.js';
 import { LanguageServerConfig } from '../../../src/types/lsp.js';
 
-describe('LSPClientV2', () => {
-  let client: LSPClientV2;
+describe('LSPClient', () => {
+  let client: LSPClient;
   let config: LanguageServerConfig;
 
   beforeEach(() => {
@@ -11,7 +11,7 @@ describe('LSPClientV2', () => {
       command: 'typescript-language-server',
       args: ['--stdio'],
     };
-    client = new LSPClientV2('test-client', config);
+    client = new LSPClient('test-client', config);
   });
 
   it('should create client with correct id', () => {
@@ -39,7 +39,7 @@ describe('LSPClientV2', () => {
   });
 
   it('should create client with custom options', () => {
-    const customClient = new LSPClientV2('custom', config, {
+    const customClient = new LSPClient('custom', config, {
       startTimeout: 60000,
       requestTimeout: 10000,
       workspaceFolders: ['/workspace'],
