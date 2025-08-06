@@ -17,7 +17,7 @@ describe('ApplyEditTool - Complex Scenarios', () => {
     // Create a temporary test directory
     testDir = path.join(process.cwd(), 'test-temp-' + Date.now());
     await fs.mkdir(testDir, { recursive: true });
-    
+
     testFilePath = path.join(testDir, 'test.ts');
     testFileUri = `file://${testFilePath}`;
 
@@ -84,7 +84,8 @@ describe('ApplyEditTool - Complex Scenarios', () => {
               // Add new method at end of class
               {
                 range: { start: { line: 7, character: 3 }, end: { line: 7, character: 3 } },
-                newText: '\n  \n  power(base: number, exp: number) {\n    return Math.pow(base, exp);\n  }',
+                newText:
+                  '\n  \n  power(base: number, exp: number) {\n    return Math.pow(base, exp);\n  }',
               },
             ],
           },
@@ -121,9 +122,9 @@ describe('ApplyEditTool - Complex Scenarios', () => {
           [testFileUri]: [
             // Replace entire if-else block
             {
-              range: { 
-                start: { line: 1, character: 2 }, 
-                end: { line: 7, character: 3 } 
+              range: {
+                start: { line: 1, character: 2 },
+                end: { line: 7, character: 3 },
               },
               newText: `switch (data.type) {
     case 'user':
@@ -146,8 +147,8 @@ describe('ApplyEditTool - Complex Scenarios', () => {
       expect(result.data.applied).toBe(true);
       const finalContent = await fs.readFile(testFilePath, 'utf-8');
       expect(finalContent).toContain('switch (data.type)');
-      expect(finalContent).toContain('case \'admin\'');
-      expect(finalContent).not.toContain('if (data.type === \'user\')');
+      expect(finalContent).toContain("case 'admin'");
+      expect(finalContent).not.toContain("if (data.type === 'user')");
     });
   });
 
@@ -163,17 +164,17 @@ const z = 30;`;
           [testFileUri]: [
             // First edit: lines 0-1
             {
-              range: { 
-                start: { line: 0, character: 0 }, 
-                end: { line: 1, character: 13 } 
+              range: {
+                start: { line: 0, character: 0 },
+                end: { line: 1, character: 13 },
               },
               newText: 'let a = 100;\nlet b = 200;',
             },
             // Second edit: overlaps with first (line 1)
             {
-              range: { 
-                start: { line: 1, character: 6 }, 
-                end: { line: 2, character: 0 } 
+              range: {
+                start: { line: 1, character: 6 },
+                end: { line: 2, character: 0 },
               },
               newText: 'value = 999;\n',
             },
@@ -199,25 +200,25 @@ line4`;
           [testFileUri]: [
             // Edit at end of line 1
             {
-              range: { 
-                start: { line: 0, character: 5 }, 
-                end: { line: 0, character: 5 } 
+              range: {
+                start: { line: 0, character: 5 },
+                end: { line: 0, character: 5 },
               },
               newText: ' // comment1',
             },
             // Edit at beginning of line 2 (adjacent but not overlapping)
             {
-              range: { 
-                start: { line: 1, character: 0 }, 
-                end: { line: 1, character: 0 } 
+              range: {
+                start: { line: 1, character: 0 },
+                end: { line: 1, character: 0 },
               },
               newText: '// comment2 ',
             },
             // Edit at line 3
             {
-              range: { 
-                start: { line: 2, character: 0 }, 
-                end: { line: 2, character: 5 } 
+              range: {
+                start: { line: 2, character: 0 },
+                end: { line: 2, character: 5 },
               },
               newText: 'LINE3',
             },
@@ -244,9 +245,9 @@ line4`;
         changes: {
           [testFileUri]: [
             {
-              range: { 
-                start: { line: 0, character: 0 }, 
-                end: { line: 0, character: 0 } 
+              range: {
+                start: { line: 0, character: 0 },
+                end: { line: 0, character: 0 },
               },
               newText: 'const hello = "world";\nconsole.log(hello);',
             },
@@ -272,17 +273,17 @@ last line`;
           [testFileUri]: [
             // Insert at very beginning
             {
-              range: { 
-                start: { line: 0, character: 0 }, 
-                end: { line: 0, character: 0 } 
+              range: {
+                start: { line: 0, character: 0 },
+                end: { line: 0, character: 0 },
               },
               newText: 'header\n',
             },
             // Append at very end
             {
-              range: { 
-                start: { line: 2, character: 9 }, 
-                end: { line: 2, character: 9 } 
+              range: {
+                start: { line: 2, character: 9 },
+                end: { line: 2, character: 9 },
               },
               newText: '\nfooter',
             },
@@ -305,9 +306,9 @@ last line`;
         changes: {
           [testFileUri]: [
             {
-              range: { 
+              range: {
                 start: { line: 0, character: 10 }, // Beyond line length
-                end: { line: 0, character: 15 } 
+                end: { line: 0, character: 15 },
               },
               newText: 'invalid',
             },
@@ -329,9 +330,9 @@ last line`;
         changes: {
           [testFileUri]: [
             {
-              range: { 
+              range: {
                 start: { line: 5, character: 0 }, // Line doesn't exist
-                end: { line: 5, character: 0 } 
+                end: { line: 5, character: 0 },
               },
               newText: 'new line',
             },
@@ -349,7 +350,7 @@ last line`;
   describe('File operations', () => {
     it('should create new files', async () => {
       const newFileUri = `file://${path.join(testDir, 'new-file.ts')}`;
-      
+
       const edit: WorkspaceEdit = {
         documentChanges: [
           {
@@ -362,7 +363,8 @@ last line`;
       const result = await tool.execute({ edit });
 
       expect(result.data.applied).toBe(true);
-      const exists = await fs.access(fileURLToPath(newFileUri))
+      const exists = await fs
+        .access(fileURLToPath(newFileUri))
         .then(() => true)
         .catch(() => false);
       expect(exists).toBe(true);
@@ -385,7 +387,8 @@ last line`;
       const result = await tool.execute({ edit });
 
       expect(result.data.applied).toBe(true);
-      const exists = await fs.access(fileToDelete)
+      const exists = await fs
+        .access(fileToDelete)
         .then(() => true)
         .catch(() => false);
       expect(exists).toBe(false);
@@ -396,7 +399,7 @@ last line`;
       const newPath = path.join(testDir, 'new-name.ts');
       const oldUri = `file://${oldPath}`;
       const newUri = `file://${newPath}`;
-      
+
       await fs.writeFile(oldPath, 'file content', 'utf-8');
 
       const edit: WorkspaceEdit = {
@@ -412,17 +415,19 @@ last line`;
       const result = await tool.execute({ edit });
 
       expect(result.data.applied).toBe(true);
-      
-      const oldExists = await fs.access(oldPath)
+
+      const oldExists = await fs
+        .access(oldPath)
         .then(() => true)
         .catch(() => false);
       expect(oldExists).toBe(false);
-      
-      const newExists = await fs.access(newPath)
+
+      const newExists = await fs
+        .access(newPath)
         .then(() => true)
         .catch(() => false);
       expect(newExists).toBe(true);
-      
+
       const content = await fs.readFile(newPath, 'utf-8');
       expect(content).toBe('file content');
     });
@@ -432,7 +437,7 @@ last line`;
       const existingUri = `file://${existingFile}`;
       const newFile = path.join(testDir, 'created.ts');
       const newUri = `file://${newFile}`;
-      
+
       await fs.writeFile(existingFile, 'original content', 'utf-8');
 
       const edit: WorkspaceEdit = {
@@ -447,9 +452,9 @@ last line`;
             textDocument: { uri: existingUri, version: null },
             edits: [
               {
-                range: { 
-                  start: { line: 0, character: 0 }, 
-                  end: { line: 0, character: 8 } 
+                range: {
+                  start: { line: 0, character: 0 },
+                  end: { line: 0, character: 8 },
                 },
                 newText: 'modified',
               },
@@ -461,12 +466,13 @@ last line`;
       const result = await tool.execute({ edit });
 
       expect(result.data.applied).toBe(true);
-      
-      const newExists = await fs.access(newFile)
+
+      const newExists = await fs
+        .access(newFile)
         .then(() => true)
         .catch(() => false);
       expect(newExists).toBe(true);
-      
+
       const modifiedContent = await fs.readFile(existingFile, 'utf-8');
       expect(modifiedContent).toBe('modified content');
     });
@@ -495,7 +501,7 @@ last line`;
               // Add imports at top
               {
                 range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
-                newText: 'import { Logger } from \'./logger\';\nimport { User } from \'./types\';\n\n',
+                newText: "import { Logger } from './logger';\nimport { User } from './types';\n\n",
               },
               // Add logger to constructor
               {
@@ -546,7 +552,7 @@ last line`;
 
       expect(result.data.applied).toBe(true);
       expect(result.data.summary).toContain('9 edits in 1 file');
-      
+
       const finalContent = await fs.readFile(testFilePath, 'utf-8');
       expect(finalContent).toContain('import { Logger }');
       expect(finalContent).toContain('import { User }');
@@ -579,17 +585,20 @@ function divide(n: number, d: number) {
             // Add JSDoc for add function
             {
               range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
-              newText: '/**\n * Adds two numbers together\n * @param a First number\n * @param b Second number\n * @returns Sum of a and b\n */\n',
+              newText:
+                '/**\n * Adds two numbers together\n * @param a First number\n * @param b Second number\n * @returns Sum of a and b\n */\n',
             },
             // Add JSDoc for multiply function
             {
               range: { start: { line: 4, character: 0 }, end: { line: 4, character: 0 } },
-              newText: '/**\n * Multiplies two numbers\n * @param x First factor\n * @param y Second factor\n * @returns Product of x and y\n */\n',
+              newText:
+                '/**\n * Multiplies two numbers\n * @param x First factor\n * @param y Second factor\n * @returns Product of x and y\n */\n',
             },
             // Add JSDoc for divide function
             {
               range: { start: { line: 8, character: 0 }, end: { line: 8, character: 0 } },
-              newText: '/**\n * Divides two numbers\n * @param n Numerator\n * @param d Denominator\n * @returns Quotient of n divided by d\n * @throws {Error} When denominator is zero\n */\n',
+              newText:
+                '/**\n * Divides two numbers\n * @param n Numerator\n * @param d Denominator\n * @returns Quotient of n divided by d\n * @throws {Error} When denominator is zero\n */\n',
             },
           ],
         },
