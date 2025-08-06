@@ -87,10 +87,13 @@ export class LSPClient extends EventEmitter {
       });
 
       // Listen for diagnostics
-      this.connection.onNotification('textDocument/publishDiagnostics', (params: PublishDiagnosticsParams) => {
-        this.diagnostics.set(params.uri, params.diagnostics);
-        this.emit('diagnostics', params);
-      });
+      this.connection.onNotification(
+        'textDocument/publishDiagnostics',
+        (params: PublishDiagnosticsParams) => {
+          this.diagnostics.set(params.uri, params.diagnostics);
+          this.emit('diagnostics', params);
+        }
+      );
 
       // Start listening
       this.connection.listen();

@@ -1,30 +1,33 @@
 import { describe, it, expect, beforeAll, afterAll } from '@jest/globals';
 import { DiagnosticsTool } from '../../src/tools/diagnostics.js';
 import { ConnectionPool } from '../../src/lsp/manager.js';
-import { createTestProject, cleanupTestProject, TestProject } from '../helpers/test-project.js';
+import { mkdtempSync, rmSync } from 'fs';
+import { tmpdir } from 'os';
 import path from 'path';
 import fs from 'fs/promises';
 
 describe('DiagnosticsTool Integration', () => {
   let tool: DiagnosticsTool;
   let connectionPool: ConnectionPool;
-  let testProject: TestProject;
+  let testDir: string;
 
   beforeAll(async () => {
-    testProject = await createTestProject();
+    // Create a temporary test directory
+    testDir = mkdtempSync(path.join(tmpdir(), 'lsmcp-test-'));
     connectionPool = new ConnectionPool();
     tool = new DiagnosticsTool(connectionPool);
   }, 30000);
 
   afterAll(async () => {
     await connectionPool.disposeAll();
-    await cleanupTestProject(testProject);
+    // Clean up test directory
+    rmSync(testDir, { recursive: true, force: true });
   });
 
   describe('TypeScript diagnostics', () => {
     it('should detect type errors', async () => {
       // Create a file with a type error
-      const filePath = path.join(testProject.dir, 'type-error.ts');
+      const filePath = path.join(testDir, 'type-error.ts');
       await fs.writeFile(
         filePath,
         `
@@ -42,30 +45,30 @@ describe('DiagnosticsTool Integration', () => {
       );
 
       // Give the language server time to analyze the file
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      await new Promise((resolve) => setTimeout(resolve, 2000));
 
       const result = await tool.execute({
-        uri: `file://${filePath}`
+        uri: `file://${filePath}`,
       });
 
       expect(result.summary.total).toBeGreaterThan(0);
       expect(result.summary.errors).toBeGreaterThan(0);
-      
+
       // Should detect the type mismatch error
-      const typeError = result.diagnostics?.find(d => 
-        d.message.includes('number') && d.message.includes('string')
+      const typeError = result.diagnostics?.find(
+        (d) => d.message.includes('number') && d.message.includes('string')
       );
       expect(typeError).toBeDefined();
 
       // Should detect the property error
-      const propError = result.diagnostics?.find(d => 
-        d.message.includes('age') || d.message.includes('property')
+      const propError = result.diagnostics?.find(
+        (d) => d.message.includes('age') || d.message.includes('property')
       );
       expect(propError).toBeDefined();
     }, 30000);
 
     it('should provide quick fixes for misspellings', async () => {
-      const filePath = path.join(testProject.dir, 'spelling-error.ts');
+      const filePath = path.join(testDir, 'spelling-error.ts');
       await fs.writeFile(
         filePath,
         `
@@ -76,29 +79,30 @@ describe('DiagnosticsTool Integration', () => {
         `
       );
 
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      await new Promise((resolve) => setTimeout(resolve, 2000));
 
       const result = await tool.execute({
         uri: `file://${filePath}`,
-        includeRelated: true
+        includeRelated: true,
       });
 
       expect(result.summary.errors).toBeGreaterThan(0);
-      
-      const spellingError = result.diagnostics?.find(d => 
-        d.message.includes('naem') || d.message.includes('name')
+
+      const spellingError = result.diagnostics?.find(
+        (d) => d.message.includes('naem') || d.message.includes('name')
       );
-      
+
       expect(spellingError).toBeDefined();
-      
+
       // TypeScript usually provides quick fixes for misspellings
-      if (spellingError?.quickFixes && spellingError.quickFixes.length > 0) {
-        expect(spellingError.quickFixes[0].title).toContain('name');
+      if (spellingError && spellingError.quickFixes && spellingError.quickFixes.length > 0) {
+        const firstFix = spellingError.quickFixes[0];
+        expect(firstFix?.title).toContain('name');
       }
     }, 30000);
 
     it('should filter by severity', async () => {
-      const filePath = path.join(testProject.dir, 'mixed-severity.ts');
+      const filePath = path.join(testDir, 'mixed-severity.ts');
       await fs.writeFile(
         filePath,
         `
@@ -116,17 +120,17 @@ describe('DiagnosticsTool Integration', () => {
         `
       );
 
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      await new Promise((resolve) => setTimeout(resolve, 2000));
 
       // Get only errors
       const errorsOnly = await tool.execute({
         uri: `file://${filePath}`,
-        severity: 'error'
+        severity: 'error',
       });
 
       // Get all diagnostics
       const allDiagnostics = await tool.execute({
-        uri: `file://${filePath}`
+        uri: `file://${filePath}`,
       });
 
       expect(errorsOnly.summary.total).toBeLessThanOrEqual(allDiagnostics.summary.total);
@@ -137,9 +141,9 @@ describe('DiagnosticsTool Integration', () => {
 
     it('should get workspace-wide diagnostics', async () => {
       // Create multiple files with errors
-      const file1 = path.join(testProject.dir, 'error1.ts');
-      const file2 = path.join(testProject.dir, 'error2.ts');
-      
+      const file1 = path.join(testDir, 'error1.ts');
+      const file2 = path.join(testDir, 'error2.ts');
+
       await fs.writeFile(
         file1,
         `
@@ -151,7 +155,7 @@ describe('DiagnosticsTool Integration', () => {
         add("1", "2");
         `
       );
-      
+
       await fs.writeFile(
         file2,
         `
@@ -165,39 +169,41 @@ describe('DiagnosticsTool Integration', () => {
         `
       );
 
-      await new Promise(resolve => setTimeout(resolve, 3000));
+      await new Promise((resolve) => setTimeout(resolve, 3000));
 
       const result = await tool.execute({});
 
       expect(result.summary.filesAffected).toBeGreaterThanOrEqual(2);
       expect(result.byFile).toBeDefined();
       expect(result.byFile!.length).toBeGreaterThanOrEqual(2);
-      
+
       // Check that files are sorted by error count
-      if (result.byFile!.length >= 2) {
-        for (let i = 1; i < result.byFile!.length; i++) {
-          const prev = result.byFile![i - 1];
-          const curr = result.byFile![i];
-          expect(prev.errorCount).toBeGreaterThanOrEqual(curr.errorCount);
+      if (result.byFile && result.byFile.length >= 2) {
+        for (let i = 1; i < result.byFile.length; i++) {
+          const prev = result.byFile[i - 1];
+          const curr = result.byFile[i];
+          if (prev && curr) {
+            expect(prev.errorCount).toBeGreaterThanOrEqual(curr.errorCount);
+          }
         }
       }
     }, 30000);
 
     it('should respect maxResults limit', async () => {
-      const filePath = path.join(testProject.dir, 'many-errors.ts');
-      
+      const filePath = path.join(testDir, 'many-errors.ts');
+
       // Create a file with many errors
       const errors = [];
       for (let i = 0; i < 20; i++) {
         errors.push(`const err${i}: string = ${i};`);
       }
-      
+
       await fs.writeFile(filePath, errors.join('\n'));
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      await new Promise((resolve) => setTimeout(resolve, 2000));
 
       const limited = await tool.execute({
         uri: `file://${filePath}`,
-        maxResults: 5
+        maxResults: 5,
       });
 
       expect(limited.summary.total).toBeLessThanOrEqual(5);
@@ -207,7 +213,7 @@ describe('DiagnosticsTool Integration', () => {
 
   describe('Python diagnostics', () => {
     it('should detect Python syntax errors', async () => {
-      const filePath = path.join(testProject.dir, 'syntax-error.py');
+      const filePath = path.join(testDir, 'syntax-error.py');
       await fs.writeFile(
         filePath,
         `
@@ -221,10 +227,10 @@ def add(a, b)
         `
       );
 
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      await new Promise((resolve) => setTimeout(resolve, 2000));
 
       const result = await tool.execute({
-        uri: `file://${filePath}`
+        uri: `file://${filePath}`,
       });
 
       // Python syntax errors should be detected
@@ -235,7 +241,7 @@ def add(a, b)
     }, 30000);
 
     it('should detect Python type errors with type hints', async () => {
-      const filePath = path.join(testProject.dir, 'type-hints.py');
+      const filePath = path.join(testDir, 'type-hints.py');
       await fs.writeFile(
         filePath,
         `
@@ -250,17 +256,18 @@ print(undefined_variable)
         `
       );
 
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      await new Promise((resolve) => setTimeout(resolve, 2000));
 
       const result = await tool.execute({
-        uri: `file://${filePath}`
+        uri: `file://${filePath}`,
       });
 
       // Should at least detect the undefined variable
       if (result.summary.total > 0) {
-        const undefinedError = result.diagnostics?.find(d =>
-          d.message.toLowerCase().includes('undefined') ||
-          d.message.toLowerCase().includes('not defined')
+        const undefinedError = result.diagnostics?.find(
+          (d) =>
+            d.message.toLowerCase().includes('undefined') ||
+            d.message.toLowerCase().includes('not defined')
         );
         expect(undefinedError).toBeDefined();
       }
@@ -269,7 +276,7 @@ print(undefined_variable)
 
   describe('Edge cases', () => {
     it('should handle files with no diagnostics', async () => {
-      const filePath = path.join(testProject.dir, 'clean.ts');
+      const filePath = path.join(testDir, 'clean.ts');
       await fs.writeFile(
         filePath,
         `
@@ -283,10 +290,10 @@ print(undefined_variable)
         `
       );
 
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      await new Promise((resolve) => setTimeout(resolve, 2000));
 
       const result = await tool.execute({
-        uri: `file://${filePath}`
+        uri: `file://${filePath}`,
       });
 
       expect(result.summary.total).toBe(0);
@@ -296,7 +303,7 @@ print(undefined_variable)
 
     it('should handle non-existent files gracefully', async () => {
       const result = await tool.execute({
-        uri: 'file:///non/existent/file.ts'
+        uri: 'file:///non/existent/file.ts',
       });
 
       expect(result.summary.total).toBe(0);
@@ -304,11 +311,11 @@ print(undefined_variable)
     }, 30000);
 
     it('should handle files without language server support', async () => {
-      const filePath = path.join(testProject.dir, 'unknown.xyz');
+      const filePath = path.join(testDir, 'unknown.xyz');
       await fs.writeFile(filePath, 'some content');
 
       const result = await tool.execute({
-        uri: `file://${filePath}`
+        uri: `file://${filePath}`,
       });
 
       expect(result.summary.total).toBe(0);

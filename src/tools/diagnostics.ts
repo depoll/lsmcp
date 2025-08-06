@@ -8,7 +8,7 @@ import {
   CodeAction,
   CodeActionKind,
   Command,
-  WorkspaceEdit
+  WorkspaceEdit,
 } from 'vscode-languageserver-protocol';
 
 interface DiagnosticsInput {
@@ -74,24 +74,38 @@ export class DiagnosticsTool extends BaseTool<DiagnosticsInput, DiagnosticsOutpu
   description = 'Get errors, warnings, and hints with severity filtering and quick fixes';
 
   inputSchema = z.object({
-    uri: z.string().optional().describe('File URI for file-specific diagnostics. Omit for workspace-wide diagnostics'),
-    severity: z.enum(['error', 'warning', 'info', 'hint']).optional().describe('Filter by severity level'),
-    includeRelated: z.boolean().optional().default(true).describe('Include related diagnostic information'),
-    maxResults: z.number().optional().default(500).describe('Maximum number of diagnostics to return')
+    uri: z
+      .string()
+      .optional()
+      .describe('File URI for file-specific diagnostics. Omit for workspace-wide diagnostics'),
+    severity: z
+      .enum(['error', 'warning', 'info', 'hint'])
+      .optional()
+      .describe('Filter by severity level'),
+    includeRelated: z
+      .boolean()
+      .optional()
+      .default(true)
+      .describe('Include related diagnostic information'),
+    maxResults: z
+      .number()
+      .optional()
+      .default(500)
+      .describe('Maximum number of diagnostics to return'),
   });
 
   private severityMap: Record<DiagnosticSeverity, 'error' | 'warning' | 'info' | 'hint'> = {
     [DiagnosticSeverity.Error]: 'error',
     [DiagnosticSeverity.Warning]: 'warning',
     [DiagnosticSeverity.Information]: 'info',
-    [DiagnosticSeverity.Hint]: 'hint'
+    [DiagnosticSeverity.Hint]: 'hint',
   };
 
   private reverseSeverityMap: Record<string, DiagnosticSeverity> = {
-    'error': DiagnosticSeverity.Error,
-    'warning': DiagnosticSeverity.Warning,
-    'info': DiagnosticSeverity.Information,
-    'hint': DiagnosticSeverity.Hint
+    error: DiagnosticSeverity.Error,
+    warning: DiagnosticSeverity.Warning,
+    info: DiagnosticSeverity.Information,
+    hint: DiagnosticSeverity.Hint,
   };
 
   constructor(connectionPool: ConnectionPool) {
@@ -104,7 +118,7 @@ export class DiagnosticsTool extends BaseTool<DiagnosticsInput, DiagnosticsOutpu
 
       // Get diagnostics based on scope
       let allDiagnostics: Map<string, Diagnostic[]>;
-      
+
       if (uri) {
         // File-specific diagnostics
         allDiagnostics = await this.getFileDiagnostics(uri);
@@ -132,31 +146,31 @@ export class DiagnosticsTool extends BaseTool<DiagnosticsInput, DiagnosticsOutpu
   private async getFileDiagnostics(uri: string): Promise<Map<string, Diagnostic[]>> {
     const connection = await this.clientManager.getForFile(uri, process.cwd());
     const diagnostics = new Map<string, Diagnostic[]>();
-    
+
     if (connection) {
       // Get cached diagnostics for the file
       const fileDiagnostics = connection.getDiagnostics(uri) || [];
       diagnostics.set(uri, fileDiagnostics);
     }
-    
+
     return diagnostics;
   }
 
   private getWorkspaceDiagnostics(): Map<string, Diagnostic[]> {
     const connections = this.clientManager.getAllConnections();
     const allDiagnostics = new Map<string, Diagnostic[]>();
-    
+
     for (const connection of connections) {
       // Get all cached diagnostics from this connection
       const diagnostics = connection.getAllDiagnostics() || new Map();
-      
+
       // Merge with existing diagnostics
       for (const [uri, fileDiags] of diagnostics) {
         const existing = allDiagnostics.get(uri) || [];
         allDiagnostics.set(uri, [...existing, ...fileDiags]);
       }
     }
-    
+
     return allDiagnostics;
   }
 
@@ -183,23 +197,23 @@ export class DiagnosticsTool extends BaseTool<DiagnosticsInput, DiagnosticsOutpu
 
         // Convert diagnostic to our format
         const severity = this.severityMap[diagnostic.severity || DiagnosticSeverity.Error];
-        
+
         const diagnosticWithFix: DiagnosticWithFixes = {
           uri,
           severity,
           range: {
             start: {
               line: diagnostic.range.start.line,
-              character: diagnostic.range.start.character
+              character: diagnostic.range.start.character,
             },
             end: {
               line: diagnostic.range.end.line,
-              character: diagnostic.range.end.character
-            }
+              character: diagnostic.range.end.character,
+            },
           },
           message: diagnostic.message,
           code: diagnostic.code,
-          source: diagnostic.source
+          source: diagnostic.source,
         };
 
         // Get quick fixes for this diagnostic
@@ -214,28 +228,28 @@ export class DiagnosticsTool extends BaseTool<DiagnosticsInput, DiagnosticsOutpu
 
         // Add related information if requested
         if (includeRelated && diagnostic.relatedInformation) {
-          diagnosticWithFix.related = diagnostic.relatedInformation.map(related => ({
+          diagnosticWithFix.related = diagnostic.relatedInformation.map((related) => ({
             location: {
               uri: related.location.uri,
               range: {
                 start: {
                   line: related.location.range.start.line,
-                  character: related.location.range.start.character
+                  character: related.location.range.start.character,
                 },
                 end: {
                   line: related.location.range.end.line,
-                  character: related.location.range.end.character
-                }
-              }
+                  character: related.location.range.end.character,
+                },
+              },
             },
-            message: related.message
+            message: related.message,
           }));
         }
 
         processed.push(diagnosticWithFix);
         count++;
       }
-      
+
       if (count >= maxResults) break;
     }
 
@@ -244,47 +258,55 @@ export class DiagnosticsTool extends BaseTool<DiagnosticsInput, DiagnosticsOutpu
       const severityOrder = { error: 0, warning: 1, info: 2, hint: 3 };
       const severityDiff = severityOrder[a.severity] - severityOrder[b.severity];
       if (severityDiff !== 0) return severityDiff;
-      
+
       const fileDiff = a.uri.localeCompare(b.uri);
       if (fileDiff !== 0) return fileDiff;
-      
+
       return a.range.start.line - b.range.start.line;
     });
 
     return processed;
   }
 
-  private async getQuickFixes(uri: string, diagnostic: Diagnostic): Promise<Array<{
-    title: string;
-    action: {
-      type: 'codeAction';
-      edit?: WorkspaceEdit;
-      command?: Command;
-    };
-  }>> {
+  private async getQuickFixes(
+    uri: string,
+    diagnostic: Diagnostic
+  ): Promise<
+    Array<{
+      title: string;
+      action: {
+        type: 'codeAction';
+        edit?: WorkspaceEdit;
+        command?: Command;
+      };
+    }>
+  > {
     const connection = await this.clientManager.getForFile(uri, process.cwd());
-    
+
     if (!connection) {
       return [];
     }
-    
+
     try {
       // Request code actions for this diagnostic
-      const codeActions = await connection.sendRequest<(CodeAction | Command)[] | null>('textDocument/codeAction', {
-        textDocument: { uri },
-        range: diagnostic.range,
-        context: {
-          diagnostics: [diagnostic],
-          only: [CodeActionKind.QuickFix]
+      const codeActions = await connection.sendRequest<(CodeAction | Command)[] | null>(
+        'textDocument/codeAction',
+        {
+          textDocument: { uri },
+          range: diagnostic.range,
+          context: {
+            diagnostics: [diagnostic],
+            only: [CodeActionKind.QuickFix],
+          },
         }
-      });
+      );
 
       if (!codeActions) return [];
 
       return codeActions
-        .filter(action => 'title' in action)
+        .filter((action) => 'title' in action)
         .slice(0, 5) // Limit to 5 quick fixes per diagnostic
-        .map(action => {
+        .map((action) => {
           if ('edit' in action || 'command' in action) {
             // It's a CodeAction
             const codeAction = action as CodeAction;
@@ -293,8 +315,8 @@ export class DiagnosticsTool extends BaseTool<DiagnosticsInput, DiagnosticsOutpu
               action: {
                 type: 'codeAction' as const,
                 edit: codeAction.edit,
-                command: codeAction.command
-              }
+                command: codeAction.command,
+              },
             };
           } else {
             // It's a Command
@@ -302,8 +324,8 @@ export class DiagnosticsTool extends BaseTool<DiagnosticsInput, DiagnosticsOutpu
               title: action.title,
               action: {
                 type: 'codeAction' as const,
-                command: action as unknown as Command
-              }
+                command: action as unknown as Command,
+              },
             };
           }
         });
@@ -320,18 +342,18 @@ export class DiagnosticsTool extends BaseTool<DiagnosticsInput, DiagnosticsOutpu
     // Calculate summary
     const summary = {
       total: diagnostics.length,
-      errors: diagnostics.filter(d => d.severity === 'error').length,
-      warnings: diagnostics.filter(d => d.severity === 'warning').length,
-      info: diagnostics.filter(d => d.severity === 'info').length,
-      hints: diagnostics.filter(d => d.severity === 'hint').length,
-      filesAffected: new Set(diagnostics.map(d => d.uri)).size
+      errors: diagnostics.filter((d) => d.severity === 'error').length,
+      warnings: diagnostics.filter((d) => d.severity === 'warning').length,
+      info: diagnostics.filter((d) => d.severity === 'info').length,
+      hints: diagnostics.filter((d) => d.severity === 'hint').length,
+      filesAffected: new Set(diagnostics.map((d) => d.uri)).size,
     };
 
     // If single file requested, return flat list
     if (requestedUri) {
       return {
         summary,
-        diagnostics
+        diagnostics,
       };
     }
 
@@ -346,11 +368,11 @@ export class DiagnosticsTool extends BaseTool<DiagnosticsInput, DiagnosticsOutpu
     const fileGroups = Array.from(byFile.entries()).map(([uri, fileDiagnostics]) => ({
       uri,
       count: fileDiagnostics.length,
-      errorCount: fileDiagnostics.filter(d => d.severity === 'error').length,
-      warningCount: fileDiagnostics.filter(d => d.severity === 'warning').length,
-      infoCount: fileDiagnostics.filter(d => d.severity === 'info').length,
-      hintCount: fileDiagnostics.filter(d => d.severity === 'hint').length,
-      diagnostics: fileDiagnostics
+      errorCount: fileDiagnostics.filter((d) => d.severity === 'error').length,
+      warningCount: fileDiagnostics.filter((d) => d.severity === 'warning').length,
+      infoCount: fileDiagnostics.filter((d) => d.severity === 'info').length,
+      hintCount: fileDiagnostics.filter((d) => d.severity === 'hint').length,
+      diagnostics: fileDiagnostics,
     }));
 
     // Sort file groups by error count (most errors first)
@@ -358,7 +380,7 @@ export class DiagnosticsTool extends BaseTool<DiagnosticsInput, DiagnosticsOutpu
 
     return {
       summary,
-      byFile: fileGroups
+      byFile: fileGroups,
     };
   }
 }

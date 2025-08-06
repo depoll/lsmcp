@@ -6,14 +6,18 @@ import { Diagnostic, DiagnosticSeverity, CodeAction } from 'vscode-languageserve
 describe('DiagnosticsTool', () => {
   let tool: DiagnosticsTool;
   let mockConnectionPool: jest.Mocked<ConnectionPool>;
-  let mockConnection: any;
+  let mockConnection: {
+    sendRequest: jest.Mock;
+    getDiagnostics: jest.Mock;
+    getAllDiagnostics: jest.Mock;
+  };
 
   beforeEach(() => {
     // Create mock connection
     mockConnection = {
       sendRequest: jest.fn(),
       getDiagnostics: jest.fn(),
-      getAllDiagnostics: jest.fn()
+      getAllDiagnostics: jest.fn(),
     };
 
     // Create mock connection pool
@@ -23,23 +27,22 @@ describe('DiagnosticsTool', () => {
       get: jest.fn(),
       initialize: jest.fn(),
       shutdown: jest.fn(),
-      getConnectionInfo: jest.fn()
-    } as any;
+      getConnectionInfo: jest.fn(),
+    } as unknown as jest.Mocked<ConnectionPool>;
 
     tool = new DiagnosticsTool(mockConnectionPool);
   });
-
 
   describe('execute', () => {
     const mockDiagnostic: Diagnostic = {
       range: {
         start: { line: 10, character: 5 },
-        end: { line: 10, character: 15 }
+        end: { line: 10, character: 15 },
       },
       message: "Cannot find name 'userr'. Did you mean 'user'?",
       severity: DiagnosticSeverity.Error,
       code: 2552,
-      source: 'typescript'
+      source: 'typescript',
     };
 
     const mockCodeAction: CodeAction = {
@@ -47,12 +50,14 @@ describe('DiagnosticsTool', () => {
       kind: 'quickfix',
       edit: {
         changes: {
-          'file:///test.ts': [{
-            range: mockDiagnostic.range,
-            newText: 'user'
-          }]
-        }
-      }
+          'file:///test.ts': [
+            {
+              range: mockDiagnostic.range,
+              newText: 'user',
+            },
+          ],
+        },
+      },
     };
 
     describe('file-specific diagnostics', () => {
@@ -72,7 +77,7 @@ describe('DiagnosticsTool', () => {
           uri,
           severity: 'error',
           message: mockDiagnostic.message,
-          code: mockDiagnostic.code
+          code: mockDiagnostic.code,
         });
       });
 
@@ -83,13 +88,15 @@ describe('DiagnosticsTool', () => {
 
         const result = await tool.execute({ uri });
 
-        expect(result.diagnostics![0].quickFixes).toHaveLength(1);
-        expect(result.diagnostics![0].quickFixes![0]).toMatchObject({
+        const firstDiagnostic = result.diagnostics?.[0];
+        expect(firstDiagnostic?.quickFixes).toHaveLength(1);
+        const firstQuickFix = firstDiagnostic?.quickFixes?.[0];
+        expect(firstQuickFix).toMatchObject({
           title: mockCodeAction.title,
           action: {
             type: 'codeAction',
-            edit: mockCodeAction.edit
-          }
+            edit: mockCodeAction.edit,
+          },
         });
       });
 
@@ -98,27 +105,24 @@ describe('DiagnosticsTool', () => {
         const warningDiagnostic: Diagnostic = {
           ...mockDiagnostic,
           severity: DiagnosticSeverity.Warning,
-          message: 'Unused variable'
+          message: 'Unused variable',
         };
 
-        mockConnection.getDiagnostics.mockReturnValue([
-          mockDiagnostic,
-          warningDiagnostic
-        ]);
+        mockConnection.getDiagnostics.mockReturnValue([mockDiagnostic, warningDiagnostic]);
 
         const result = await tool.execute({ uri, severity: 'error' });
 
         expect(result.summary.total).toBe(1);
         expect(result.summary.errors).toBe(1);
         expect(result.summary.warnings).toBe(0);
-        expect(result.diagnostics![0].message).toBe(mockDiagnostic.message);
+        expect(result.diagnostics?.[0]?.message).toBe(mockDiagnostic.message);
       });
 
       it('should respect maxResults limit', async () => {
         const uri = 'file:///test.ts';
         const diagnostics = Array.from({ length: 10 }, (_, i) => ({
           ...mockDiagnostic,
-          message: `Error ${i}`
+          message: `Error ${i}`,
         }));
 
         mockConnection.getDiagnostics.mockReturnValue(diagnostics);
@@ -133,32 +137,35 @@ describe('DiagnosticsTool', () => {
         const uri = 'file:///test.ts';
         const diagnosticWithRelated: Diagnostic = {
           ...mockDiagnostic,
-          relatedInformation: [{
-            location: {
-              uri: 'file:///types.ts',
-              range: {
-                start: { line: 5, character: 0 },
-                end: { line: 5, character: 10 }
-              }
+          relatedInformation: [
+            {
+              location: {
+                uri: 'file:///types.ts',
+                range: {
+                  start: { line: 5, character: 0 },
+                  end: { line: 5, character: 10 },
+                },
+              },
+              message: "Type 'User' is declared here",
             },
-            message: "Type 'User' is declared here"
-          }]
+          ],
         };
 
         mockConnection.getDiagnostics.mockReturnValue([diagnosticWithRelated]);
 
         const result = await tool.execute({ uri, includeRelated: true });
 
-        expect(result.diagnostics![0].related).toHaveLength(1);
-        expect(result.diagnostics![0].related![0]).toMatchObject({
+        const firstDiagnostic = result.diagnostics?.[0];
+        expect(firstDiagnostic?.related).toHaveLength(1);
+        expect(firstDiagnostic?.related?.[0]).toMatchObject({
           location: {
             uri: 'file:///types.ts',
             range: {
               start: { line: 5, character: 0 },
-              end: { line: 5, character: 10 }
-            }
+              end: { line: 5, character: 10 },
+            },
           },
-          message: "Type 'User' is declared here"
+          message: "Type 'User' is declared here",
         });
       });
     });
@@ -167,11 +174,16 @@ describe('DiagnosticsTool', () => {
       it('should get diagnostics for entire workspace', async () => {
         const diagnosticsMap = new Map([
           ['file:///a.ts', [mockDiagnostic]],
-          ['file:///b.ts', [{
-            ...mockDiagnostic,
-            severity: DiagnosticSeverity.Warning,
-            message: 'Warning in file B'
-          }]]
+          [
+            'file:///b.ts',
+            [
+              {
+                ...mockDiagnostic,
+                severity: DiagnosticSeverity.Warning,
+                message: 'Warning in file B',
+              },
+            ],
+          ],
         ]);
 
         mockConnection.getAllDiagnostics.mockReturnValue(diagnosticsMap);
@@ -187,19 +199,18 @@ describe('DiagnosticsTool', () => {
       });
 
       it('should group diagnostics by file', async () => {
-        const file1Diagnostics = [
-          mockDiagnostic,
-          { ...mockDiagnostic, message: 'Error 2' }
+        const file1Diagnostics = [mockDiagnostic, { ...mockDiagnostic, message: 'Error 2' }];
+        const file2Diagnostics = [
+          {
+            ...mockDiagnostic,
+            severity: DiagnosticSeverity.Warning,
+            message: 'Warning',
+          },
         ];
-        const file2Diagnostics = [{
-          ...mockDiagnostic,
-          severity: DiagnosticSeverity.Warning,
-          message: 'Warning'
-        }];
 
         const diagnosticsMap = new Map([
           ['file:///a.ts', file1Diagnostics],
-          ['file:///b.ts', file2Diagnostics]
+          ['file:///b.ts', file2Diagnostics],
         ]);
 
         mockConnection.getAllDiagnostics.mockReturnValue(diagnosticsMap);
@@ -207,41 +218,49 @@ describe('DiagnosticsTool', () => {
         const result = await tool.execute({});
 
         expect(result.byFile).toHaveLength(2);
-        expect(result.byFile![0]).toMatchObject({
+        expect(result.byFile?.[0]).toMatchObject({
           uri: 'file:///a.ts',
           count: 2,
           errorCount: 2,
-          warningCount: 0
+          warningCount: 0,
         });
-        expect(result.byFile![1]).toMatchObject({
+        expect(result.byFile?.[1]).toMatchObject({
           uri: 'file:///b.ts',
           count: 1,
           errorCount: 0,
-          warningCount: 1
+          warningCount: 1,
         });
       });
 
       it('should sort files by error count', async () => {
         const diagnosticsMap = new Map([
-          ['file:///few-errors.ts', [{
-            ...mockDiagnostic,
-            severity: DiagnosticSeverity.Warning
-          }]],
-          ['file:///many-errors.ts', [
-            mockDiagnostic,
-            { ...mockDiagnostic, message: 'Error 2' },
-            { ...mockDiagnostic, message: 'Error 3' }
-          ]]
+          [
+            'file:///few-errors.ts',
+            [
+              {
+                ...mockDiagnostic,
+                severity: DiagnosticSeverity.Warning,
+              },
+            ],
+          ],
+          [
+            'file:///many-errors.ts',
+            [
+              mockDiagnostic,
+              { ...mockDiagnostic, message: 'Error 2' },
+              { ...mockDiagnostic, message: 'Error 3' },
+            ],
+          ],
         ]);
 
         mockConnection.getAllDiagnostics.mockReturnValue(diagnosticsMap);
 
         const result = await tool.execute({});
 
-        expect(result.byFile![0].uri).toBe('file:///many-errors.ts');
-        expect(result.byFile![0].errorCount).toBe(3);
-        expect(result.byFile![1].uri).toBe('file:///few-errors.ts');
-        expect(result.byFile![1].errorCount).toBe(0);
+        expect(result.byFile?.[0]?.uri).toBe('file:///many-errors.ts');
+        expect(result.byFile?.[0]?.errorCount).toBe(3);
+        expect(result.byFile?.[1]?.uri).toBe('file:///few-errors.ts');
+        expect(result.byFile?.[1]?.errorCount).toBe(0);
       });
     });
 
@@ -252,31 +271,31 @@ describe('DiagnosticsTool', () => {
           { ...mockDiagnostic, severity: DiagnosticSeverity.Error },
           { ...mockDiagnostic, severity: DiagnosticSeverity.Warning },
           { ...mockDiagnostic, severity: DiagnosticSeverity.Information },
-          { ...mockDiagnostic, severity: DiagnosticSeverity.Hint }
+          { ...mockDiagnostic, severity: DiagnosticSeverity.Hint },
         ];
 
         mockConnection.getDiagnostics.mockReturnValue(diagnostics);
 
         const result = await tool.execute({ uri });
 
-        expect(result.diagnostics![0].severity).toBe('error');
-        expect(result.diagnostics![1].severity).toBe('warning');
-        expect(result.diagnostics![2].severity).toBe('info');
-        expect(result.diagnostics![3].severity).toBe('hint');
+        expect(result.diagnostics?.[0]?.severity).toBe('error');
+        expect(result.diagnostics?.[1]?.severity).toBe('warning');
+        expect(result.diagnostics?.[2]?.severity).toBe('info');
+        expect(result.diagnostics?.[3]?.severity).toBe('hint');
       });
 
       it('should handle missing severity as error', async () => {
         const uri = 'file:///test.ts';
         const diagnosticNoSeverity: Diagnostic = {
           range: mockDiagnostic.range,
-          message: 'No severity specified'
+          message: 'No severity specified',
         };
 
         mockConnection.getDiagnostics.mockReturnValue([diagnosticNoSeverity]);
 
         const result = await tool.execute({ uri });
 
-        expect(result.diagnostics![0].severity).toBe('error');
+        expect(result.diagnostics?.[0]?.severity).toBe('error');
       });
     });
 
@@ -298,7 +317,7 @@ describe('DiagnosticsTool', () => {
 
         const result = await tool.execute({ uri });
 
-        expect(result.diagnostics![0].quickFixes).toBeUndefined();
+        expect(result.diagnostics?.[0]?.quickFixes).toBeUndefined();
         expect(result.summary.total).toBe(1);
       });
 
@@ -309,7 +328,7 @@ describe('DiagnosticsTool', () => {
 
         const result = await tool.execute({ uri });
 
-        expect(result.diagnostics![0].quickFixes).toBeUndefined();
+        expect(result.diagnostics?.[0]?.quickFixes).toBeUndefined();
       });
     });
 
@@ -319,23 +338,23 @@ describe('DiagnosticsTool', () => {
           {
             ...mockDiagnostic,
             severity: DiagnosticSeverity.Warning,
-            range: { start: { line: 20, character: 0 }, end: { line: 20, character: 10 } }
+            range: { start: { line: 20, character: 0 }, end: { line: 20, character: 10 } },
           },
           {
             ...mockDiagnostic,
             severity: DiagnosticSeverity.Error,
-            range: { start: { line: 10, character: 0 }, end: { line: 10, character: 10 } }
+            range: { start: { line: 10, character: 0 }, end: { line: 10, character: 10 } },
           },
           {
             ...mockDiagnostic,
             severity: DiagnosticSeverity.Error,
-            range: { start: { line: 5, character: 0 }, end: { line: 5, character: 10 } }
-          }
+            range: { start: { line: 5, character: 0 }, end: { line: 5, character: 10 } },
+          },
         ];
 
         const diagnosticsMap = new Map([
           ['file:///b.ts', [diagnostics[0]]],
-          ['file:///a.ts', [diagnostics[1], diagnostics[2]]]
+          ['file:///a.ts', [diagnostics[1], diagnostics[2]]],
         ]);
 
         mockConnection.getAllDiagnostics.mockReturnValue(diagnosticsMap);
@@ -343,11 +362,11 @@ describe('DiagnosticsTool', () => {
         const result = await tool.execute({});
 
         // Should be sorted: errors first, then by file, then by line
-        expect(result.byFile![0].uri).toBe('file:///a.ts');
-        expect(result.byFile![0].diagnostics[0].range.start.line).toBe(5);
-        expect(result.byFile![0].diagnostics[1].range.start.line).toBe(10);
-        expect(result.byFile![1].uri).toBe('file:///b.ts');
-        expect(result.byFile![1].diagnostics[0].severity).toBe('warning');
+        expect(result.byFile?.[0]?.uri).toBe('file:///a.ts');
+        expect(result.byFile?.[0]?.diagnostics[0]?.range.start.line).toBe(5);
+        expect(result.byFile?.[0]?.diagnostics[1]?.range.start.line).toBe(10);
+        expect(result.byFile?.[1]?.uri).toBe('file:///b.ts');
+        expect(result.byFile?.[1]?.diagnostics[0]?.severity).toBe('warning');
       });
     });
   });
