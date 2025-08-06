@@ -103,8 +103,10 @@ export class LSPClient extends EventEmitter {
       const initParams: InitializeParams = {
         processId: process.pid,
         capabilities: {},
-        // rootUri is deprecated but still required by the type, using workspaceFolders instead
-        rootUri: null,
+        // rootUri is deprecated but still required by the type, provide first workspace folder
+        rootUri: this.options.workspaceFolders?.[0]
+          ? this.toFileUri(this.options.workspaceFolders[0])
+          : null,
         workspaceFolders:
           this.options.workspaceFolders?.map((folder) => ({
             uri: this.toFileUri(folder),
@@ -114,6 +116,7 @@ export class LSPClient extends EventEmitter {
       };
 
       this.logger.info('Sending initialize request', {
+        rootUri: initParams.rootUri,
         workspaceFolders: initParams.workspaceFolders,
       });
       const result = await this.protocolHandler.initialize(initParams);
