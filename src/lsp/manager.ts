@@ -344,6 +344,13 @@ export class ConnectionPool {
     await Promise.all(promises);
   }
 
+  /**
+   * Alias for disposeAll() to provide a more intuitive name for shutting down all connections
+   */
+  async shutdown(): Promise<void> {
+    return this.disposeAll();
+  }
+
   getHealth(): Map<string, HealthStatus> {
     const health = new Map<string, HealthStatus>();
     this.connections.forEach((info, key) => {

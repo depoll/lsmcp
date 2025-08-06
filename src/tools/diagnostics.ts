@@ -148,9 +148,14 @@ export class DiagnosticsTool extends BaseTool<DiagnosticsInput, DiagnosticsOutpu
     const diagnostics = new Map<string, Diagnostic[]>();
 
     if (connection) {
-      // Get cached diagnostics for the file
-      const fileDiagnostics = connection.getDiagnostics(uri) || [];
-      diagnostics.set(uri, fileDiagnostics);
+      // Check if getDiagnostics method exists before calling it
+      if (typeof connection.getDiagnostics === 'function') {
+        // Get cached diagnostics for the file
+        const fileDiagnostics = connection.getDiagnostics(uri) || [];
+        diagnostics.set(uri, fileDiagnostics);
+      } else {
+        logger.debug({ uri }, 'Connection does not support getDiagnostics method');
+      }
     }
 
     return diagnostics;
@@ -161,13 +166,18 @@ export class DiagnosticsTool extends BaseTool<DiagnosticsInput, DiagnosticsOutpu
     const allDiagnostics = new Map<string, Diagnostic[]>();
 
     for (const connection of connections) {
-      // Get all cached diagnostics from this connection
-      const diagnostics = connection.getAllDiagnostics() || new Map();
+      // Check if getAllDiagnostics method exists before calling it
+      if (typeof connection.getAllDiagnostics === 'function') {
+        // Get all cached diagnostics from this connection
+        const diagnostics = connection.getAllDiagnostics() || new Map();
 
-      // Merge with existing diagnostics
-      for (const [uri, fileDiags] of diagnostics) {
-        const existing = allDiagnostics.get(uri) || [];
-        allDiagnostics.set(uri, [...existing, ...fileDiags]);
+        // Merge with existing diagnostics
+        for (const [uri, fileDiags] of diagnostics) {
+          const existing = allDiagnostics.get(uri) || [];
+          allDiagnostics.set(uri, [...existing, ...fileDiags]);
+        }
+      } else {
+        logger.debug('Connection does not support getAllDiagnostics method');
       }
     }
 

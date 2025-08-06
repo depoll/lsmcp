@@ -19,7 +19,7 @@ describe('DiagnosticsTool Integration', () => {
   }, 30000);
 
   afterAll(async () => {
-    await connectionPool.disposeAll();
+    await connectionPool.shutdown();
     // Clean up test directory
     rmSync(testDir, { recursive: true, force: true });
   });
