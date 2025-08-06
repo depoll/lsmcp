@@ -6,6 +6,15 @@ import { logger } from './logger.js';
 
 /**
  * Apply text edits to a file
+ *
+ * IMPORTANT: Line and character positions are 0-indexed!
+ * - First line in file = line 0
+ * - First character in line = character 0
+ * - To insert at position: start === end
+ * - To delete text: newText = ""
+ *
+ * @param uri - File URI (must exist unless just created)
+ * @param edits - Array of text edits with 0-indexed positions
  */
 export async function applyTextEdits(uri: string, edits: TextEdit[]): Promise<void> {
   const filePath = fileURLToPath(uri);
@@ -57,7 +66,7 @@ export async function applyTextEdits(uri: string, edits: TextEdit[]): Promise<vo
     const startChar = edit.range.start.character;
     const endChar = edit.range.end.character;
 
-    // Validate line numbers
+    // Validate line numbers (0-indexed: valid range is 0 to lines.length-1)
     if (startLine < 0 || startLine >= lines.length) {
       throw new Error(`Invalid start line ${startLine + 1}. File has ${lines.length} lines.`);
     }

@@ -15,8 +15,10 @@ import { z } from 'zod';
 
 // Comprehensive WorkspaceEdit schema definition following LSP specification
 const TextEditSchema = z.object({
-  range: rangeSchema,
-  newText: z.string(),
+  range: rangeSchema.describe(
+    'Range to replace. Lines/chars are 0-indexed. To insert: start=end. To delete: newText=""'
+  ),
+  newText: z.string().describe('Text to insert. Use \\n for newlines. Empty string to delete.'),
 });
 
 const TextDocumentEditSchema = z.object({
@@ -84,7 +86,10 @@ const WorkspaceEditSchema = z.object({
 });
 
 const ApplyEditParamsSchema = z.object({
-  edit: WorkspaceEditSchema.describe('The workspace edit to apply'),
+  edit: WorkspaceEditSchema.describe(
+    'The workspace edit to apply. Use documentChanges for ordered operations (e.g., create then edit). ' +
+      'Use changes for simple text edits to existing files.'
+  ),
   label: z.string().optional().describe('Optional label to describe the edit operation'),
 });
 
@@ -114,9 +119,22 @@ export type ApplyEditResult = StandardResult<ApplyEditResultData>;
 export class ApplyEditTool extends BatchableTool<ApplyEditParams, ApplyEditResult> {
   readonly name = 'applyEdit';
   readonly description =
-    'Apply workspace edits via LSP workspace/applyEdit. Modifies files with text changes, ' +
-    'creates/deletes files, or renames files. Returns diff showing changes. CAUTION: This ' +
-    'tool makes destructive changes to your workspace - review the diff output carefully.';
+    'Apply workspace edits to modify files with precise text changes, create/delete files, or rename files. ' +
+    'Returns diff showing changes made. CAUTION: Makes destructive changes - review diff carefully.\n\n' +
+    'CRITICAL POSITIONING RULES:\n' +
+    '• Lines are 0-indexed (first line = 0, second line = 1, etc.)\n' +
+    '• Characters are 0-indexed within each line (first char = 0)\n' +
+    '• To insert at line start: character = 0\n' +
+    '• To insert at line end: character = line.length\n' +
+    '• To replace entire line: start.character = 0, end.character = line.length\n' +
+    '• To insert between lines: use end of previous line (line N, char = line.length)\n\n' +
+    'FILE OPERATIONS ORDER:\n' +
+    '• Always put create/rename/delete operations BEFORE text edits\n' +
+    '• When creating file with content: 1) create file, 2) add text edit\n\n' +
+    'COMMON MISTAKES TO AVOID:\n' +
+    '• Using 1-based line numbers (use 0-based!)\n' +
+    "• Trying to edit files that don't exist yet (create them first!)\n" +
+    '• Overlapping text edits (edits must not overlap!)';
   readonly inputSchema = ApplyEditParamsSchema;
 
   /** Output schema for MCP tool discovery */
