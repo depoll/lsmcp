@@ -162,31 +162,38 @@ export class ApplyEditTool extends BatchableTool<ApplyEditParams, ApplyEditResul
       // Validate workspace edit safety
       this.validateWorkspaceEditSafety(validatedParams.edit);
 
-      // Get the first URI from the edit to determine which LSP client to use
-      const uri = this.getFirstUri(validatedParams.edit);
-      if (!uri) {
-        throw new MCPError(MCPErrorCode.INVALID_PARAMS, 'No URIs found in workspace edit', {
-          edit: validatedParams.edit,
-        });
-      }
+      // Check if this is a pure file operation that doesn't need a language server
+      // OR if it starts with a create operation (file doesn't exist yet)
+      const isPureFileOperation = this.isPureFileOperation(validatedParams.edit);
+      const startsWithCreate = this.startsWithCreateOperation(validatedParams.edit);
 
-      const language = getLanguageFromUri(uri);
-      const client = await this.clientManager.get(language, uri);
+      if (!isPureFileOperation && !startsWithCreate) {
+        // Get the first URI from the edit to determine which LSP client to use
+        const uri = this.getFirstUri(validatedParams.edit);
+        if (!uri) {
+          throw new MCPError(MCPErrorCode.INVALID_PARAMS, 'No URIs found in workspace edit', {
+            edit: validatedParams.edit,
+          });
+        }
 
-      if (!client) {
-        throw new MCPError(
-          MCPErrorCode.NO_LANGUAGE_SERVER,
-          `No language server available for ${language}`,
-          { language, uri }
-        );
-      }
+        const language = getLanguageFromUri(uri);
+        const client = await this.clientManager.get(language, uri);
 
-      if (!client.isConnected()) {
-        throw new MCPError(
-          MCPErrorCode.NO_LANGUAGE_SERVER,
-          `Language server not connected for ${language}`,
-          { language, uri }
-        );
+        if (!client) {
+          throw new MCPError(
+            MCPErrorCode.NO_LANGUAGE_SERVER,
+            `No language server available for ${language}`,
+            { language, uri }
+          );
+        }
+
+        if (!client.isConnected()) {
+          throw new MCPError(
+            MCPErrorCode.NO_LANGUAGE_SERVER,
+            `Language server not connected for ${language}`,
+            { language, uri }
+          );
+        }
       }
 
       // Generate summary before applying
@@ -373,5 +380,39 @@ export class ApplyEditTool extends BatchableTool<ApplyEditParams, ApplyEditResul
     });
 
     return grouped;
+  }
+
+  /**
+   * Check if this is a pure file operation (create/delete/rename) without text edits
+   */
+  private isPureFileOperation(edit: WorkspaceEdit): boolean {
+    // If there are simple changes, it's not a pure file operation
+    if (edit.changes && Object.keys(edit.changes).length > 0) {
+      return false;
+    }
+
+    // Check document changes
+    if (!edit.documentChanges || edit.documentChanges.length === 0) {
+      return false;
+    }
+
+    // Check if all changes are file operations (not text edits)
+    return edit.documentChanges.every((change) => {
+      // If it has 'kind', it's a file operation (create/delete/rename)
+      // If it has 'textDocument', it's a text edit
+      return 'kind' in change;
+    });
+  }
+
+  /**
+   * Check if the edit starts with a create operation (for files that don't exist yet)
+   */
+  private startsWithCreateOperation(edit: WorkspaceEdit): boolean {
+    if (!edit.documentChanges || edit.documentChanges.length === 0) {
+      return false;
+    }
+
+    const firstChange = edit.documentChanges[0];
+    return Boolean(firstChange && 'kind' in firstChange && firstChange.kind === 'create');
   }
 }
