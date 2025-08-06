@@ -286,11 +286,6 @@ export class PythonLanguageServerProvider implements LanguageServerProvider {
       }, timeout);
       timer.unref();
 
-      if (!child) {
-        reject(new Error('Failed to create child process'));
-        return;
-      }
-
       child.stdout.on('data', (data: Buffer) => {
         stdout += data.toString();
       });
