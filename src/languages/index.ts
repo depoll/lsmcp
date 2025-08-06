@@ -4,3 +4,4 @@ export {
   type LanguageServerProvider,
   createLanguageServerProvider,
 } from './typescript-provider.js';
+export { PythonLanguageServerProvider } from './python-provider.js';

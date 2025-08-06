@@ -79,14 +79,14 @@ npm run build
 
 ## Supported Languages
 
-- TypeScript/JavaScript
-- Python
-- Go
-- Rust
-- Java
-- C/C++
-- Ruby
-- PHP
+- **TypeScript/JavaScript** - Full support with automatic project detection
+- **Python** - Full support with virtual environment detection (venv, Poetry, Pipenv, Conda)
+- Go (configuration available)
+- Rust (configuration available)
+- Java (configuration available)
+- C/C++ (configuration available)
+- Ruby (configuration available)
+- PHP (configuration available)
 - And more...
 
 ## Architecture

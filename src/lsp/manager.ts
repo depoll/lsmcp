@@ -177,7 +177,7 @@ export class ConnectionPool {
         };
 
         // Check if server is available
-        const provider = createLanguageServerProvider(detected);
+        const provider = await createLanguageServerProvider(detected);
         if (provider && !(await provider.isAvailable())) {
           const installCmd = this.getInstallCommand(language);
           this.logger.warn(
@@ -384,7 +384,7 @@ export class ConnectionPool {
       // Only check availability if we don't have an existing connection
       // This avoids unnecessary availability checks for servers we've already started
       if (!existing) {
-        const provider = createLanguageServerProvider(detectedWithRoot);
+        const provider = await createLanguageServerProvider(detectedWithRoot);
         if (provider && !(await provider.isAvailable())) {
           const installCmd = this.getInstallCommand(detected.id);
           this.logger.warn(

@@ -211,13 +211,18 @@ export class TypeScriptLanguageServerProvider implements LanguageServerProvider 
   }
 }
 
-export function createLanguageServerProvider(
+export async function createLanguageServerProvider(
   language: DetectedLanguage
-): LanguageServerProvider | null {
+): Promise<LanguageServerProvider | null> {
   switch (language.id) {
     case 'typescript':
     case 'javascript':
       return new TypeScriptLanguageServerProvider(language);
+    case 'python': {
+      // Dynamic import to avoid circular dependency
+      const { PythonLanguageServerProvider } = await import('./python-provider.js');
+      return new PythonLanguageServerProvider(language);
+    }
     default:
       return null;
   }
