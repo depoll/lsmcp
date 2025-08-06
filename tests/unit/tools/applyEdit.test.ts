@@ -186,7 +186,7 @@ describe('ApplyEditTool', () => {
       expect(jest.mocked(mockClientManager.get)).toHaveBeenCalledWith('typescript', testFileUri);
     });
 
-    it('should extract URI from create file operation', async () => {
+    it('should skip language server for pure create file operation', async () => {
       const newFile = join(testDir, 'new.ts');
       const newFileUri = `file://${newFile}`;
 
@@ -202,10 +202,11 @@ describe('ApplyEditTool', () => {
       const result = await tool.execute({ edit });
 
       expect(result.data.applied).toBe(true);
-      expect(jest.mocked(mockClientManager.get)).toHaveBeenCalledWith('typescript', newFileUri);
+      // Should NOT call language server for pure file operations
+      expect(jest.mocked(mockClientManager.get)).not.toHaveBeenCalled();
     });
 
-    it('should extract URI from rename file operation', async () => {
+    it('should skip language server for pure rename file operation', async () => {
       await writeFile(testFile, 'const x = 5;\n');
       const newFile = join(testDir, 'new.ts');
       const newFileUri = `file://${newFile}`;
@@ -223,7 +224,43 @@ describe('ApplyEditTool', () => {
       const result = await tool.execute({ edit });
 
       expect(result.data.applied).toBe(true);
-      expect(jest.mocked(mockClientManager.get)).toHaveBeenCalledWith('typescript', testFileUri);
+      // Should NOT call language server for pure file operations
+      expect(jest.mocked(mockClientManager.get)).not.toHaveBeenCalled();
+    });
+
+    it('should skip language server when create operation comes first', async () => {
+      const newFile = join(testDir, 'new.ts');
+      const newFileUri = `file://${newFile}`;
+
+      const edit: WorkspaceEdit = {
+        documentChanges: [
+          {
+            kind: 'create',
+            uri: newFileUri,
+          },
+          {
+            textDocument: {
+              uri: newFileUri,
+              version: null,
+            },
+            edits: [
+              {
+                range: {
+                  start: { line: 0, character: 0 },
+                  end: { line: 0, character: 0 },
+                },
+                newText: 'const x = 5;',
+              },
+            ],
+          },
+        ],
+      };
+
+      const result = await tool.execute({ edit });
+
+      expect(result.data.applied).toBe(true);
+      // Should NOT call language server when creating a new file with content
+      expect(jest.mocked(mockClientManager.get)).not.toHaveBeenCalled();
     });
   });
 
