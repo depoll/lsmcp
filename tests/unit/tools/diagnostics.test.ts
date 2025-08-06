@@ -22,12 +22,12 @@ describe('DiagnosticsTool', () => {
 
     // Create mock connection pool
     mockConnectionPool = {
-      getForFile: jest.fn().mockResolvedValue(mockConnection),
-      getAllConnections: jest.fn().mockReturnValue([mockConnection]),
-      get: jest.fn(),
-      initialize: jest.fn(),
-      shutdown: jest.fn(),
-      getConnectionInfo: jest.fn(),
+      getForFile: jest.fn().mockResolvedValue(mockConnection as never) as jest.Mock,
+      getAllConnections: jest.fn().mockReturnValue([mockConnection]) as jest.Mock,
+      get: jest.fn() as jest.Mock,
+      initialize: jest.fn() as jest.Mock,
+      shutdown: jest.fn() as jest.Mock,
+      getConnectionInfo: jest.fn() as jest.Mock,
     } as unknown as jest.Mocked<ConnectionPool>;
 
     tool = new DiagnosticsTool(mockConnectionPool);
@@ -64,11 +64,12 @@ describe('DiagnosticsTool', () => {
       it('should get diagnostics for a specific file', async () => {
         const uri = 'file:///test.ts';
         mockConnection.getDiagnostics.mockReturnValue([mockDiagnostic]);
-        mockConnection.sendRequest.mockResolvedValue([mockCodeAction]);
+        mockConnection.sendRequest.mockResolvedValue([mockCodeAction] as never);
 
         const result = await tool.execute({ uri });
 
-        expect(mockConnectionPool.getForFile).toHaveBeenCalledWith(uri, expect.any(String));
+        // eslint-disable-next-line @typescript-eslint/unbound-method
+        expect(mockConnectionPool.getForFile).toHaveBeenCalledWith(uri, expect.stringMatching(/.*/));
         expect(mockConnection.getDiagnostics).toHaveBeenCalledWith(uri);
         expect(result.summary.total).toBe(1);
         expect(result.summary.errors).toBe(1);
@@ -84,7 +85,7 @@ describe('DiagnosticsTool', () => {
       it('should include quick fixes when available', async () => {
         const uri = 'file:///test.ts';
         mockConnection.getDiagnostics.mockReturnValue([mockDiagnostic]);
-        mockConnection.sendRequest.mockResolvedValue([mockCodeAction]);
+        mockConnection.sendRequest.mockResolvedValue([mockCodeAction] as never);
 
         const result = await tool.execute({ uri });
 
@@ -190,6 +191,7 @@ describe('DiagnosticsTool', () => {
 
         const result = await tool.execute({});
 
+        // eslint-disable-next-line @typescript-eslint/unbound-method
         expect(mockConnectionPool.getAllConnections).toHaveBeenCalled();
         expect(result.summary.total).toBe(2);
         expect(result.summary.errors).toBe(1);
@@ -302,7 +304,12 @@ describe('DiagnosticsTool', () => {
     describe('error handling', () => {
       it('should handle missing getDiagnostics method gracefully', async () => {
         const uri = 'file:///test.ts';
-        mockConnection.getDiagnostics = undefined;
+        // Mock a connection without getDiagnostics
+        const connectionWithoutDiagnostics = {
+          sendRequest: jest.fn(),
+          getAllDiagnostics: jest.fn(),
+        };
+        (mockConnectionPool.getForFile as jest.Mock).mockResolvedValue(connectionWithoutDiagnostics as never);
 
         const result = await tool.execute({ uri });
 
@@ -313,7 +320,7 @@ describe('DiagnosticsTool', () => {
       it('should handle code action request failures gracefully', async () => {
         const uri = 'file:///test.ts';
         mockConnection.getDiagnostics.mockReturnValue([mockDiagnostic]);
-        mockConnection.sendRequest.mockRejectedValue(new Error('Code action failed'));
+        mockConnection.sendRequest.mockRejectedValue(new Error('Code action failed') as never);
 
         const result = await tool.execute({ uri });
 
@@ -324,7 +331,7 @@ describe('DiagnosticsTool', () => {
       it('should handle null code actions response', async () => {
         const uri = 'file:///test.ts';
         mockConnection.getDiagnostics.mockReturnValue([mockDiagnostic]);
-        mockConnection.sendRequest.mockResolvedValue(null);
+        mockConnection.sendRequest.mockResolvedValue(null as never);
 
         const result = await tool.execute({ uri });
 

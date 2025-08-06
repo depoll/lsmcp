@@ -11,7 +11,7 @@ describe('DiagnosticsTool Integration', () => {
   let connectionPool: ConnectionPool;
   let testDir: string;
 
-  beforeAll(async () => {
+  beforeAll(() => {
     // Create a temporary test directory
     testDir = mkdtempSync(path.join(tmpdir(), 'lsmcp-test-'));
     connectionPool = new ConnectionPool();
@@ -55,15 +55,15 @@ describe('DiagnosticsTool Integration', () => {
       expect(result.summary.errors).toBeGreaterThan(0);
 
       // Should detect the type mismatch error
-      const typeError = result.diagnostics?.find(
-        (d) => d.message.includes('number') && d.message.includes('string')
-      );
+      const typeError = result.diagnostics?.find((d) => {
+        return d.message.includes('number') && d.message.includes('string');
+      });
       expect(typeError).toBeDefined();
 
       // Should detect the property error
-      const propError = result.diagnostics?.find(
-        (d) => d.message.includes('age') || d.message.includes('property')
-      );
+      const propError = result.diagnostics?.find((d) => {
+        return d.message.includes('age') || d.message.includes('property');
+      });
       expect(propError).toBeDefined();
     }, 30000);
 
@@ -88,9 +88,9 @@ describe('DiagnosticsTool Integration', () => {
 
       expect(result.summary.errors).toBeGreaterThan(0);
 
-      const spellingError = result.diagnostics?.find(
-        (d) => d.message.includes('naem') || d.message.includes('name')
-      );
+      const spellingError = result.diagnostics?.find((d) => {
+        return d.message.includes('naem') || d.message.includes('name');
+      });
 
       expect(spellingError).toBeDefined();
 
@@ -264,11 +264,12 @@ print(undefined_variable)
 
       // Should at least detect the undefined variable
       if (result.summary.total > 0) {
-        const undefinedError = result.diagnostics?.find(
-          (d) =>
+        const undefinedError = result.diagnostics?.find((d) => {
+          return (
             d.message.toLowerCase().includes('undefined') ||
             d.message.toLowerCase().includes('not defined')
-        );
+          );
+        });
         expect(undefinedError).toBeDefined();
       }
     }, 30000);
