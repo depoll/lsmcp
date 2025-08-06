@@ -94,17 +94,17 @@ function delay(ms: number): Promise<void> {
  * Create a retry wrapper for LSP read operations
  * Specifically tuned for LSP indexing lag scenarios
  */
-export function createLSPRetryWrapper<T extends (...args: unknown[]) => Promise<unknown>>(
+export function createLSPRetryWrapper<T extends (...args: any[]) => Promise<any>>(
   operation: T,
   customOptions?: RetryOptions
-): T {
-  return (async (...args: Parameters<T>): Promise<ReturnType<T>> => {
+): (...args: Parameters<T>) => Promise<Awaited<ReturnType<T>>> {
+  return async (...args: Parameters<T>): Promise<Awaited<ReturnType<T>>> => {
     const result = await retryWithBackoff(() => operation(...args), {
       maxAttempts: 3,
       delayMs: 1000, // Start with 1 second for LSP indexing
       backoffMultiplier: 2, // Double the delay each time
       ...customOptions,
     });
-    return result as ReturnType<T>;
-  }) as T;
+    return result;
+  };
 }

@@ -216,6 +216,13 @@ function formatDiffs(diffs: DiffEntry[]): string {
 }
 
 /**
+ * Helper to pluralize words based on count
+ */
+function pluralize(count: number, singular: string, plural?: string): string {
+  return count === 1 ? singular : (plural || `${singular}s`);
+}
+
+/**
  * Format a simple summary of changes
  */
 export function formatWorkspaceEditSummary(edit: WorkspaceEdit): string {
@@ -247,12 +254,10 @@ export function formatWorkspaceEditSummary(edit: WorkspaceEdit): string {
 
   const parts: string[] = [];
   if (editCount > 0)
-    parts.push(
-      `${editCount} edit${editCount !== 1 ? 's' : ''} in ${fileCount} file${fileCount !== 1 ? 's' : ''}`
-    );
-  if (createCount > 0) parts.push(`${createCount} file${createCount !== 1 ? 's' : ''} created`);
-  if (deleteCount > 0) parts.push(`${deleteCount} file${deleteCount !== 1 ? 's' : ''} deleted`);
-  if (renameCount > 0) parts.push(`${renameCount} file${renameCount !== 1 ? 's' : ''} renamed`);
+    parts.push(`${editCount} ${pluralize(editCount, 'edit')} in ${fileCount} ${pluralize(fileCount, 'file')}`);
+  if (createCount > 0) parts.push(`${createCount} ${pluralize(createCount, 'file')} created`);
+  if (deleteCount > 0) parts.push(`${deleteCount} ${pluralize(deleteCount, 'file')} deleted`);
+  if (renameCount > 0) parts.push(`${renameCount} ${pluralize(renameCount, 'file')} renamed`);
 
   return parts.length > 0 ? parts.join(', ') : 'No changes';
 }

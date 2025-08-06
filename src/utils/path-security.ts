@@ -35,18 +35,17 @@ export function validateFilePath(filePath: string, workspaceRoot: string): strin
   }
 
   // Additional checks for suspicious patterns
+  // Since we run in Docker (Linux), we only need to check for Unix-style patterns
   const suspiciousPatterns = [
     /\.\.[\\/]/, // Parent directory traversal
-    /^\//, // Absolute paths on Unix that might escape
-    /^[A-Za-z]:[\\/]/, // Absolute paths on Windows
+    /^\//, // Absolute paths that might escape container
     // eslint-disable-next-line no-control-regex
     /[\x00-\x1f]/, // Control characters
   ];
 
-  // Only check the relative part for suspicious patterns
-  const relativePath = absolutePath.substring(absoluteWorkspace.length);
+  // Check the original input for suspicious patterns
   for (const pattern of suspiciousPatterns) {
-    if (pattern.test(relativePath)) {
+    if (pattern.test(filePath)) {
       throw new Error(`Suspicious path pattern detected: ${filePath}`);
     }
   }
@@ -61,9 +60,9 @@ export function validateFilePath(filePath: string, workspaceRoot: string): strin
  */
 export function validateGlobPattern(pattern: string): void {
   // Disallow patterns that could match system files
+  // Since we run in Docker (Linux container), only Unix patterns are relevant
   const dangerousPatterns = [
     /^\//, // Absolute paths
-    /^[A-Za-z]:/, // Windows absolute paths
     /\.\.[/\\]/, // Parent directory traversal
     /^\*\*$/, // Match everything recursively
     /^\/\*\*/, // Match from root

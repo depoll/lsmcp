@@ -111,8 +111,10 @@ export async function applyTextEdits(uri: string, edits: TextEdit[]): Promise<vo
       const newText =
         startLineText.substring(0, startChar) + edit.newText + endLineText.substring(endChar);
 
-      // Replace the lines
-      lines.splice(startLine, endLine - startLine + 1, ...newText.split('\n'));
+      // Replace the lines with bounds checking
+      const safeEndLine = Math.min(endLine, lines.length - 1);
+      const linesToRemove = safeEndLine - startLine + 1;
+      lines.splice(startLine, linesToRemove, ...newText.split('\n'));
     }
   }
 
