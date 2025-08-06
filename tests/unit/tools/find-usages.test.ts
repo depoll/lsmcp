@@ -117,10 +117,10 @@ Required parameters:
         context: { includeDeclaration: true },
       });
 
-      expect(result.references).toHaveLength(2);
-      expect(result.total).toBe(2);
-      expect(result.references).toBeDefined();
-      expect(result.references![0]).toMatchObject({
+      expect(result.data.references).toHaveLength(2);
+      expect(result.data.total).toBe(2);
+      expect(result.data.references).toBeDefined();
+      expect(result.data.references![0]).toMatchObject({
         uri: 'file:///test.ts',
         range: mockLocations[0]!.range,
         kind: 'declaration',
@@ -137,8 +137,8 @@ Required parameters:
 
       const result = await tool.execute(params);
 
-      expect(result.references).toHaveLength(0);
-      expect(result.total).toBe(0);
+      expect(result.data.references).toHaveLength(0);
+      expect(result.data.total).toBe(0);
     });
 
     it('should respect maxResults limit', async () => {
@@ -160,8 +160,8 @@ Required parameters:
 
       const result = await tool.execute(params);
 
-      expect(result.references).toHaveLength(2);
-      expect(result.total).toBe(2);
+      expect(result.data.references).toHaveLength(2);
+      expect(result.data.total).toBe(2);
     });
   });
 
@@ -228,11 +228,11 @@ Required parameters:
         item: mockItem,
       });
 
-      expect(result.hierarchy).toBeDefined();
-      expect(result.hierarchy).toBeDefined();
-      expect(result.hierarchy!.name).toBe('myFunction');
-      expect(result.hierarchy!.calls).toHaveLength(1);
-      expect(result.hierarchy!.calls![0]!.name).toBe('callerFunction');
+      expect(result.data.hierarchy).toBeDefined();
+      expect(result.data.hierarchy).toBeDefined();
+      expect(result.data.hierarchy!.name).toBe('myFunction');
+      expect(result.data.hierarchy!.calls).toHaveLength(1);
+      expect(result.data.hierarchy!.calls![0]!.name).toBe('callerFunction');
     });
 
     it('should find outgoing calls', async () => {
@@ -291,9 +291,9 @@ Required parameters:
         item: mockItem,
       });
 
-      expect(result.hierarchy).toBeDefined();
-      expect(result.hierarchy!.calls).toHaveLength(1);
-      expect(result.hierarchy!.calls![0]!.name).toBe('calledFunction');
+      expect(result.data.hierarchy).toBeDefined();
+      expect(result.data.hierarchy!.calls).toHaveLength(1);
+      expect(result.data.hierarchy!.calls![0]!.name).toBe('calledFunction');
     });
 
     it('should handle no call hierarchy items', async () => {
@@ -307,7 +307,7 @@ Required parameters:
 
       const result = await tool.execute(params);
 
-      expect(result.hierarchy).toBeUndefined();
+      expect(result.data.hierarchy).toBeUndefined();
     });
 
     it('should avoid infinite recursion in call hierarchy', async () => {
@@ -352,10 +352,10 @@ Required parameters:
       const result = await tool.execute(params);
 
       // Should not result in infinite recursion
-      expect(result.hierarchy).toBeDefined();
-      expect(result.hierarchy!.calls).toHaveLength(1);
+      expect(result.data.hierarchy).toBeDefined();
+      expect(result.data.hierarchy!.calls).toHaveLength(1);
       // The recursive call should be caught and not expanded further
-      expect(result.hierarchy!.calls![0]!.calls).toHaveLength(0);
+      expect(result.data.hierarchy!.calls![0]!.calls).toHaveLength(0);
     });
   });
 
@@ -399,8 +399,8 @@ Required parameters:
       // eslint-disable-next-line @typescript-eslint/unbound-method
       const getForFileMock = jest.mocked(mockPool.getForFile);
       expect(getForFileMock).toHaveBeenCalledTimes(2);
-      expect(result.references).toHaveLength(2);
-      expect(result.total).toBe(2);
+      expect(result.data.references).toHaveLength(2);
+      expect(result.data.total).toBe(2);
     });
 
     it('should deduplicate batch results', async () => {
@@ -428,8 +428,8 @@ Required parameters:
 
       const result = await tool.execute(params);
 
-      expect(result.references).toHaveLength(1);
-      expect(result.total).toBe(1);
+      expect(result.data.references).toHaveLength(1);
+      expect(result.data.total).toBe(1);
     });
   });
 
@@ -530,13 +530,16 @@ Required parameters:
   });
 
   describe('error handling', () => {
-    it('should throw on invalid parameters', async () => {
+    it('should return error for invalid parameters', async () => {
       const invalidParams = {
         uri: 'not-a-url',
         position: { line: -1, character: -1 },
       } as FindUsagesParams;
 
-      await expect(tool.execute(invalidParams)).rejects.toThrow();
+      const result = await tool.execute(invalidParams);
+      expect(result.error).toBeDefined();
+      expect(result.data.references).toEqual([]);
+      expect(result.data.total).toBe(0);
     });
 
     it('should handle LSP errors gracefully', async () => {
@@ -547,7 +550,10 @@ Required parameters:
 
       mockConnection.sendRequest.mockRejectedValueOnce(new Error('LSP server error'));
 
-      await expect(tool.execute(params)).rejects.toThrow('LSP server error');
+      const result = await tool.execute(params);
+      expect(result.error).toContain('LSP server error');
+      expect(result.data.references).toEqual([]);
+      expect(result.fallback).toBeDefined();
     });
 
     it('should handle connection pool errors', async () => {
@@ -558,7 +564,10 @@ Required parameters:
 
       mockPool.getForFile.mockRejectedValueOnce(new Error('Connection failed'));
 
-      await expect(tool.execute(params)).rejects.toThrow('Connection failed');
+      const result = await tool.execute(params);
+      expect(result.error).toContain('Connection failed');
+      expect(result.data.references).toEqual([]);
+      expect(result.fallback).toBeDefined();
     });
   });
 

@@ -138,10 +138,10 @@ manager.addUser(testUser);
       target: 'definition',
     });
 
-    expect(result.results).toHaveLength(1);
-    expect(result.results[0]?.uri).toContain('utils.ts');
-    expect(result.results[0]?.range.start.line).toBeGreaterThanOrEqual(2); // Function is around line 3
-    expect(result.results[0]?.preview).toContain('function formatUser');
+    expect(result.data.results).toHaveLength(1);
+    expect(result.data.results[0]?.uri).toContain('utils.ts');
+    expect(result.data.results[0]?.range.start.line).toBeGreaterThanOrEqual(2); // Function is around line 3
+    expect(result.data.results[0]?.preview).toContain('function formatUser');
   });
 
   it('should navigate to type definition', async () => {
@@ -160,10 +160,10 @@ manager.addUser(testUser);
       target: 'typeDefinition',
     });
 
-    expect(result.results).toHaveLength(1);
-    expect(result.results[0]?.uri).toContain('types.ts');
-    expect(result.results[0]?.range.start.line).toBe(0); // Interface starts at line 0
-    expect(result.results[0]?.preview).toContain('export interface User');
+    expect(result.data.results).toHaveLength(1);
+    expect(result.data.results[0]?.uri).toContain('types.ts');
+    expect(result.data.results[0]?.range.start.line).toBe(0); // Interface starts at line 0
+    expect(result.data.results[0]?.preview).toContain('export interface User');
   });
 
   it('should navigate to class implementation', async () => {
@@ -182,10 +182,10 @@ manager.addUser(testUser);
       target: 'definition',
     });
 
-    expect(result.results).toHaveLength(1);
-    expect(result.results[0]?.uri).toContain('utils.ts');
-    expect(result.results[0]?.range.start.line).toBeGreaterThanOrEqual(11); // Class is around line 12
-    expect(result.results[0]?.preview).toContain('export class UserManager');
+    expect(result.data.results).toHaveLength(1);
+    expect(result.data.results[0]?.uri).toContain('utils.ts');
+    expect(result.data.results[0]?.range.start.line).toBeGreaterThanOrEqual(11); // Class is around line 12
+    expect(result.data.results[0]?.preview).toContain('export class UserManager');
   });
 
   it('should handle navigation with no results', async () => {
@@ -204,9 +204,9 @@ manager.addUser(testUser);
       target: 'definition',
     });
 
-    expect(result.results).toHaveLength(0);
-    expect(result.fallbackSuggestion).toBeDefined();
-    expect(result.fallbackSuggestion).toContain('grep');
+    expect(result.data.results).toHaveLength(0);
+    expect(result.fallback).toBeDefined();
+    expect(result.fallback).toContain('grep');
   });
 
   it('should handle batch navigation requests', async () => {
@@ -241,16 +241,16 @@ manager.addUser(testUser);
     });
 
     // Debug information for CI failures
-    if (result.results.length < 3) {
-      console.log('Expected at least 3 results but got:', result.results.length);
-      console.log('Results:', result.results);
-      console.log('Fallback suggestion:', result.fallbackSuggestion);
+    if (result.data.results.length < 3) {
+      console.log('Expected at least 3 results but got:', result.data.results.length);
+      console.log('Results:', result.data.results);
+      console.log('Fallback suggestion:', result.fallback);
     }
 
-    expect(result.results.length).toBeGreaterThanOrEqual(2); // Reduced expectation to be more robust
+    expect(result.data.results.length).toBeGreaterThanOrEqual(2); // Reduced expectation to be more robust
 
     // Check that we got results from different files
-    const uniqueUris = new Set(result.results.map((r) => r.uri));
+    const uniqueUris = new Set(result.data.results.map((r: { uri: string }) => r.uri));
     expect(uniqueUris.size).toBeGreaterThanOrEqual(2); // Should have utils.ts and types.ts
   }, 15000);
 
@@ -287,7 +287,7 @@ const role: UserRole = 'admin';
       maxResults: 2,
     });
 
-    expect(result.results.length).toBeLessThanOrEqual(2);
+    expect(result.data.results.length).toBeLessThanOrEqual(2);
   });
 
   it('should cache navigation results', async () => {
@@ -311,12 +311,18 @@ const role: UserRole = 'admin';
     // Second call (should be cached)
     const result2 = await navigateTool.execute(params);
 
-    // Results should be the same
-    expect(result1).toEqual(result2);
+    // Results should be the same (except for metadata)
+    expect(result1.data).toEqual(result2.data);
+    expect(result1.fallback).toEqual(result2.fallback);
+
+    // Second call should be cached
+    expect(result1.metadata?.cached).toBe(false);
+    expect(result2.metadata?.cached).toBe(true);
+    expect(result2.metadata?.processingTime).toBeLessThan(result1.metadata?.processingTime || 0);
 
     // Both calls should succeed with the same results
-    expect(result1.results).toHaveLength(1);
-    expect(result2.results).toHaveLength(1);
+    expect(result1.data.results).toHaveLength(1);
+    expect(result2.data.results).toHaveLength(1);
   });
 
   it('should sort results by relevance', async () => {
@@ -366,14 +372,16 @@ function internalFunction() {
     });
 
     // If we get multiple results, they should be sorted by relevance
-    if (result.results.length > 1) {
+    if (result.data.results.length > 1) {
       // Results in the same file should come first
-      const sameFileResults = result.results.filter((r) => r.uri.includes('local.ts'));
-      const otherFileResults = result.results.filter((r) => !r.uri.includes('local.ts'));
+      const sameFileResults = result.data.results.filter((r) => r.uri.includes('local.ts'));
+      const otherFileResults = result.data.results.filter((r) => !r.uri.includes('local.ts'));
 
       if (sameFileResults.length > 0 && otherFileResults.length > 0) {
-        const firstSameFileIndex = result.results.findIndex((r) => r.uri.includes('local.ts'));
-        const firstOtherFileIndex = result.results.findIndex((r) => !r.uri.includes('local.ts'));
+        const firstSameFileIndex = result.data.results.findIndex((r) => r.uri.includes('local.ts'));
+        const firstOtherFileIndex = result.data.results.findIndex(
+          (r) => !r.uri.includes('local.ts')
+        );
         expect(firstSameFileIndex).toBeLessThan(firstOtherFileIndex);
       }
     }

@@ -9,6 +9,7 @@ import {
   type DocumentSymbolParams,
   type WorkspaceSymbolParams,
 } from 'vscode-languageserver-protocol';
+import { StandardResult, MCPError, MCPErrorCode, ToolAnnotations } from './common-types.js';
 // Simple TTL-based cache implementation
 // We use a basic Map with TTL instead of LRU because:
 // 1. Symbol search patterns are often repeated in short bursts
@@ -99,13 +100,13 @@ export interface SymbolResult {
   score?: number;
 }
 
-export interface SymbolSearchResult {
+export interface SymbolSearchResultData {
   symbols: SymbolResult[];
   truncated?: boolean;
   totalFound?: number;
-  error?: string;
-  fallback?: string;
 }
+
+export type SymbolSearchResult = StandardResult<SymbolSearchResultData>;
 
 export class SymbolSearchTool extends BatchableTool<SymbolSearchParams, SymbolSearchResult> {
   readonly name = 'findSymbols';
@@ -123,7 +124,53 @@ Features: Fuzzy matching, kind filtering, relevance scoring, grep fallback.`;
     return symbolSearchParamsSchema as unknown as z.ZodType<SymbolSearchParams>;
   }
 
-  private cache = new Map<string, CacheEntry<SymbolSearchResult>>();
+  /** Output schema for MCP tool discovery */
+  readonly outputSchema = z.object({
+    data: z.object({
+      symbols: z.array(
+        z.object({
+          name: z.string(),
+          kind: z.enum(USER_SYMBOL_KINDS),
+          location: z.object({
+            uri: z.string(),
+            range: z.object({
+              start: z.object({
+                line: z.number(),
+                character: z.number(),
+              }),
+              end: z.object({
+                line: z.number(),
+                character: z.number(),
+              }),
+            }),
+          }),
+          containerName: z.string().optional(),
+          score: z.number().optional(),
+        })
+      ),
+      truncated: z.boolean().optional(),
+      totalFound: z.number().optional(),
+    }),
+    metadata: z
+      .object({
+        processingTime: z.number().optional(),
+        cached: z.boolean().optional(),
+      })
+      .optional(),
+    fallback: z.string().optional(),
+    error: z.string().optional(),
+  });
+
+  /** MCP tool annotations */
+  readonly annotations: ToolAnnotations = {
+    title: 'Find Symbols',
+    readOnlyHint: true,
+    destructiveHint: false,
+    idempotentHint: true,
+    openWorldHint: false,
+  };
+
+  private cache = new Map<string, CacheEntry<SymbolSearchResultData>>();
   private readonly CACHE_MAX_SIZE = 100;
   private readonly CACHE_TTL_MS = 1000 * 60 * 10; // 10 minutes
   private readonly MAX_SYMBOL_DEPTH = 10;
@@ -138,25 +185,36 @@ Features: Fuzzy matching, kind filtering, relevance scoring, grep fallback.`;
   }
 
   async execute(params: SymbolSearchParams): Promise<SymbolSearchResult> {
-    // Validate params
-    if (params.scope === 'document' && !params.uri) {
-      throw new Error('uri is required for document scope');
-    }
-
-    // Input validation to prevent DoS
-    if (params.query.length > this.MAX_QUERY_LENGTH) {
-      throw new Error(`Query too long (max ${this.MAX_QUERY_LENGTH} characters)`);
-    }
-
-    // Check cache
-    const cacheKey = this.getCacheKey(params);
-    const cached = this.getFromCache(cacheKey);
-    if (cached) {
-      this.logger?.debug({ cacheKey }, 'Symbol search cache hit');
-      return cached;
-    }
+    const startTime = Date.now();
 
     try {
+      // Validate params
+      if (params.scope === 'document' && !params.uri) {
+        throw new MCPError(MCPErrorCode.INVALID_PARAMS, 'uri is required for document scope');
+      }
+
+      // Input validation to prevent DoS
+      if (params.query.length > this.MAX_QUERY_LENGTH) {
+        throw new MCPError(
+          MCPErrorCode.INVALID_PARAMS,
+          `Query too long (max ${this.MAX_QUERY_LENGTH} characters)`
+        );
+      }
+
+      // Check cache
+      const cacheKey = this.getCacheKey(params);
+      const cached = this.getFromCache(cacheKey);
+      if (cached) {
+        this.logger?.debug({ cacheKey }, 'Symbol search cache hit');
+        return {
+          data: cached,
+          metadata: {
+            processingTime: Date.now() - startTime,
+            cached: true,
+          },
+        };
+      }
+
       let symbols: SymbolResult[];
 
       if (params.scope === 'document') {
@@ -176,9 +234,15 @@ Features: Fuzzy matching, kind filtering, relevance scoring, grep fallback.`;
       const limited = sorted.slice(0, params.maxResults);
 
       const result: SymbolSearchResult = {
-        symbols: limited,
-        truncated: sorted.length > params.maxResults,
-        totalFound: sorted.length,
+        data: {
+          symbols: limited,
+          truncated: sorted.length > params.maxResults,
+          totalFound: sorted.length,
+        },
+        metadata: {
+          processingTime: Date.now() - startTime,
+          cached: false,
+        },
       };
 
       this.setInCache(cacheKey, result);
@@ -190,7 +254,13 @@ Features: Fuzzy matching, kind filtering, relevance scoring, grep fallback.`;
       const fallback = this.generateFallback(params);
 
       return {
-        symbols: [],
+        data: {
+          symbols: [],
+        },
+        metadata: {
+          processingTime: Date.now() - startTime,
+          cached: false,
+        },
         error: this.formatError(error),
         fallback,
       };
@@ -600,7 +670,7 @@ Features: Fuzzy matching, kind filtering, relevance scoring, grep fallback.`;
     return createHash('sha256').update(key).digest('hex');
   }
 
-  private getFromCache(key: string): SymbolSearchResult | undefined {
+  private getFromCache(key: string): SymbolSearchResultData | undefined {
     const entry = this.cache.get(key);
     if (!entry) return undefined;
 
@@ -627,6 +697,8 @@ Features: Fuzzy matching, kind filtering, relevance scoring, grep fallback.`;
   }
 
   private setInCache(key: string, value: SymbolSearchResult): void {
+    // Extract data portion to cache
+    const dataToCache = value.data;
     // Enforce max size
     if (this.cache.size >= this.CACHE_MAX_SIZE) {
       const firstKey = this.cache.keys().next().value;
@@ -640,7 +712,7 @@ Features: Fuzzy matching, kind filtering, relevance scoring, grep fallback.`;
     }
 
     this.cache.set(key, {
-      value,
+      value: dataToCache,
       expires: Date.now() + this.CACHE_TTL_MS,
     });
   }

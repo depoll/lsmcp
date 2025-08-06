@@ -19,6 +19,7 @@ import { logger as rootLogger } from '../utils/logger.js';
 import { createPositionSchema, USAGE_POSITION_DESCRIPTION } from './position-schema.js';
 import { FILE_URI_DESCRIPTION, BATCH_FILE_URI_DESCRIPTION } from './file-uri-description.js';
 import { retryWithBackoff } from '../utils/retry.js';
+import { StandardResult, ToolAnnotations } from './common-types.js';
 
 // Configuration constants
 const DEFAULT_STREAM_BATCH_SIZE = 20;
@@ -80,11 +81,13 @@ export interface CallHierarchyResult {
   calls?: CallHierarchyResult[];
 }
 
-export interface FindUsagesResult {
+export interface FindUsagesResultData {
   references?: ReferenceResult[];
   hierarchy?: CallHierarchyResult;
   total?: number;
 }
+
+export type FindUsagesResult = StandardResult<FindUsagesResultData>;
 
 export interface StreamingFindUsagesResult {
   type: 'progress' | 'partial' | 'complete';
@@ -127,6 +130,50 @@ Required parameters:
 - maxDepth: Call hierarchy depth (1-10)
 - includeDeclaration: Include declaration in references (boolean)`;
   inputSchema = findUsagesParamsSchema;
+
+  /** Output schema for MCP tool discovery */
+  readonly outputSchema = z.object({
+    data: z.object({
+      references: z
+        .array(
+          z.object({
+            uri: z.string(),
+            range: z.object({
+              start: z.object({
+                line: z.number(),
+                character: z.number(),
+              }),
+              end: z.object({
+                line: z.number(),
+                character: z.number(),
+              }),
+            }),
+            preview: z.string().optional(),
+            kind: z.enum(['read', 'write', 'call', 'declaration', 'import']).optional(),
+          })
+        )
+        .optional(),
+      hierarchy: z.any().optional(), // Complex recursive type
+      total: z.number().optional(),
+    }),
+    metadata: z
+      .object({
+        processingTime: z.number().optional(),
+        cached: z.boolean().optional(),
+      })
+      .optional(),
+    fallback: z.string().optional(),
+    error: z.string().optional(),
+  });
+
+  /** MCP tool annotations */
+  readonly annotations: ToolAnnotations = {
+    title: 'Find Usages',
+    readOnlyHint: true,
+    destructiveHint: false,
+    idempotentHint: true,
+    openWorldHint: false,
+  };
   private config: FindUsagesConfig;
 
   constructor(connectionPool: ConnectionPool, config: FindUsagesConfig = {}) {
@@ -155,40 +202,86 @@ Required parameters:
    * ```
    */
   async execute(params: FindUsagesParams): Promise<FindUsagesResult> {
-    // Validate parameters
-    const validatedParams = this.validateParams(params);
+    const startTime = Date.now();
 
-    if (validatedParams.type === 'references') {
-      if (validatedParams.batch && validatedParams.batch.length > 0) {
-        // Process batch requests and deduplicate results
-        const allReferences: ReferenceResult[] = [];
-        const seen = new Set<string>();
+    try {
+      // Validate parameters
+      const validatedParams = this.validateParams(params);
 
-        for (const batchItem of validatedParams.batch) {
-          const batchParams = {
-            ...validatedParams,
-            uri: batchItem.uri,
-            position: batchItem.position,
-          };
-          const references = await this.findReferences(batchParams);
+      if (validatedParams.type === 'references') {
+        if (validatedParams.batch && validatedParams.batch.length > 0) {
+          // Process batch requests and deduplicate results
+          const allReferences: ReferenceResult[] = [];
+          const seen = new Set<string>();
 
-          for (const ref of references) {
-            const key = `${ref.uri}:${ref.range.start.line}:${ref.range.start.character}`;
-            if (!seen.has(key)) {
-              seen.add(key);
-              allReferences.push(ref);
+          for (const batchItem of validatedParams.batch) {
+            const batchParams = {
+              ...validatedParams,
+              uri: batchItem.uri,
+              position: batchItem.position,
+            };
+            const references = await this.findReferences(batchParams);
+
+            for (const ref of references) {
+              const key = `${ref.uri}:${ref.range.start.line}:${ref.range.start.character}`;
+              if (!seen.has(key)) {
+                seen.add(key);
+                allReferences.push(ref);
+              }
             }
           }
-        }
 
-        return { references: allReferences, total: allReferences.length };
+          return {
+            data: { references: allReferences, total: allReferences.length },
+            metadata: {
+              processingTime: Date.now() - startTime,
+              cached: false,
+            },
+          };
+        } else {
+          const references = await this.findReferences(validatedParams);
+          return {
+            data: { references, total: references.length },
+            metadata: {
+              processingTime: Date.now() - startTime,
+              cached: false,
+            },
+          };
+        }
       } else {
-        const references = await this.findReferences(validatedParams);
-        return { references, total: references.length };
+        const hierarchy = await this.findCallHierarchy(validatedParams);
+        return {
+          data: { hierarchy },
+          metadata: {
+            processingTime: Date.now() - startTime,
+            cached: false,
+          },
+        };
       }
+    } catch (error) {
+      logger.error({ error, params }, 'Find usages failed');
+
+      return {
+        data: {
+          references: [],
+          total: 0,
+        },
+        metadata: {
+          processingTime: Date.now() - startTime,
+          cached: false,
+        },
+        error: error instanceof Error ? error.message : String(error),
+        fallback: this.generateFallback(params),
+      };
+    }
+  }
+
+  private generateFallback(params: FindUsagesParams): string {
+    const filename = params.uri.split('/').pop() || 'file';
+    if (params.type === 'references') {
+      return `No references found. Try: grep -r "symbol_name" --include="*.${filename.split('.').pop()}"`;
     } else {
-      const hierarchy = await this.findCallHierarchy(validatedParams);
-      return { hierarchy };
+      return `Call hierarchy unavailable. Try: grep -r "function_name" --include="*.${filename.split('.').pop()}"`;
     }
   }
 

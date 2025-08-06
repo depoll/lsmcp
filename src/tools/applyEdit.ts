@@ -2,7 +2,13 @@ import { WorkspaceEdit } from 'vscode-languageserver-protocol';
 import { BatchableTool } from './base.js';
 import { ConnectionPool } from '../lsp/index.js';
 import { getLanguageFromUri } from '../utils/languages.js';
-import { MCPError, MCPErrorCode, StandardResult, rangeSchema } from './common-types.js';
+import {
+  MCPError,
+  MCPErrorCode,
+  StandardResult,
+  rangeSchema,
+  ToolAnnotations,
+} from './common-types.js';
 import { formatWorkspaceEditAsDiff, formatWorkspaceEditSummary } from '../utils/diff-formatter.js';
 import { z } from 'zod';
 
@@ -103,22 +109,6 @@ export interface ApplyEditResultData {
  * Standard MCP result for apply edit operations
  */
 export type ApplyEditResult = StandardResult<ApplyEditResultData>;
-
-/**
- * MCP Tool Annotations for applyEdit
- */
-interface ToolAnnotations {
-  /** Human-readable title for the tool */
-  title: string;
-  /** Whether this tool only reads data */
-  readOnlyHint: boolean;
-  /** Whether this tool modifies or deletes data */
-  destructiveHint: boolean;
-  /** Whether multiple calls produce the same result */
-  idempotentHint: boolean;
-  /** Whether this tool accesses external resources */
-  openWorldHint: boolean;
-}
 
 export class ApplyEditTool extends BatchableTool<ApplyEditParams, ApplyEditResult> {
   readonly name = 'applyEdit';

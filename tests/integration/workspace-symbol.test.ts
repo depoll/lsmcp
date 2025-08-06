@@ -46,13 +46,13 @@ describe('Workspace Symbol Search Integration', () => {
       expect(result.fallback).toBeDefined();
       expect(result.fallback).toContain('grep');
       expect(result.fallback).toContain('Connection');
-    } else if (result.symbols.length === 0) {
+    } else if (result.data.symbols.length === 0) {
       // Language server might return empty results for exact matches
       // This is acceptable behavior for integration tests
-      expect(result.symbols).toEqual([]);
+      expect(result.data.symbols).toEqual([]);
     } else {
       // If we get results, verify them
-      const connectionPoolSymbol = result.symbols.find((s) => s.name === 'ConnectionPool');
+      const connectionPoolSymbol = result.data.symbols.find((s) => s.name === 'ConnectionPool');
       if (connectionPoolSymbol) {
         expect(connectionPoolSymbol.kind).toBe('class');
         expect(connectionPoolSymbol.location.uri).toContain('manager.ts');
@@ -72,13 +72,13 @@ describe('Workspace Symbol Search Integration', () => {
       expect(result.fallback).toBeDefined();
       expect(result.fallback).toContain('grep');
       expect(result.fallback).toContain('Tool');
-    } else if (result.symbols.length === 0) {
+    } else if (result.data.symbols.length === 0) {
       // Language server might not support wildcard patterns
       // This is acceptable behavior for integration tests
-      expect(result.symbols).toEqual([]);
+      expect(result.data.symbols).toEqual([]);
     } else {
       // If we get results, verify them
-      result.symbols.forEach((symbol) => {
+      result.data.symbols.forEach((symbol) => {
         expect(symbol.name).toMatch(/Tool$/i);
       });
     }
@@ -99,7 +99,7 @@ describe('Workspace Symbol Search Integration', () => {
       expect(result.fallback).toContain('execute');
     } else {
       // All results should be methods
-      result.symbols.forEach((symbol) => {
+      result.data.symbols.forEach((symbol) => {
         expect(symbol.kind).toBe('method');
       });
     }

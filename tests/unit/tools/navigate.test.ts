@@ -131,8 +131,8 @@ Features: Batch support, relevance sorting, grep fallback suggestions.`
         textDocument: { uri: singleParams.uri },
         position: singleParams.position,
       });
-      expect(result.results).toHaveLength(1);
-      expect(result.results[0]).toMatchObject({
+      expect(result.data.results).toHaveLength(1);
+      expect(result.data.results[0]).toMatchObject({
         uri: mockLocation.uri,
         range: mockLocation.range,
       });
@@ -165,7 +165,7 @@ Features: Batch support, relevance sorting, grep fallback suggestions.`
         'textDocument/implementation',
         expect.any(Object)
       );
-      expect(result.results).toHaveLength(2);
+      expect(result.data.results).toHaveLength(2);
     });
 
     it('should navigate to type definition', async () => {
@@ -189,8 +189,8 @@ Features: Batch support, relevance sorting, grep fallback suggestions.`
         'textDocument/typeDefinition',
         expect.any(Object)
       );
-      expect(result.results).toHaveLength(1);
-      expect(result.results[0]?.uri).toBe(`${filePrefix}/test/types.ts`);
+      expect(result.data.results).toHaveLength(1);
+      expect(result.data.results[0]?.uri).toBe(`${filePrefix}/test/types.ts`);
     });
 
     it('should handle no results with fallback suggestion', async () => {
@@ -198,8 +198,8 @@ Features: Batch support, relevance sorting, grep fallback suggestions.`
 
       const result = await tool.execute(singleParams);
 
-      expect(result.results).toHaveLength(0);
-      expect(result.fallbackSuggestion).toContain('grep');
+      expect(result.data.results).toHaveLength(0);
+      expect(result.fallback).toContain('grep');
     });
 
     it('should apply maxResults limit', async () => {
@@ -218,7 +218,7 @@ Features: Batch support, relevance sorting, grep fallback suggestions.`
         maxResults: 5,
       });
 
-      expect(result.results).toHaveLength(5);
+      expect(result.data.results).toHaveLength(5);
     });
 
     it('should handle LSP errors gracefully', async () => {
@@ -226,8 +226,8 @@ Features: Batch support, relevance sorting, grep fallback suggestions.`
 
       const result = await tool.execute(singleParams);
 
-      expect(result.results).toHaveLength(0);
-      expect(result.fallbackSuggestion).toBeDefined();
+      expect(result.data.results).toHaveLength(0);
+      expect(result.fallback).toBeDefined();
     });
   });
 
@@ -266,7 +266,7 @@ Features: Batch support, relevance sorting, grep fallback suggestions.`
       const result = await tool.execute(batchParams);
 
       expect(mockClient.sendRequest).toHaveBeenCalledTimes(2);
-      expect(result.results).toHaveLength(2);
+      expect(result.data.results).toHaveLength(2);
     });
 
     it('should handle partial batch failures', async () => {
@@ -280,8 +280,8 @@ Features: Batch support, relevance sorting, grep fallback suggestions.`
 
       const result = await tool.execute(batchParams);
 
-      expect(result.results).toHaveLength(1);
-      expect(result.fallbackSuggestion).toBeDefined();
+      expect(result.data.results).toHaveLength(1);
+      expect(result.fallback).toBeDefined();
     });
   });
 
@@ -315,9 +315,9 @@ Features: Batch support, relevance sorting, grep fallback suggestions.`
       });
 
       // Should be sorted: same file, same directory, then others
-      expect(result.results[0]?.uri).toBe(sourceUri);
-      expect(result.results[1]?.uri).toBe(`${filePrefix}/project/src/utils.ts`);
-      expect(result.results[2]?.uri).toBe(`${filePrefix}/project/node_modules/lib/index.ts`);
+      expect(result.data.results[0]?.uri).toBe(sourceUri);
+      expect(result.data.results[1]?.uri).toBe(`${filePrefix}/project/src/utils.ts`);
+      expect(result.data.results[2]?.uri).toBe(`${filePrefix}/project/node_modules/lib/index.ts`);
     });
   });
 
@@ -348,10 +348,10 @@ Features: Batch support, relevance sorting, grep fallback suggestions.`
       const result2 = await tool.execute(params);
 
       // Results should be consistent
-      expect(result1.results).toHaveLength(1);
-      expect(result2.results).toHaveLength(1);
-      expect(result1.results[0]?.uri).toBe(mockResult.uri);
-      expect(result2.results[0]?.uri).toBe(mockResult.uri);
+      expect(result1.data.results).toHaveLength(1);
+      expect(result2.data.results).toHaveLength(1);
+      expect(result1.data.results[0]?.uri).toBe(mockResult.uri);
+      expect(result2.data.results[0]?.uri).toBe(mockResult.uri);
 
       // Note: In this test setup, cache is mocked to always miss,
       // so both calls hit the server. In production, the second call
@@ -389,15 +389,15 @@ Features: Batch support, relevance sorting, grep fallback suggestions.`
 
   describe('error handling', () => {
     it('should require all params for single navigation', async () => {
-      await expect(tool.execute({ uri: 'file:///test.ts' })).rejects.toThrow(
-        'Single navigation requires uri, position, and target'
-      );
+      const result = await tool.execute({ uri: 'file:///test.ts' });
+      expect(result.error).toContain('Single navigation requires uri, position, and target');
+      expect(result.data.results).toEqual([]);
     });
 
     it('should handle empty batch', async () => {
-      await expect(tool.execute({ batch: [] })).rejects.toThrow(
-        'Batch navigation requires at least one navigation request'
-      );
+      const result = await tool.execute({ batch: [] });
+      expect(result.error).toContain('Batch navigation requires at least one navigation request');
+      expect(result.data.results).toEqual([]);
     });
   });
 });
