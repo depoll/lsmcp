@@ -373,7 +373,7 @@ describe('TypeScriptLanguageServerProvider', () => {
 });
 
 describe('createLanguageServerProvider', () => {
-  it('should create TypeScript provider for typescript language', () => {
+  it('should create TypeScript provider for typescript language', async () => {
     const language: DetectedLanguage = {
       id: 'typescript',
       name: 'TypeScript',
@@ -382,12 +382,12 @@ describe('createLanguageServerProvider', () => {
       rootPath: '/test',
     };
 
-    const provider = createLanguageServerProvider(language);
+    const provider = await createLanguageServerProvider(language);
 
     expect(provider).toBeInstanceOf(TypeScriptLanguageServerProvider);
   });
 
-  it('should create TypeScript provider for javascript language', () => {
+  it('should create TypeScript provider for javascript language', async () => {
     const language: DetectedLanguage = {
       id: 'javascript',
       name: 'JavaScript',
@@ -396,21 +396,21 @@ describe('createLanguageServerProvider', () => {
       rootPath: '/test',
     };
 
-    const provider = createLanguageServerProvider(language);
+    const provider = await createLanguageServerProvider(language);
 
     expect(provider).toBeInstanceOf(TypeScriptLanguageServerProvider);
   });
 
-  it('should return null for unsupported language', () => {
+  it('should return null for unsupported language', async () => {
     const language: DetectedLanguage = {
-      id: 'python',
-      name: 'Python',
-      fileExtensions: ['.py'],
-      serverCommand: ['pylsp'],
+      id: 'ruby',
+      name: 'Ruby',
+      fileExtensions: ['.rb'],
+      serverCommand: ['solargraph', 'stdio'],
       rootPath: '/test',
     };
 
-    const provider = createLanguageServerProvider(language);
+    const provider = await createLanguageServerProvider(language);
 
     expect(provider).toBeNull();
   });

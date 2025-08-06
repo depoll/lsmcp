@@ -98,7 +98,8 @@ describe('Language Detection Integration Tests', () => {
       expect(detector.detectLanguageByExtension('test.tsx')?.id).toBe('typescript');
       expect(detector.detectLanguageByExtension('test.js')?.id).toBe('javascript');
       expect(detector.detectLanguageByExtension('test.jsx')?.id).toBe('javascript');
-      expect(detector.detectLanguageByExtension('test.py')).toBeNull();
+      expect(detector.detectLanguageByExtension('test.py')?.id).toBe('python');
+      expect(detector.detectLanguageByExtension('test.rb')).toBeNull();
     });
   });
 

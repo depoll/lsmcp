@@ -138,9 +138,9 @@ The project implements:
   - `vscode-languageclient` - LSP client
   - `jest` - Testing framework
   - `pino` - Logging
-- **Supported Languages** (initial):
-  - TypeScript/JavaScript
-  - Python
+- **Supported Languages**:
+  - ✅ TypeScript/JavaScript (fully implemented)
+  - ✅ Python (fully implemented with virtual environment detection)
   - (Extensible to any LSP-compatible language)
 - **License**: Apache License 2.0
 

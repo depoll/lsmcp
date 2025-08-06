@@ -1,4 +1,4 @@
-import { existsSync } from 'fs';
+import { existsSync, readdirSync } from 'fs';
 import { readFile } from 'fs/promises';
 import { join, extname } from 'path';
 import { logger } from '../utils/logger.js';
@@ -72,11 +72,72 @@ export class LanguageDetector {
           },
         },
       ],
+      [
+        'python',
+        {
+          id: 'python',
+          name: 'Python',
+          fileExtensions: ['.py', '.pyw', '.pyi'],
+          serverCommand: ['python', '-m', 'pylsp'],
+          initializationOptions: {
+            pylsp: {
+              plugins: {
+                // Disable slow plugins for AI usage
+                pycodestyle: { enabled: false },
+                mccabe: { enabled: false },
+                pyflakes: { enabled: true },
+                pylint: { enabled: false },
+                // Enable fast, useful plugins
+                jedi_completion: {
+                  enabled: true,
+                  include_params: true,
+                  include_class_objects: true,
+                  fuzzy: true,
+                },
+                jedi_definition: { enabled: true },
+                jedi_hover: { enabled: true },
+                jedi_references: { enabled: true },
+                jedi_signature_help: { enabled: true },
+                jedi_symbols: { enabled: true },
+              },
+            },
+          },
+        },
+      ],
     ]);
   }
 
   async detectLanguage(rootPath: string): Promise<DetectedLanguage | null> {
     logger.info({ rootPath }, 'Detecting language for project');
+
+    // Check for Python project files
+    const pythonFiles = [
+      'setup.py',
+      'pyproject.toml',
+      'requirements.txt',
+      'Pipfile',
+      'poetry.lock',
+    ];
+    for (const file of pythonFiles) {
+      if (existsSync(join(rootPath, file))) {
+        logger.info({ rootPath, file }, 'Detected Python project');
+        const config = this.languageConfigs.get('python')!;
+        return { ...config, rootPath };
+      }
+    }
+
+    // Check for .py files in root
+    let hasPyFiles = false;
+    try {
+      hasPyFiles = readdirSync(rootPath).some((file) => extname(file) === '.py');
+    } catch (e) {
+      logger.warn({ error: e, rootPath }, 'Failed to read directory for Python files');
+    }
+    if (hasPyFiles) {
+      logger.info({ rootPath }, 'Detected Python project (Python files found)');
+      const config = this.languageConfigs.get('python')!;
+      return { ...config, rootPath };
+    }
 
     // Check for TypeScript configuration files
     const tsConfigPath = join(rootPath, 'tsconfig.json');
