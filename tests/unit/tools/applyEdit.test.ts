@@ -1,10 +1,12 @@
 /* eslint-disable @typescript-eslint/unbound-method -- Jest mocked functions are properly bound */
-import { describe, it, expect, beforeEach } from '@jest/globals';
-import { jest } from '@jest/globals';
+import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
 import { ApplyEditTool } from '../../../src/tools/applyEdit.js';
 import { ConnectionPool } from '../../../src/lsp/index.js';
 import { WorkspaceEdit, TextEdit } from 'vscode-languageserver-protocol';
 import type { LSPClient } from '../../../src/lsp/client-v2.js';
+import { writeFile, rm, mkdir } from 'fs/promises';
+import { tmpdir } from 'os';
+import { join } from 'path';
 
 jest.mock('../../../src/lsp/index.js');
 
@@ -12,8 +14,19 @@ describe('ApplyEditTool', () => {
   let tool: ApplyEditTool;
   let mockClientManager: jest.Mocked<ConnectionPool>;
   let mockClient: jest.Mocked<LSPClient>;
+  let testDir: string;
+  let testFile: string;
+  let testFileUri: string;
 
-  beforeEach(() => {
+  beforeEach(async () => {
+    jest.clearAllMocks();
+    
+    // Create a temporary test directory and file
+    testDir = join(tmpdir(), `lsmcp-test-${Date.now()}`);
+    await mkdir(testDir, { recursive: true });
+    testFile = join(testDir, 'test.ts');
+    testFileUri = `file://${testFile}`;
+    
     mockClient = {
       sendRequest: jest.fn(),
       isConnected: jest.fn().mockReturnValue(true),
@@ -26,22 +39,30 @@ describe('ApplyEditTool', () => {
     tool = new ApplyEditTool(mockClientManager);
   });
 
+  afterEach(async () => {
+    // Clean up test files
+    try {
+      await rm(testDir, { recursive: true, force: true });
+    } catch {
+      // Ignore cleanup errors
+    }
+  });
+
   describe('execute', () => {
     it('should apply workspace edit successfully', async () => {
+      // Create initial file content
+      await writeFile(testFile, 'const x = 5;\n');
+      
       const edit: WorkspaceEdit = {
         changes: {
-          'file:///test.ts': [
+          [testFileUri]: [
             TextEdit.replace(
-              { start: { line: 0, character: 0 }, end: { line: 0, character: 5 } },
-              'hello'
+              { start: { line: 0, character: 6 }, end: { line: 0, character: 7 } },
+              'y'
             ),
           ],
         },
       };
-
-      mockClient.sendRequest.mockResolvedValue({
-        applied: true,
-      });
 
       const result = await tool.execute({ edit });
 
@@ -53,44 +74,35 @@ describe('ApplyEditTool', () => {
       expect(result.data.summary).toBe('1 edit in 1 file');
       expect(result.data.diff).toContain('File: ');
       expect(result.data.diff).toContain('@ Line 1');
-
-      expect(jest.mocked(mockClient.sendRequest)).toHaveBeenCalledWith('workspace/applyEdit', {
-        label: undefined,
-        edit,
-      });
     });
 
     it('should handle workspace edit with label', async () => {
+      // Create initial file content
+      await writeFile(testFile, 'const x = 5;\n');
+      
       const edit: WorkspaceEdit = {
         changes: {
-          'file:///test.ts': [
+          [testFileUri]: [
             TextEdit.replace(
-              { start: { line: 0, character: 0 }, end: { line: 0, character: 5 } },
-              'hello'
+              { start: { line: 0, character: 6 }, end: { line: 0, character: 7 } },
+              'y'
             ),
           ],
         },
       };
-
-      mockClient.sendRequest.mockResolvedValue({
-        applied: true,
-      });
 
       const result = await tool.execute({ edit, label: 'Test Edit' });
 
       expect(result.data.applied).toBe(true);
       expect(result.data.summary).toBe('1 edit in 1 file');
       expect(result.data.diff).toBeDefined();
-      expect(jest.mocked(mockClient.sendRequest)).toHaveBeenCalledWith('workspace/applyEdit', {
-        label: 'Test Edit',
-        edit,
-      });
     });
 
     it('should handle failed workspace edit', async () => {
+      // Don't create the file - it should fail
       const edit: WorkspaceEdit = {
         changes: {
-          'file:///test.ts': [
+          [testFileUri]: [
             TextEdit.replace(
               { start: { line: 0, character: 0 }, end: { line: 0, character: 5 } },
               'hello'
@@ -99,18 +111,13 @@ describe('ApplyEditTool', () => {
         },
       };
 
-      mockClient.sendRequest.mockResolvedValue({
-        applied: false,
-        failureReason: 'File not found',
-      });
-
       const result = await tool.execute({ edit });
 
       expect(result.data).toMatchObject({
         applied: false,
-        failureReason: 'File not found',
-        failedChange: undefined,
       });
+      expect(result.data.failureReason).toContain('ENOENT');
+      expect(result.data.failedChange).toContain('text edit');
       expect(result.data.summary).toBe('1 edit in 1 file');
       expect(result.data.diff).toContain('File: ');
       expect(result.data.diff).toContain('@ Line 1');
@@ -130,13 +137,13 @@ describe('ApplyEditTool', () => {
     it('should handle error when no client available', async () => {
       const edit: WorkspaceEdit = {
         changes: {
-          'file:///test.ts': [],
+          [testFileUri]: [],
         },
       };
 
       mockClientManager.get = jest.fn(() =>
-        Promise.resolve(null)
-      ) as unknown as typeof mockClientManager.get;
+        Promise.resolve(null as any)
+      );
 
       const result = await tool.execute({ edit });
 
@@ -149,7 +156,7 @@ describe('ApplyEditTool', () => {
     it('should handle error when client not connected', async () => {
       const edit: WorkspaceEdit = {
         changes: {
-          'file:///test.ts': [],
+          [testFileUri]: [],
         },
       };
 
@@ -164,97 +171,105 @@ describe('ApplyEditTool', () => {
     });
 
     it('should extract URI from documentChanges', async () => {
+      await writeFile(testFile, 'const x = 5;\n');
+      
       const edit: WorkspaceEdit = {
         documentChanges: [
           {
-            textDocument: { uri: 'file:///test.ts', version: 1 },
+            textDocument: { uri: testFileUri, version: 1 },
             edits: [],
           },
         ],
       };
 
-      mockClient.sendRequest.mockResolvedValue({ applied: true });
-
       const result = await tool.execute({ edit });
 
       expect(result.data.applied).toBe(true);
       expect(jest.mocked(mockClientManager.get)).toHaveBeenCalledWith(
         'typescript',
-        'file:///test.ts'
+        testFileUri
       );
     });
 
     it('should extract URI from create file operation', async () => {
+      const newFile = join(testDir, 'new.ts');
+      const newFileUri = `file://${newFile}`;
+      
       const edit: WorkspaceEdit = {
         documentChanges: [
           {
             kind: 'create',
-            uri: 'file:///new.ts',
+            uri: newFileUri,
           },
         ],
       };
-
-      mockClient.sendRequest.mockResolvedValue({ applied: true });
 
       const result = await tool.execute({ edit });
 
       expect(result.data.applied).toBe(true);
       expect(jest.mocked(mockClientManager.get)).toHaveBeenCalledWith(
         'typescript',
-        'file:///new.ts'
+        newFileUri
       );
     });
 
     it('should extract URI from rename file operation', async () => {
+      await writeFile(testFile, 'const x = 5;\n');
+      const newFile = join(testDir, 'new.ts');
+      const newFileUri = `file://${newFile}`;
+      
       const edit: WorkspaceEdit = {
         documentChanges: [
           {
             kind: 'rename',
-            oldUri: 'file:///old.ts',
-            newUri: 'file:///new.ts',
+            oldUri: testFileUri,
+            newUri: newFileUri,
           },
         ],
       };
-
-      mockClient.sendRequest.mockResolvedValue({ applied: true });
 
       const result = await tool.execute({ edit });
 
       expect(result.data.applied).toBe(true);
       expect(jest.mocked(mockClientManager.get)).toHaveBeenCalledWith(
         'typescript',
-        'file:///old.ts'
+        testFileUri
       );
     });
   });
 
   describe('executeBatch', () => {
     it('should execute multiple operations in parallel', async () => {
+      const testFile1 = join(testDir, 'test1.ts');
+      const testFile2 = join(testDir, 'test2.ts');
+      const testFileUri1 = `file://${testFile1}`;
+      const testFileUri2 = `file://${testFile2}`;
+      
+      await writeFile(testFile1, 'const x = 5;\n');
+      await writeFile(testFile2, 'const y = 10;\n');
+      
       const edits = [
         {
           edit: {
             changes: {
-              'file:///test1.ts': [],
+              [testFileUri1]: [],
             },
           } as WorkspaceEdit,
         },
         {
           edit: {
             changes: {
-              'file:///test2.ts': [],
+              [testFileUri2]: [],
             },
           } as WorkspaceEdit,
         },
       ];
-
-      mockClient.sendRequest.mockResolvedValue({ applied: true });
 
       const results = await tool.executeBatch(edits);
 
       expect(results).toHaveLength(2);
       expect(results[0]?.data.applied).toBe(true);
       expect(results[1]?.data.applied).toBe(true);
-      expect(jest.mocked(mockClient.sendRequest)).toHaveBeenCalledTimes(2);
     });
   });
 });

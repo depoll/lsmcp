@@ -10,6 +10,7 @@ import {
   ToolAnnotations,
 } from './common-types.js';
 import { formatWorkspaceEditAsDiff, formatWorkspaceEditSummary } from '../utils/diff-formatter.js';
+import { applyWorkspaceEdit } from '../utils/file-operations.js';
 import { z } from 'zod';
 
 // Comprehensive WorkspaceEdit schema definition following LSP specification
@@ -192,15 +193,10 @@ export class ApplyEditTool extends BatchableTool<ApplyEditParams, ApplyEditResul
       const summary = formatWorkspaceEditSummary(validatedParams.edit);
       const diff = formatWorkspaceEditAsDiff(validatedParams.edit);
 
-      // Apply the edit using LSP workspace/applyEdit
-      const result = await client.sendRequest<{
-        applied: boolean;
-        failureReason?: string;
-        failedChange?: string;
-      }>('workspace/applyEdit', {
-        label: validatedParams.label,
-        edit: validatedParams.edit,
-      });
+      // Apply the edit directly to the filesystem
+      // Note: We don't send workspace/applyEdit to the server because that's a server-to-client request.
+      // As the client, we apply the edits ourselves.
+      const result = await applyWorkspaceEdit(validatedParams.edit);
 
       const processingTime = Date.now() - startTime;
 
