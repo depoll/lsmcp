@@ -129,9 +129,7 @@ export class LanguageDetector {
     // Check for .py files in root
     let hasPyFiles = false;
     try {
-      hasPyFiles = readdirSync(rootPath).some(
-        (file) => extname(file) === '.py'
-      );
+      hasPyFiles = readdirSync(rootPath).some((file) => extname(file) === '.py');
     } catch (e) {
       logger.warn({ error: e, rootPath }, 'Failed to read directory for Python files');
     }
