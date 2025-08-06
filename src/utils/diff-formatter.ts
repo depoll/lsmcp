@@ -219,7 +219,7 @@ function formatDiffs(diffs: DiffEntry[]): string {
  * Helper to pluralize words based on count
  */
 function pluralize(count: number, singular: string, plural?: string): string {
-  return count === 1 ? singular : (plural || `${singular}s`);
+  return count === 1 ? singular : plural || `${singular}s`;
 }
 
 /**
@@ -254,7 +254,9 @@ export function formatWorkspaceEditSummary(edit: WorkspaceEdit): string {
 
   const parts: string[] = [];
   if (editCount > 0)
-    parts.push(`${editCount} ${pluralize(editCount, 'edit')} in ${fileCount} ${pluralize(fileCount, 'file')}`);
+    parts.push(
+      `${editCount} ${pluralize(editCount, 'edit')} in ${fileCount} ${pluralize(fileCount, 'file')}`
+    );
   if (createCount > 0) parts.push(`${createCount} ${pluralize(createCount, 'file')} created`);
   if (deleteCount > 0) parts.push(`${deleteCount} ${pluralize(deleteCount, 'file')} deleted`);
   if (renameCount > 0) parts.push(`${renameCount} ${pluralize(renameCount, 'file')} renamed`);
