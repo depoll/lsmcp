@@ -28,7 +28,7 @@ export class PythonLanguageServerProvider implements LanguageServerProvider {
     try {
       // First detect Python and virtual environment
       await this.detectPythonEnvironment();
-      
+
       if (!this.pythonPath) {
         logger.error('No Python interpreter found');
         return false;
@@ -36,17 +36,20 @@ export class PythonLanguageServerProvider implements LanguageServerProvider {
 
       // Check if pylsp is available
       const result = await this.executeCommand([this.pythonPath, '-m', 'pylsp', '--version']);
-      logger.info({ version: result, pythonPath: this.pythonPath }, 'Python language server is available');
+      logger.info(
+        { version: result, pythonPath: this.pythonPath },
+        'Python language server is available'
+      );
       return true;
     } catch (error) {
       logger.debug({ error }, 'Python language server not found');
-      
+
       // Try checking if it's installed as a package
       try {
         const result = await this.executeCommand([
           this.pythonPath || 'python3',
           '-c',
-          'import pylsp_server; print(pylsp_server.__version__)'
+          'import pylsp_server; print(pylsp_server.__version__)',
         ]);
         logger.info({ version: result }, 'Python LSP server package found');
         return true;
@@ -91,12 +94,12 @@ export class PythonLanguageServerProvider implements LanguageServerProvider {
         'pip',
         'install',
         '--upgrade',
-        'python-lsp-server[all]'
+        'python-lsp-server[all]',
       ]);
       logger.info('Python language server installed successfully');
     } catch (error) {
       logger.error({ error }, 'Failed to install Python language server');
-      
+
       // Try minimal installation
       try {
         logger.info('Trying minimal installation without optional dependencies...');
@@ -106,7 +109,7 @@ export class PythonLanguageServerProvider implements LanguageServerProvider {
           'pip',
           'install',
           '--upgrade',
-          'python-lsp-server'
+          'python-lsp-server',
         ]);
         logger.info('Python language server installed successfully (minimal)');
       } catch {
@@ -128,7 +131,7 @@ export class PythonLanguageServerProvider implements LanguageServerProvider {
 
   private async detectPythonEnvironment(): Promise<void> {
     const rootPath = this.language.rootPath || process.cwd();
-    
+
     // Check for virtual environments
     const venvPaths = [
       join(rootPath, 'venv'),
@@ -155,7 +158,10 @@ export class PythonLanguageServerProvider implements LanguageServerProvider {
         if (pythonBin && existsSync(pythonBin)) {
           this.venvPath = poetryEnv.trim();
           this.pythonPath = pythonBin;
-          logger.info({ venvPath: this.venvPath, pythonPath: pythonBin }, 'Found Poetry environment');
+          logger.info(
+            { venvPath: this.venvPath, pythonPath: pythonBin },
+            'Found Poetry environment'
+          );
           return;
         }
       }
@@ -181,7 +187,10 @@ export class PythonLanguageServerProvider implements LanguageServerProvider {
         const condaPython = await this.executeCommand(['conda', 'run', 'which', 'python'], 5000);
         if (condaPython) {
           this.pythonPath = condaPython.trim();
-          logger.info({ pythonPath: this.pythonPath, condaEnv: process.env['CONDA_DEFAULT_ENV'] }, 'Found Conda environment');
+          logger.info(
+            { pythonPath: this.pythonPath, condaEnv: process.env['CONDA_DEFAULT_ENV'] },
+            'Found Conda environment'
+          );
           return;
         }
       } catch {

@@ -3,11 +3,13 @@ import type { LanguageDetector as LanguageDetectorType } from '../../../src/lang
 
 // Create mocks before importing
 const mockExistsSync = jest.fn<typeof import('fs').existsSync>();
+const mockReaddirSync = jest.fn<typeof import('fs').readdirSync>();
 const mockReadFile = jest.fn<typeof import('fs/promises').readFile>();
 
 // Mock modules
 jest.unstable_mockModule('fs', () => ({
   existsSync: mockExistsSync,
+  readdirSync: mockReaddirSync,
 }));
 
 jest.unstable_mockModule('fs/promises', () => ({
@@ -23,6 +25,8 @@ describe('LanguageDetector', () => {
   beforeEach(() => {
     detector = new LanguageDetector();
     jest.clearAllMocks();
+    // Default mock behaviors
+    mockReaddirSync.mockReturnValue([]);
   });
 
   describe('detectLanguage', () => {

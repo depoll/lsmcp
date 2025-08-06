@@ -17,7 +17,7 @@ describe('PythonLanguageServerProvider', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    
+
     // Default to non-container environment
     delete process.env['CONTAINER'];
     delete process.env['DOCKER'];

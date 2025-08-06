@@ -1,4 +1,4 @@
-import { existsSync } from 'fs';
+import { existsSync, readdirSync } from 'fs';
 import { readFile } from 'fs/promises';
 import { join, extname } from 'path';
 import { logger } from '../utils/logger.js';
@@ -111,7 +111,13 @@ export class LanguageDetector {
     logger.info({ rootPath }, 'Detecting language for project');
 
     // Check for Python project files
-    const pythonFiles = ['setup.py', 'pyproject.toml', 'requirements.txt', 'Pipfile', 'poetry.lock'];
+    const pythonFiles = [
+      'setup.py',
+      'pyproject.toml',
+      'requirements.txt',
+      'Pipfile',
+      'poetry.lock',
+    ];
     for (const file of pythonFiles) {
       if (existsSync(join(rootPath, file))) {
         logger.info({ rootPath, file }, 'Detected Python project');
@@ -121,13 +127,19 @@ export class LanguageDetector {
     }
 
     // Check for .py files in root
-    const hasPyFiles = existsSync(join(rootPath, '*.py'));
+    let hasPyFiles = false;
+    try {
+      hasPyFiles = readdirSync(rootPath).some(
+        (file) => extname(file) === '.py'
+      );
+    } catch (e) {
+      logger.warn({ error: e, rootPath }, 'Failed to read directory for Python files');
+    }
     if (hasPyFiles) {
       logger.info({ rootPath }, 'Detected Python project (Python files found)');
       const config = this.languageConfigs.get('python')!;
       return { ...config, rootPath };
     }
-
 
     // Check for TypeScript configuration files
     const tsConfigPath = join(rootPath, 'tsconfig.json');
