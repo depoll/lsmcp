@@ -217,7 +217,9 @@ describe('DiagnosticsTool Integration', () => {
 
       // In CI without language server, we may get no diagnostics
       if (!result.summary.filesAffected || result.summary.filesAffected === 0) {
-        console.log('No workspace diagnostics found - language server may not be properly initialized');
+        console.log(
+          'No workspace diagnostics found - language server may not be properly initialized'
+        );
         return;
       }
 
