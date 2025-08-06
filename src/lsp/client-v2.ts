@@ -202,14 +202,14 @@ export class LSPClient extends EventEmitter {
 
   /**
    * Get diagnostics for a specific file
-   * 
+   *
    * The client listens for 'textDocument/publishDiagnostics' notifications from the language server
    * and caches them. It also emits a 'diagnostics' event with PublishDiagnosticsParams when new
    * diagnostics are received, allowing external listeners to react to diagnostic changes.
-   * 
+   *
    * @param uri - The file URI to get diagnostics for
    * @returns Array of diagnostics for the file, or empty array if none
-   * 
+   *
    * @example
    * client.on('diagnostics', (params: PublishDiagnosticsParams) => {
    *   console.log(`New diagnostics for ${params.uri}:`, params.diagnostics);
