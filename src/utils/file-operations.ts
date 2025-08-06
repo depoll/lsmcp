@@ -30,12 +30,13 @@ export async function applyTextEdits(uri: string, edits: TextEdit[]): Promise<vo
     // These should always be defined due to loop bounds, but TypeScript needs assurance
     if (!current || !next) continue;
 
-    // Since we're sorted in reverse, current should be after next
-    // Check if they overlap
+    // Since we're sorted in reverse order (bottom to top):
+    // - current comes AFTER next in the file (current has higher line numbers)
+    // - We need to check if next's end overlaps with current's start
     if (
-      current.range.end.line < next.range.start.line ||
-      (current.range.end.line === next.range.start.line &&
-        current.range.end.character <= next.range.start.character)
+      next.range.end.line < current.range.start.line ||
+      (next.range.end.line === current.range.start.line &&
+        next.range.end.character <= current.range.start.character)
     ) {
       // No overlap, edits are properly separated
       continue;
@@ -43,8 +44,8 @@ export async function applyTextEdits(uri: string, edits: TextEdit[]): Promise<vo
 
     // Edits overlap - this could cause corruption
     throw new Error(
-      `Overlapping text edits detected at lines ${next.range.start.line + 1}-${next.range.end.line + 1} ` +
-        `and ${current.range.start.line + 1}-${current.range.end.line + 1}. ` +
+      `Overlapping text edits detected at lines ${current.range.start.line + 1}-${current.range.end.line + 1} ` +
+        `and ${next.range.start.line + 1}-${next.range.end.line + 1}. ` +
         `This could cause file corruption.`
     );
   }
