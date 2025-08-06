@@ -189,8 +189,11 @@ export class ApplyEditTool extends BatchableTool<ApplyEditParams, ApplyEditResul
         );
       }
 
-      // Generate diff before applying
+      // Generate summary before applying
       const summary = formatWorkspaceEditSummary(validatedParams.edit);
+
+      // IMPORTANT: Generate diff BEFORE applying to capture original content
+      // This ensures the diff shows the actual changes being made
       const diff = formatWorkspaceEditAsDiff(validatedParams.edit);
 
       // Apply the edit directly to the filesystem

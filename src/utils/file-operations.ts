@@ -22,6 +22,33 @@ export async function applyTextEdits(uri: string, edits: TextEdit[]): Promise<vo
     return b.range.start.character - a.range.start.character;
   });
 
+  // Validate no overlapping edits
+  for (let i = 0; i < sortedEdits.length - 1; i++) {
+    const current = sortedEdits[i];
+    const next = sortedEdits[i + 1];
+
+    // These should always be defined due to loop bounds, but TypeScript needs assurance
+    if (!current || !next) continue;
+
+    // Since we're sorted in reverse, current should be after next
+    // Check if they overlap
+    if (
+      current.range.end.line < next.range.start.line ||
+      (current.range.end.line === next.range.start.line &&
+        current.range.end.character <= next.range.start.character)
+    ) {
+      // No overlap, edits are properly separated
+      continue;
+    }
+
+    // Edits overlap - this could cause corruption
+    throw new Error(
+      `Overlapping text edits detected at lines ${next.range.start.line + 1}-${next.range.end.line + 1} ` +
+        `and ${current.range.start.line + 1}-${current.range.end.line + 1}. ` +
+        `This could cause file corruption.`
+    );
+  }
+
   // Apply each edit
   for (const edit of sortedEdits) {
     const startLine = edit.range.start.line;
@@ -29,14 +56,47 @@ export async function applyTextEdits(uri: string, edits: TextEdit[]): Promise<vo
     const startChar = edit.range.start.character;
     const endChar = edit.range.end.character;
 
+    // Validate line numbers
+    if (startLine < 0 || startLine >= lines.length) {
+      throw new Error(`Invalid start line ${startLine + 1}. File has ${lines.length} lines.`);
+    }
+    if (endLine < 0 || endLine >= lines.length) {
+      throw new Error(`Invalid end line ${endLine + 1}. File has ${lines.length} lines.`);
+    }
+
     if (startLine === endLine) {
       // Single line edit
       const line = lines[startLine] || '';
+
+      // Validate character positions
+      if (startChar < 0 || startChar > line.length) {
+        throw new Error(
+          `Invalid start character ${startChar} on line ${startLine + 1}. Line has ${line.length} characters.`
+        );
+      }
+      if (endChar < 0 || endChar > line.length) {
+        throw new Error(
+          `Invalid end character ${endChar} on line ${startLine + 1}. Line has ${line.length} characters.`
+        );
+      }
+
       lines[startLine] = line.substring(0, startChar) + edit.newText + line.substring(endChar);
     } else {
       // Multi-line edit
       const startLineText = lines[startLine] || '';
       const endLineText = lines[endLine] || '';
+
+      // Validate character positions
+      if (startChar < 0 || startChar > startLineText.length) {
+        throw new Error(
+          `Invalid start character ${startChar} on line ${startLine + 1}. Line has ${startLineText.length} characters.`
+        );
+      }
+      if (endChar < 0 || endChar > endLineText.length) {
+        throw new Error(
+          `Invalid end character ${endChar} on line ${endLine + 1}. Line has ${endLineText.length} characters.`
+        );
+      }
 
       const newText =
         startLineText.substring(0, startChar) + edit.newText + endLineText.substring(endChar);

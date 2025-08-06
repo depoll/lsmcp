@@ -111,6 +111,8 @@ function getRelativePath(uri: string): string {
 
 /**
  * Try to get the original text from a file at the specified range
+ * NOTE: This reads the current file content, which may have been modified
+ * by previous edits in a batch. For accurate diffs, capture content before applying edits.
  */
 function getOriginalText(uri: string, range: Range | undefined): string {
   try {
@@ -146,7 +148,7 @@ function getOriginalText(uri: string, range: Range | undefined): string {
     }
   } catch {
     // If we can't read the file, return a placeholder
-    return '<original text>';
+    return '';
   }
 }
 
