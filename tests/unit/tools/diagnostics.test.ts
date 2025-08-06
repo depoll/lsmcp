@@ -69,7 +69,10 @@ describe('DiagnosticsTool', () => {
         const result = await tool.execute({ uri });
 
         // eslint-disable-next-line @typescript-eslint/unbound-method
-        expect(mockConnectionPool.getForFile).toHaveBeenCalledWith(uri, expect.stringMatching(/.*/));
+        expect(mockConnectionPool.getForFile).toHaveBeenCalledWith(
+          uri,
+          expect.stringMatching(/.*/)
+        );
         expect(mockConnection.getDiagnostics).toHaveBeenCalledWith(uri);
         expect(result.summary.total).toBe(1);
         expect(result.summary.errors).toBe(1);
@@ -309,7 +312,9 @@ describe('DiagnosticsTool', () => {
           sendRequest: jest.fn(),
           getAllDiagnostics: jest.fn(),
         };
-        (mockConnectionPool.getForFile as jest.Mock).mockResolvedValue(connectionWithoutDiagnostics as never);
+        (mockConnectionPool.getForFile as jest.Mock).mockResolvedValue(
+          connectionWithoutDiagnostics as never
+        );
 
         const result = await tool.execute({ uri });
 
