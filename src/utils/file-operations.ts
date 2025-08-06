@@ -138,7 +138,9 @@ export async function applyWorkspaceEdit(edit: WorkspaceEdit): Promise<{
                 await renameFile(change.oldUri, change.newUri, change.options);
                 break;
               default:
-                logger.warn(`Unknown resource operation kind: ${(change as { kind: string }).kind}`);
+                logger.warn(
+                  `Unknown resource operation kind: ${(change as { kind: string }).kind}`
+                );
             }
           }
         } catch (error) {
