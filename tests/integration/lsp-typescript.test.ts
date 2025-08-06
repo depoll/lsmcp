@@ -22,7 +22,7 @@ describe('TypeScript Language Server Integration', () => {
 
   afterAll(async () => {
     if (pool) {
-      await pool.disposeAll();
+      await pool.shutdown();
     }
   });
 

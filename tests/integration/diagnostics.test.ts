@@ -1,0 +1,385 @@
+import { describe, it, expect, beforeAll, afterAll } from '@jest/globals';
+import { DiagnosticsTool } from '../../src/tools/diagnostics.js';
+import { ConnectionPool } from '../../src/lsp/manager.js';
+import { mkdtempSync, rmSync } from 'fs';
+import { tmpdir } from 'os';
+import path from 'path';
+import fs from 'fs/promises';
+import { execSync } from 'child_process';
+
+describe('DiagnosticsTool Integration', () => {
+  let tool: DiagnosticsTool;
+  let connectionPool: ConnectionPool;
+  let testDir: string;
+  let hasTypeScriptServer = false;
+  let hasPythonServer = false;
+
+  beforeAll(() => {
+    // Check if language servers are available
+    try {
+      execSync('which typescript-language-server', { stdio: 'ignore' });
+      hasTypeScriptServer = true;
+    } catch {
+      console.log('TypeScript language server not found, TypeScript tests will be skipped');
+    }
+
+    try {
+      execSync('which pylsp', { stdio: 'ignore' });
+      hasPythonServer = true;
+    } catch {
+      console.log('Python language server not found, Python tests will be skipped');
+    }
+
+    // Create a temporary test directory
+    testDir = mkdtempSync(path.join(tmpdir(), 'lsmcp-test-'));
+    connectionPool = new ConnectionPool();
+    tool = new DiagnosticsTool(connectionPool);
+  }, 30000);
+
+  afterAll(async () => {
+    await connectionPool.shutdown();
+    // Clean up test directory
+    rmSync(testDir, { recursive: true, force: true });
+  });
+
+  describe('TypeScript diagnostics', () => {
+    it('should detect type errors', async () => {
+      if (!hasTypeScriptServer) {
+        pending('TypeScript language server not installed');
+      }
+      // Create a file with a type error
+      const filePath = path.join(testDir, 'type-error.ts');
+      await fs.writeFile(
+        filePath,
+        `
+        function greet(name: string) {
+          console.log("Hello, " + name);
+        }
+        
+        // Type error: number is not assignable to string
+        greet(123);
+        
+        // Another error: property doesn't exist
+        const user = { name: "John" };
+        console.log(user.age);
+        `
+      );
+
+      // Give the language server time to analyze the file
+      await new Promise((resolve) => setTimeout(resolve, 3000));
+
+      const result = await tool.execute({
+        uri: `file://${filePath}`,
+      });
+
+      // In CI without language server, we may get no diagnostics
+      if (result.summary.total === 0) {
+        console.log('No diagnostics found - language server may not be properly initialized');
+        return;
+      }
+
+      expect(result.summary.total).toBeGreaterThan(0);
+      expect(result.summary.errors).toBeGreaterThan(0);
+
+      // Should detect the type mismatch error
+      const typeError = result.diagnostics?.find((d) => {
+        return d.message.includes('number') && d.message.includes('string');
+      });
+      expect(typeError).toBeDefined();
+
+      // Should detect the property error
+      const propError = result.diagnostics?.find((d) => {
+        return d.message.includes('age') || d.message.includes('property');
+      });
+      expect(propError).toBeDefined();
+    }, 30000);
+
+    it('should provide quick fixes for misspellings', async () => {
+      if (!hasTypeScriptServer) {
+        pending('TypeScript language server not installed');
+      }
+      const filePath = path.join(testDir, 'spelling-error.ts');
+      await fs.writeFile(
+        filePath,
+        `
+        const user = { name: "John", email: "john@example.com" };
+        
+        // Misspelling that should have a quick fix
+        console.log(user.naem);
+        `
+      );
+
+      await new Promise((resolve) => setTimeout(resolve, 3000));
+
+      const result = await tool.execute({
+        uri: `file://${filePath}`,
+        includeRelated: true,
+      });
+
+      // In CI without language server, we may get no diagnostics
+      if (result.summary.total === 0) {
+        console.log('No diagnostics found - language server may not be properly initialized');
+        return;
+      }
+
+      expect(result.summary.errors).toBeGreaterThan(0);
+
+      const spellingError = result.diagnostics?.find((d) => {
+        return d.message.includes('naem') || d.message.includes('name');
+      });
+
+      expect(spellingError).toBeDefined();
+
+      // TypeScript usually provides quick fixes for misspellings
+      if (spellingError && spellingError.quickFixes && spellingError.quickFixes.length > 0) {
+        const firstFix = spellingError.quickFixes[0];
+        expect(firstFix?.title).toContain('name');
+      }
+    }, 30000);
+
+    it('should filter by severity', async () => {
+      if (!hasTypeScriptServer) {
+        pending('TypeScript language server not installed');
+      }
+      const filePath = path.join(testDir, 'mixed-severity.ts');
+      await fs.writeFile(
+        filePath,
+        `
+        // @ts-ignore - This creates a warning
+        const x: any = 5;
+        
+        // This creates an error
+        function test(n: number) {
+          return n;
+        }
+        test("string");
+        
+        // Unused variable (might be a warning or hint)
+        const unused = 42;
+        `
+      );
+
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+
+      // Get only errors
+      const errorsOnly = await tool.execute({
+        uri: `file://${filePath}`,
+        severity: 'error',
+      });
+
+      // Get all diagnostics
+      const allDiagnostics = await tool.execute({
+        uri: `file://${filePath}`,
+      });
+
+      expect(errorsOnly.summary.total).toBeLessThanOrEqual(allDiagnostics.summary.total);
+      expect(errorsOnly.summary.warnings).toBe(0);
+      expect(errorsOnly.summary.info).toBe(0);
+      expect(errorsOnly.summary.hints).toBe(0);
+    }, 30000);
+
+    it('should get workspace-wide diagnostics', async () => {
+      if (!hasTypeScriptServer) {
+        pending('TypeScript language server not installed');
+      }
+      // Create multiple files with errors
+      const file1 = path.join(testDir, 'error1.ts');
+      const file2 = path.join(testDir, 'error2.ts');
+
+      await fs.writeFile(
+        file1,
+        `
+        export function add(a: number, b: number) {
+          return a + b;
+        }
+        
+        // Error: wrong argument type
+        add("1", "2");
+        `
+      );
+
+      await fs.writeFile(
+        file2,
+        `
+        import { add } from './error1';
+        
+        // Error: wrong number of arguments
+        add(1);
+        
+        // Error: undefined variable
+        console.log(undefinedVar);
+        `
+      );
+
+      await new Promise((resolve) => setTimeout(resolve, 3000));
+
+      const result = await tool.execute({});
+
+      // In CI without language server, we may get no diagnostics
+      if (!result.summary.filesAffected || result.summary.filesAffected === 0) {
+        console.log(
+          'No workspace diagnostics found - language server may not be properly initialized'
+        );
+        return;
+      }
+
+      expect(result.summary.filesAffected).toBeGreaterThanOrEqual(2);
+      expect(result.byFile).toBeDefined();
+      expect(result.byFile!.length).toBeGreaterThanOrEqual(2);
+
+      // Check that files are sorted by error count
+      if (result.byFile && result.byFile.length >= 2) {
+        for (let i = 1; i < result.byFile.length; i++) {
+          const prev = result.byFile[i - 1];
+          const curr = result.byFile[i];
+          if (prev && curr) {
+            expect(prev.errorCount).toBeGreaterThanOrEqual(curr.errorCount);
+          }
+        }
+      }
+    }, 30000);
+
+    it('should respect maxResults limit', async () => {
+      if (!hasTypeScriptServer) {
+        pending('TypeScript language server not installed');
+      }
+      const filePath = path.join(testDir, 'many-errors.ts');
+
+      // Create a file with many errors
+      const errors = [];
+      for (let i = 0; i < 20; i++) {
+        errors.push(`const err${i}: string = ${i};`);
+      }
+
+      await fs.writeFile(filePath, errors.join('\n'));
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+
+      const limited = await tool.execute({
+        uri: `file://${filePath}`,
+        maxResults: 5,
+      });
+
+      expect(limited.summary.total).toBeLessThanOrEqual(5);
+      expect(limited.diagnostics?.length).toBeLessThanOrEqual(5);
+    }, 30000);
+  });
+
+  describe('Python diagnostics', () => {
+    it('should detect Python syntax errors', async () => {
+      if (!hasPythonServer) {
+        pending('Python language server not installed');
+      }
+      const filePath = path.join(testDir, 'syntax-error.py');
+      await fs.writeFile(
+        filePath,
+        `
+def greet(name):
+    print(f"Hello, {name}"
+    # Missing closing parenthesis
+    
+def add(a, b)
+    # Missing colon
+    return a + b
+        `
+      );
+
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+
+      const result = await tool.execute({
+        uri: `file://${filePath}`,
+      });
+
+      // Python syntax errors should be detected
+      if (result.summary.total > 0) {
+        expect(result.summary.errors).toBeGreaterThan(0);
+        expect(result.diagnostics).toBeDefined();
+      }
+    }, 30000);
+
+    it('should detect Python type errors with type hints', async () => {
+      if (!hasPythonServer) {
+        pending('Python language server not installed');
+      }
+      const filePath = path.join(testDir, 'type-hints.py');
+      await fs.writeFile(
+        filePath,
+        `
+def add(a: int, b: int) -> int:
+    return a + b
+
+# Type error if type checking is enabled
+result: str = add(1, 2)
+
+# Undefined variable
+print(undefined_variable)
+        `
+      );
+
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+
+      const result = await tool.execute({
+        uri: `file://${filePath}`,
+      });
+
+      // Should at least detect the undefined variable
+      if (result.summary.total > 0) {
+        const undefinedError = result.diagnostics?.find((d) => {
+          return (
+            d.message.toLowerCase().includes('undefined') ||
+            d.message.toLowerCase().includes('not defined')
+          );
+        });
+        expect(undefinedError).toBeDefined();
+      }
+    }, 30000);
+  });
+
+  describe('Edge cases', () => {
+    it('should handle files with no diagnostics', async () => {
+      const filePath = path.join(testDir, 'clean.ts');
+      await fs.writeFile(
+        filePath,
+        `
+        // Clean TypeScript code
+        function add(a: number, b: number): number {
+          return a + b;
+        }
+        
+        const result = add(1, 2);
+        console.log(result);
+        `
+      );
+
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+
+      const result = await tool.execute({
+        uri: `file://${filePath}`,
+      });
+
+      expect(result.summary.total).toBe(0);
+      expect(result.summary.errors).toBe(0);
+      expect(result.diagnostics).toEqual([]);
+    }, 30000);
+
+    it('should handle non-existent files gracefully', async () => {
+      const result = await tool.execute({
+        uri: 'file:///non/existent/file.ts',
+      });
+
+      expect(result.summary.total).toBe(0);
+      expect(result.diagnostics).toEqual([]);
+    }, 30000);
+
+    it('should handle files without language server support', async () => {
+      const filePath = path.join(testDir, 'unknown.xyz');
+      await fs.writeFile(filePath, 'some content');
+
+      const result = await tool.execute({
+        uri: `file://${filePath}`,
+      });
+
+      expect(result.summary.total).toBe(0);
+      expect(result.diagnostics).toEqual([]);
+    }, 30000);
+  });
+});

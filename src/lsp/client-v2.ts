@@ -6,6 +6,8 @@ import {
   ServerCapabilities,
   StreamMessageReader,
   StreamMessageWriter,
+  Diagnostic,
+  PublishDiagnosticsParams,
 } from 'vscode-languageserver-protocol/node.js';
 import { LanguageServerConfig } from '../types/lsp.js';
 import { ProcessManager } from './process-manager.js';
@@ -27,6 +29,7 @@ export class LSPClient extends EventEmitter {
   private logger = logger;
   private connected = false;
   private startTime: number = Date.now();
+  private diagnostics = new Map<string, Diagnostic[]>();
 
   constructor(
     private readonly id: string,
@@ -83,6 +86,15 @@ export class LSPClient extends EventEmitter {
         this.connected = false;
       });
 
+      // Listen for diagnostics
+      this.connection.onNotification(
+        'textDocument/publishDiagnostics',
+        (params: PublishDiagnosticsParams) => {
+          this.diagnostics.set(params.uri, params.diagnostics);
+          this.emit('diagnostics', params);
+        }
+      );
+
       // Start listening
       this.connection.listen();
       this.logger.info(`Protocol connection listening for: ${this.id}`);
@@ -91,6 +103,7 @@ export class LSPClient extends EventEmitter {
       const initParams: InitializeParams = {
         processId: process.pid,
         capabilities: {},
+        // rootUri is deprecated but still required by the type, provide first workspace folder
         rootUri: this.options.workspaceFolders?.[0]
           ? this.toFileUri(this.options.workspaceFolders[0])
           : null,
@@ -186,6 +199,43 @@ export class LSPClient extends EventEmitter {
     }
 
     void this.connection.sendNotification(method, params);
+  }
+
+  /**
+   * Get diagnostics for a specific file
+   *
+   * The client listens for 'textDocument/publishDiagnostics' notifications from the language server
+   * and caches them. It also emits a 'diagnostics' event with PublishDiagnosticsParams when new
+   * diagnostics are received, allowing external listeners to react to diagnostic changes.
+   *
+   * @param uri - The file URI to get diagnostics for
+   * @returns Array of diagnostics for the file, or empty array if none
+   *
+   * @example
+   * client.on('diagnostics', (params: PublishDiagnosticsParams) => {
+   *   console.log(`New diagnostics for ${params.uri}:`, params.diagnostics);
+   * });
+   */
+  getDiagnostics(uri: string): Diagnostic[] {
+    return this.diagnostics.get(uri) || [];
+  }
+
+  /**
+   * Get all diagnostics across all files
+   */
+  getAllDiagnostics(): Map<string, Diagnostic[]> {
+    return new Map(this.diagnostics);
+  }
+
+  /**
+   * Clear diagnostics for a specific file or all files
+   */
+  clearDiagnostics(uri?: string): void {
+    if (uri) {
+      this.diagnostics.delete(uri);
+    } else {
+      this.diagnostics.clear();
+    }
   }
 
   /**

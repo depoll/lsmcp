@@ -9,6 +9,7 @@ import { NavigateTool } from './tools/navigate.js';
 import { SymbolSearchTool } from './tools/symbolSearch.js';
 import { FindUsagesTool } from './tools/find-usages.js';
 import { ApplyEditTool } from './tools/applyEdit.js';
+import { DiagnosticsTool } from './tools/diagnostics.js';
 import { ToolRegistry } from './tools/registry.js';
 import { ToolRouter } from './tools/router.js';
 import { logger } from './utils/logger.js';
@@ -83,6 +84,10 @@ export class LSMCPServer {
     // Register Apply Edit Tool
     const applyEditTool = new ApplyEditTool(this.clientManager);
     this.toolRegistry.register(applyEditTool);
+
+    // Register Diagnostics Tool
+    const diagnosticsTool = new DiagnosticsTool(this.clientManager);
+    this.toolRegistry.register(diagnosticsTool);
 
     // Register all tools with MCP server
     for (const registration of this.toolRegistry.getAll()) {
