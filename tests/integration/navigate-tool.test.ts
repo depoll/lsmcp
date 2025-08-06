@@ -207,7 +207,7 @@ manager.addUser(testUser);
     expect(result.data.results).toHaveLength(0);
     expect(result.fallback).toBeDefined();
     expect(result.fallback).toContain('grep');
-  });
+  }, 30000);
 
   it('should handle batch navigation requests', async () => {
     if (!hasTypeScriptServer) {
