@@ -20,13 +20,13 @@ describe('ApplyEditTool', () => {
 
   beforeEach(async () => {
     jest.clearAllMocks();
-    
+
     // Create a temporary test directory and file
     testDir = join(tmpdir(), `lsmcp-test-${Date.now()}`);
     await mkdir(testDir, { recursive: true });
     testFile = join(testDir, 'test.ts');
     testFileUri = `file://${testFile}`;
-    
+
     mockClient = {
       sendRequest: jest.fn(),
       isConnected: jest.fn().mockReturnValue(true),
@@ -52,7 +52,7 @@ describe('ApplyEditTool', () => {
     it('should apply workspace edit successfully', async () => {
       // Create initial file content
       await writeFile(testFile, 'const x = 5;\n');
-      
+
       const edit: WorkspaceEdit = {
         changes: {
           [testFileUri]: [
@@ -79,7 +79,7 @@ describe('ApplyEditTool', () => {
     it('should handle workspace edit with label', async () => {
       // Create initial file content
       await writeFile(testFile, 'const x = 5;\n');
-      
+
       const edit: WorkspaceEdit = {
         changes: {
           [testFileUri]: [
@@ -141,9 +141,7 @@ describe('ApplyEditTool', () => {
         },
       };
 
-      mockClientManager.get = jest.fn(() =>
-        Promise.resolve(null as any)
-      );
+      mockClientManager.get = jest.fn(() => Promise.resolve(null as unknown as LSPClient));
 
       const result = await tool.execute({ edit });
 
@@ -172,7 +170,7 @@ describe('ApplyEditTool', () => {
 
     it('should extract URI from documentChanges', async () => {
       await writeFile(testFile, 'const x = 5;\n');
-      
+
       const edit: WorkspaceEdit = {
         documentChanges: [
           {
@@ -185,16 +183,13 @@ describe('ApplyEditTool', () => {
       const result = await tool.execute({ edit });
 
       expect(result.data.applied).toBe(true);
-      expect(jest.mocked(mockClientManager.get)).toHaveBeenCalledWith(
-        'typescript',
-        testFileUri
-      );
+      expect(jest.mocked(mockClientManager.get)).toHaveBeenCalledWith('typescript', testFileUri);
     });
 
     it('should extract URI from create file operation', async () => {
       const newFile = join(testDir, 'new.ts');
       const newFileUri = `file://${newFile}`;
-      
+
       const edit: WorkspaceEdit = {
         documentChanges: [
           {
@@ -207,17 +202,14 @@ describe('ApplyEditTool', () => {
       const result = await tool.execute({ edit });
 
       expect(result.data.applied).toBe(true);
-      expect(jest.mocked(mockClientManager.get)).toHaveBeenCalledWith(
-        'typescript',
-        newFileUri
-      );
+      expect(jest.mocked(mockClientManager.get)).toHaveBeenCalledWith('typescript', newFileUri);
     });
 
     it('should extract URI from rename file operation', async () => {
       await writeFile(testFile, 'const x = 5;\n');
       const newFile = join(testDir, 'new.ts');
       const newFileUri = `file://${newFile}`;
-      
+
       const edit: WorkspaceEdit = {
         documentChanges: [
           {
@@ -231,10 +223,7 @@ describe('ApplyEditTool', () => {
       const result = await tool.execute({ edit });
 
       expect(result.data.applied).toBe(true);
-      expect(jest.mocked(mockClientManager.get)).toHaveBeenCalledWith(
-        'typescript',
-        testFileUri
-      );
+      expect(jest.mocked(mockClientManager.get)).toHaveBeenCalledWith('typescript', testFileUri);
     });
   });
 
@@ -244,10 +233,10 @@ describe('ApplyEditTool', () => {
       const testFile2 = join(testDir, 'test2.ts');
       const testFileUri1 = `file://${testFile1}`;
       const testFileUri2 = `file://${testFile2}`;
-      
+
       await writeFile(testFile1, 'const x = 5;\n');
       await writeFile(testFile2, 'const y = 10;\n');
-      
+
       const edits = [
         {
           edit: {

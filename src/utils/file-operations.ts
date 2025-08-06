@@ -9,11 +9,11 @@ import { logger } from './logger.js';
  */
 export async function applyTextEdits(uri: string, edits: TextEdit[]): Promise<void> {
   const filePath = fileURLToPath(uri);
-  
+
   // Read the file content
   const content = await readFile(filePath, 'utf-8');
   const lines = content.split('\n');
-  
+
   // Sort edits in reverse order (bottom to top) to avoid position shifts
   const sortedEdits = [...edits].sort((a, b) => {
     if (a.range.start.line !== b.range.start.line) {
@@ -21,36 +21,31 @@ export async function applyTextEdits(uri: string, edits: TextEdit[]): Promise<vo
     }
     return b.range.start.character - a.range.start.character;
   });
-  
+
   // Apply each edit
   for (const edit of sortedEdits) {
     const startLine = edit.range.start.line;
     const endLine = edit.range.end.line;
     const startChar = edit.range.start.character;
     const endChar = edit.range.end.character;
-    
+
     if (startLine === endLine) {
       // Single line edit
       const line = lines[startLine] || '';
-      lines[startLine] = 
-        line.substring(0, startChar) + 
-        edit.newText + 
-        line.substring(endChar);
+      lines[startLine] = line.substring(0, startChar) + edit.newText + line.substring(endChar);
     } else {
       // Multi-line edit
       const startLineText = lines[startLine] || '';
       const endLineText = lines[endLine] || '';
-      
-      const newText = 
-        startLineText.substring(0, startChar) + 
-        edit.newText + 
-        endLineText.substring(endChar);
-      
+
+      const newText =
+        startLineText.substring(0, startChar) + edit.newText + endLineText.substring(endChar);
+
       // Replace the lines
       lines.splice(startLine, endLine - startLine + 1, ...newText.split('\n'));
     }
   }
-  
+
   // Write the modified content back
   await writeFile(filePath, lines.join('\n'), 'utf-8');
 }
@@ -60,11 +55,11 @@ export async function applyTextEdits(uri: string, edits: TextEdit[]): Promise<vo
  */
 export async function createFile(uri: string, content?: string): Promise<void> {
   const filePath = fileURLToPath(uri);
-  
+
   // Ensure directory exists
   const dir = dirname(filePath);
   await mkdir(dir, { recursive: true });
-  
+
   // Write file
   await writeFile(filePath, content || '', 'utf-8');
 }
@@ -80,13 +75,17 @@ export async function deleteFile(uri: string): Promise<void> {
 /**
  * Rename/move a file
  */
-export async function renameFile(oldUri: string, newUri: string, options?: {
-  overwrite?: boolean;
-  ignoreIfExists?: boolean;
-}): Promise<void> {
+export async function renameFile(
+  oldUri: string,
+  newUri: string,
+  options?: {
+    overwrite?: boolean;
+    ignoreIfExists?: boolean;
+  }
+): Promise<void> {
   const oldPath = fileURLToPath(oldUri);
   const newPath = fileURLToPath(newUri);
-  
+
   // Check if target exists
   try {
     await access(newPath);
@@ -100,11 +99,11 @@ export async function renameFile(oldUri: string, newUri: string, options?: {
   } catch {
     // File doesn't exist, proceed
   }
-  
+
   // Ensure target directory exists
   const dir = dirname(newPath);
   await mkdir(dir, { recursive: true });
-  
+
   // Rename file
   await rename(oldPath, newPath);
 }
@@ -139,13 +138,14 @@ export async function applyWorkspaceEdit(edit: WorkspaceEdit): Promise<{
                 await renameFile(change.oldUri, change.newUri, change.options);
                 break;
               default:
-                logger.warn(`Unknown resource operation kind: ${(change as any).kind}`);
+                logger.warn(`Unknown resource operation kind: ${(change as { kind: string }).kind}`);
             }
           }
         } catch (error) {
-          const changeDesc = 'textDocument' in change 
-            ? `text edit in ${change.textDocument.uri}`
-            : `${change.kind} operation`;
+          const changeDesc =
+            'textDocument' in change
+              ? `text edit in ${change.textDocument.uri}`
+              : `${change.kind} operation`;
           return {
             applied: false,
             failureReason: error instanceof Error ? error.message : String(error),
@@ -154,7 +154,7 @@ export async function applyWorkspaceEdit(edit: WorkspaceEdit): Promise<{
         }
       }
     }
-    
+
     // Handle simple changes (deprecated but still supported)
     if (edit.changes) {
       for (const [uri, edits] of Object.entries(edit.changes)) {
@@ -169,7 +169,7 @@ export async function applyWorkspaceEdit(edit: WorkspaceEdit): Promise<{
         }
       }
     }
-    
+
     return { applied: true };
   } catch (error) {
     return {
