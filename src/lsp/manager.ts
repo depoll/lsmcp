@@ -1,4 +1,5 @@
 import { LSPClient } from './client-v2.js';
+export { LSPClient } from './client-v2.js';
 import { LanguageServerConfig, HealthStatus, ConnectionPoolOptions } from '../types/lsp.js';
 import { LanguageDetector, createLanguageServerProvider } from '../languages/index.js';
 import { existsSync } from 'fs';
@@ -353,6 +354,19 @@ export class ConnectionPool {
 
   getDefaultServers(): Record<string, LanguageServerConfig> {
     return { ...DEFAULT_SERVERS };
+  }
+
+  /**
+   * Get all active connections
+   */
+  getAllConnections(): LSPClient[] {
+    const clients: LSPClient[] = [];
+    for (const info of this.connections.values()) {
+      if (info.client.isConnected()) {
+        clients.push(info.client);
+      }
+    }
+    return clients;
   }
 
   /**

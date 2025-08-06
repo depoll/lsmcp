@@ -6,6 +6,8 @@ import {
   ServerCapabilities,
   StreamMessageReader,
   StreamMessageWriter,
+  Diagnostic,
+  PublishDiagnosticsParams,
 } from 'vscode-languageserver-protocol/node.js';
 import { LanguageServerConfig } from '../types/lsp.js';
 import { ProcessManager } from './process-manager.js';
@@ -27,6 +29,7 @@ export class LSPClient extends EventEmitter {
   private logger = logger;
   private connected = false;
   private startTime: number = Date.now();
+  private diagnostics = new Map<string, Diagnostic[]>();
 
   constructor(
     private readonly id: string,
@@ -81,6 +84,12 @@ export class LSPClient extends EventEmitter {
       this.connection.onClose(() => {
         this.logger.info('Protocol connection closed');
         this.connected = false;
+      });
+
+      // Listen for diagnostics
+      this.connection.onNotification('textDocument/publishDiagnostics', (params: PublishDiagnosticsParams) => {
+        this.diagnostics.set(params.uri, params.diagnostics);
+        this.emit('diagnostics', params);
       });
 
       // Start listening
@@ -186,6 +195,31 @@ export class LSPClient extends EventEmitter {
     }
 
     void this.connection.sendNotification(method, params);
+  }
+
+  /**
+   * Get diagnostics for a specific file
+   */
+  getDiagnostics(uri: string): Diagnostic[] {
+    return this.diagnostics.get(uri) || [];
+  }
+
+  /**
+   * Get all diagnostics across all files
+   */
+  getAllDiagnostics(): Map<string, Diagnostic[]> {
+    return new Map(this.diagnostics);
+  }
+
+  /**
+   * Clear diagnostics for a specific file or all files
+   */
+  clearDiagnostics(uri?: string): void {
+    if (uri) {
+      this.diagnostics.delete(uri);
+    } else {
+      this.diagnostics.clear();
+    }
   }
 
   /**
