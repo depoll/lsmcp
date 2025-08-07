@@ -7,9 +7,9 @@ import type { BenchmarkResult } from './framework.js';
 
 // Configuration constants for benchmark targets
 const BENCHMARK_TARGETS = {
-  CONTEXT_REDUCTION: 50,    // 50% reduction target
-  OPERATION_REDUCTION: 60,  // 60% reduction target
-  SPEEDUP: 2,              // 2x speedup target
+  CONTEXT_REDUCTION: 50, // 50% reduction target
+  OPERATION_REDUCTION: 60, // 60% reduction target
+  SPEEDUP: 2, // 2x speedup target
 } as const;
 
 export interface BenchmarkComparison {
@@ -288,7 +288,7 @@ export class BenchmarkFormatter {
     if (values.length === 0) {
       return 0;
     }
-    
+
     const sorted = [...values].sort((a, b) => a - b);
     const mid = Math.floor(sorted.length / 2);
 

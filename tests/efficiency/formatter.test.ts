@@ -3,7 +3,10 @@
  */
 
 import { describe, it, expect } from '@jest/globals';
-import { BenchmarkFormatter, type BenchmarkResults, type BenchmarkComparison } from './formatter.js';
+import {
+  BenchmarkFormatter,
+  type BenchmarkResults,
+} from './formatter.js';
 
 describe('BenchmarkFormatter', () => {
   const formatter = new BenchmarkFormatter();
@@ -24,8 +27,20 @@ describe('BenchmarkFormatter', () => {
     results: [
       {
         name: 'Navigate to definition',
-        filesystem: { operationCount: 5, contextTokens: 5000, executionTimeMs: 100, accuracy: 0.75 },
-        lsp: { operationCount: 1, contextTokens: 100, executionTimeMs: 20, accuracy: 0.98 },
+        filesystem: {
+          operationCount: 5,
+          contextTokens: 5000,
+          executionTimeMs: 100,
+          memoryUsageMB: 10,
+          accuracy: 0.75,
+        },
+        lsp: { 
+          operationCount: 1, 
+          contextTokens: 100, 
+          executionTimeMs: 20, 
+          memoryUsageMB: 5,
+          accuracy: 0.98 
+        },
         improvement: {
           operationReduction: 80,
           contextReduction: 98,
@@ -37,8 +52,20 @@ describe('BenchmarkFormatter', () => {
       },
       {
         name: 'Find all references',
-        filesystem: { operationCount: 10, contextTokens: 10000, executionTimeMs: 200, accuracy: 0.70 },
-        lsp: { operationCount: 2, contextTokens: 500, executionTimeMs: 40, accuracy: 0.95 },
+        filesystem: {
+          operationCount: 10,
+          contextTokens: 10000,
+          executionTimeMs: 200,
+          memoryUsageMB: 15,
+          accuracy: 0.7,
+        },
+        lsp: { 
+          operationCount: 2, 
+          contextTokens: 500, 
+          executionTimeMs: 40, 
+          memoryUsageMB: 8,
+          accuracy: 0.95 
+        },
         improvement: {
           operationReduction: 80,
           contextReduction: 95,
@@ -98,22 +125,22 @@ describe('BenchmarkFormatter', () => {
         results: [
           {
             name: 'Navigate to definition',
-            filesystem: { operationCount: 5, contextTokens: 5000, executionTimeMs: 100 },
-            lsp: { operationCount: 1, contextTokens: 100, executionTimeMs: 20 },
+            filesystem: { operationCount: 5, contextTokens: 5000, executionTimeMs: 100, memoryUsageMB: 10 },
+            lsp: { operationCount: 1, contextTokens: 100, executionTimeMs: 20, memoryUsageMB: 5 },
             improvement: { operationReduction: 80, contextReduction: 98, speedup: 5 },
             passedExpectations: true,
           },
           {
             name: 'Rename symbol',
-            filesystem: { operationCount: 10, contextTokens: 10000, executionTimeMs: 200 },
-            lsp: { operationCount: 2, contextTokens: 500, executionTimeMs: 40 },
+            filesystem: { operationCount: 10, contextTokens: 10000, executionTimeMs: 200, memoryUsageMB: 15 },
+            lsp: { operationCount: 2, contextTokens: 500, executionTimeMs: 40, memoryUsageMB: 8 },
             improvement: { operationReduction: 80, contextReduction: 95, speedup: 5 },
             passedExpectations: true,
           },
           {
             name: 'Find symbol',
-            filesystem: { operationCount: 8, contextTokens: 8000, executionTimeMs: 150 },
-            lsp: { operationCount: 1, contextTokens: 200, executionTimeMs: 25 },
+            filesystem: { operationCount: 8, contextTokens: 8000, executionTimeMs: 150, memoryUsageMB: 12 },
+            lsp: { operationCount: 1, contextTokens: 200, executionTimeMs: 25, memoryUsageMB: 6 },
             improvement: { operationReduction: 87.5, contextReduction: 97.5, speedup: 6 },
             passedExpectations: true,
           },
@@ -132,8 +159,8 @@ describe('BenchmarkFormatter', () => {
         results: [
           {
             name: 'Failed scenario',
-            filesystem: { operationCount: 10, contextTokens: 10000, executionTimeMs: 200 },
-            lsp: { operationCount: 5, contextTokens: 5000, executionTimeMs: 100 },
+            filesystem: { operationCount: 10, contextTokens: 10000, executionTimeMs: 200, memoryUsageMB: 15 },
+            lsp: { operationCount: 5, contextTokens: 5000, executionTimeMs: 100, memoryUsageMB: 10 },
             improvement: { operationReduction: 50, contextReduction: 50, speedup: 2 },
             passedExpectations: false,
             expectedReduction: { context: 80, operations: 70 },
@@ -165,94 +192,113 @@ describe('BenchmarkFormatter', () => {
   });
 
   describe('calculateMedian', () => {
+    // Helper to access private method for testing
+    const testCalculateMedian = (values: number[]): number => {
+      const formatter = new BenchmarkFormatter() as unknown as {
+        calculateMedian: (values: number[]) => number;
+      };
+      return formatter.calculateMedian(values);
+    };
+
     it('should handle empty arrays', () => {
-      const formatter = new BenchmarkFormatter();
-      // Access private method through type assertion for testing
-      const result = (formatter as any).calculateMedian([]);
+      const result = testCalculateMedian([]);
       expect(result).toBe(0);
     });
 
     it('should calculate median for odd-length arrays', () => {
-      const formatter = new BenchmarkFormatter();
-      const result = (formatter as any).calculateMedian([1, 2, 3, 4, 5]);
+      const result = testCalculateMedian([1, 2, 3, 4, 5]);
       expect(result).toBe(3);
     });
 
     it('should calculate median for even-length arrays', () => {
-      const formatter = new BenchmarkFormatter();
-      const result = (formatter as any).calculateMedian([1, 2, 3, 4]);
+      const result = testCalculateMedian([1, 2, 3, 4]);
       expect(result).toBe(2.5);
     });
 
     it('should handle unsorted arrays', () => {
-      const formatter = new BenchmarkFormatter();
-      const result = (formatter as any).calculateMedian([5, 1, 3, 2, 4]);
+      const result = testCalculateMedian([5, 1, 3, 2, 4]);
       expect(result).toBe(3);
     });
 
     it('should handle single-element arrays', () => {
-      const formatter = new BenchmarkFormatter();
-      const result = (formatter as any).calculateMedian([42]);
+      const result = testCalculateMedian([42]);
       expect(result).toBe(42);
     });
   });
 
   describe('truncateName', () => {
+    // Helper to access private method for testing
+    const testTruncateName = (name: string, maxLength: number): string => {
+      const formatter = new BenchmarkFormatter() as unknown as {
+        truncateName: (name: string, maxLength: number) => string;
+      };
+      return formatter.truncateName(name, maxLength);
+    };
+
     it('should not truncate short names', () => {
-      const formatter = new BenchmarkFormatter();
-      const result = (formatter as any).truncateName('Short name', 20);
+      const result = testTruncateName('Short name', 20);
       expect(result).toBe('Short name');
     });
 
     it('should truncate long names with ellipsis', () => {
-      const formatter = new BenchmarkFormatter();
-      const result = (formatter as any).truncateName('This is a very long scenario name that needs truncation', 20);
+      const result = testTruncateName(
+        'This is a very long scenario name that needs truncation',
+        20
+      );
       expect(result).toBe('This is a very lo...');
     });
   });
 
   describe('formatPercentage', () => {
     it('should format percentage with one decimal place', () => {
-      const formatter = new BenchmarkFormatter();
-      expect((formatter as any).formatPercentage(75.456)).toBe('75.5%');
-      expect((formatter as any).formatPercentage(100)).toBe('100.0%');
-      expect((formatter as any).formatPercentage(0)).toBe('0.0%');
+      const formatter = new BenchmarkFormatter() as unknown as {
+        formatPercentage: (value: number) => string;
+      };
+      expect(formatter.formatPercentage(75.456)).toBe('75.5%');
+      expect(formatter.formatPercentage(100)).toBe('100.0%');
+      expect(formatter.formatPercentage(0)).toBe('0.0%');
     });
   });
 
   describe('getStatusIcon', () => {
     it('should return correct status icons', () => {
-      const formatter = new BenchmarkFormatter();
-      expect((formatter as any).getStatusIcon(true)).toBe('✅');
-      expect((formatter as any).getStatusIcon(false)).toBe('❌');
+      const formatter = new BenchmarkFormatter() as unknown as {
+        getStatusIcon: (passed: boolean) => string;
+      };
+      expect(formatter.getStatusIcon(true)).toBe('✅');
+      expect(formatter.getStatusIcon(false)).toBe('❌');
     });
   });
 
   describe('formatChange', () => {
+    // Helper to access private method for testing
+    const testFormatChange = (change: number, isPercentage: boolean, suffix?: string): string => {
+      const formatter = new BenchmarkFormatter() as unknown as {
+        formatChange: (change: number, isPercentage: boolean, suffix?: string) => string;
+      };
+      return formatter.formatChange(change, isPercentage, suffix);
+    };
+
     it('should format positive changes with up arrow', () => {
-      const formatter = new BenchmarkFormatter();
-      const result = (formatter as any).formatChange(5.5, true);
+      const result = testFormatChange(5.5, true);
       expect(result).toContain('📈');
       expect(result).toContain('+5.5%');
     });
 
     it('should format negative changes with down arrow', () => {
-      const formatter = new BenchmarkFormatter();
-      const result = (formatter as any).formatChange(-3.2, true);
+      const result = testFormatChange(-3.2, true);
       expect(result).toContain('📉');
       expect(result).toContain('-3.2%');
     });
 
     it('should format zero changes with dash', () => {
-      const formatter = new BenchmarkFormatter();
-      const result = (formatter as any).formatChange(0, true);
+      const result = testFormatChange(0, true);
       expect(result).toContain('➖');
       expect(result).toContain('+0.0%');
     });
 
     it('should handle custom suffixes', () => {
-      const formatter = new BenchmarkFormatter();
-      const result = (formatter as any).formatChange(2.5, false, 'x');
+      const result = testFormatChange(2.5, false, 'x');
       expect(result).toContain('+2.5x');
     });
   });
@@ -260,13 +306,15 @@ describe('BenchmarkFormatter', () => {
   describe('edge cases', () => {
     it('should handle results with no accuracy data', () => {
       const results = createMockResults({
-        results: [{
-          name: 'Test scenario',
-          filesystem: { operationCount: 5, contextTokens: 5000, executionTimeMs: 100 },
-          lsp: { operationCount: 1, contextTokens: 100, executionTimeMs: 20 },
-          improvement: { operationReduction: 80, contextReduction: 98, speedup: 5 },
-          passedExpectations: true,
-        }],
+        results: [
+          {
+            name: 'Test scenario',
+            filesystem: { operationCount: 5, contextTokens: 5000, executionTimeMs: 100, memoryUsageMB: 10 },
+            lsp: { operationCount: 1, contextTokens: 100, executionTimeMs: 20, memoryUsageMB: 5 },
+            improvement: { operationReduction: 80, contextReduction: 98, speedup: 5 },
+            passedExpectations: true,
+          },
+        ],
       });
 
       const formatted = formatter.formatForPR({ current: results });
@@ -290,13 +338,15 @@ describe('BenchmarkFormatter', () => {
 
     it('should handle negative improvements gracefully', () => {
       const results = createMockResults({
-        results: [{
-          name: 'Regression scenario',
-          filesystem: { operationCount: 1, contextTokens: 100, executionTimeMs: 10 },
-          lsp: { operationCount: 5, contextTokens: 500, executionTimeMs: 50 },
-          improvement: { operationReduction: -400, contextReduction: -400, speedup: 0.2 },
-          passedExpectations: false,
-        }],
+        results: [
+          {
+            name: 'Regression scenario',
+            filesystem: { operationCount: 1, contextTokens: 100, executionTimeMs: 10, memoryUsageMB: 2 },
+            lsp: { operationCount: 5, contextTokens: 500, executionTimeMs: 50, memoryUsageMB: 10 },
+            improvement: { operationReduction: -400, contextReduction: -400, speedup: 0.2 },
+            passedExpectations: false,
+          },
+        ],
       });
 
       const formatted = formatter.formatForPR({ current: results });
