@@ -232,9 +232,7 @@ export class EfficiencyBenchmark {
         ).toFixed(0)}% | +${(result.improvement.accuracyGain! * 100).toFixed(0)}% |\n`;
       }
 
-      report += `| **Status** | ${
-        result.passedExpectations ? '✅ Passed' : '❌ Failed'
-      } | | |\n\n`;
+      report += `| **Status** | ${result.passedExpectations ? '✅ Passed' : '❌ Failed'} | | |\n\n`;
     }
 
     // Performance characteristics
