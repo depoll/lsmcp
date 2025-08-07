@@ -123,7 +123,11 @@ describe('MCP-LSP Efficiency Benchmarks', () => {
 
     it('should achieve 2-5x operation reduction on average', async () => {
       // Run scenarios and check operation reduction
-      const sampleScenarios = [navigateScenarios[1]!, findUsagesScenarios[1]!, applyEditScenarios[0]!];
+      const sampleScenarios = [
+        navigateScenarios[1]!,
+        findUsagesScenarios[1]!,
+        applyEditScenarios[0]!,
+      ];
 
       const results = [];
       for (const scenario of sampleScenarios) {
