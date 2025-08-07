@@ -32,6 +32,10 @@ export interface BenchmarkResult {
     accuracyGain?: number;
   };
   passedExpectations: boolean;
+  expectedReduction?: {
+    context: number;
+    operations: number;
+  };
 }
 
 export class EfficiencyBenchmark {
@@ -80,6 +84,7 @@ export class EfficiencyBenchmark {
         lsp: lspResult,
         improvement,
         passedExpectations,
+        expectedReduction: scenario.expectedReduction,
       };
 
       this.results.push(result);
