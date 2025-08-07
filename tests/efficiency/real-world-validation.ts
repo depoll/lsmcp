@@ -39,7 +39,7 @@ class RealWorldValidator {
     try {
       await this.connectionPool.get('typescript', this.projectRoot);
       // Wait for indexing
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      await new Promise((resolve) => setTimeout(resolve, 2000));
     } catch (error) {
       console.warn('LSP setup warning:', error);
     }
@@ -70,7 +70,9 @@ class RealWorldValidator {
     fsOps++;
 
     // Step 2: Parse grep output to find files
-    const matches = grepResult.split('\n').filter(line => line.includes(`class ${targetFunction}`));
+    const matches = grepResult
+      .split('\n')
+      .filter((line) => line.includes(`class ${targetFunction}`));
     fsFiles = matches.length;
 
     // Step 3: Read each matching file to verify
@@ -104,17 +106,20 @@ class RealWorldValidator {
     let lspOps = 0;
 
     const navigateTool = new NavigateTool(this.connectionPool);
-    
+
     // Find the position of ConnectionPool in server.ts
     const fileContent = await fs.readFile(searchFile, 'utf-8');
     const lines = fileContent.split('\n');
     let position = { line: 0, character: 0 };
-    
+
     for (let i = 0; i < lines.length; i++) {
-      const charIndex = lines[i].indexOf(targetFunction);
-      if (charIndex !== -1) {
-        position = { line: i, character: charIndex };
-        break;
+      const line = lines[i];
+      if (line) {
+        const charIndex = line.indexOf(targetFunction);
+        if (charIndex !== -1) {
+          position = { line: i, character: charIndex };
+          break;
+        }
       }
     }
 
@@ -147,7 +152,7 @@ class RealWorldValidator {
    */
   async testFindReferences(): Promise<void> {
     const targetSymbol = 'logger';
-    
+
     // Approach 1: Filesystem with grep
     console.log('\n📁 Testing Find References - Filesystem Approach...');
     const fsStart = performance.now();
@@ -163,13 +168,24 @@ class RealWorldValidator {
 
     // Step 2: Read context around each match
     const matches = grepResult.split('\n');
-    const uniqueFiles = new Set(matches.map(m => {
-      const parts = m.split(':');
-      return parts[0] || '';
-    }).filter(Boolean));
-    
+    const uniqueFiles = new Set(
+      matches
+        .map((m) => {
+          const parts = m.split(':');
+          return parts[0] || '';
+        })
+        .filter(Boolean)
+    );
+
     for (const filePath of uniqueFiles) {
-      if (filePath && filePath.length > 0 && await fs.access(filePath).then(() => true).catch(() => false)) {
+      if (
+        filePath &&
+        filePath.length > 0 &&
+        (await fs
+          .access(filePath)
+          .then(() => true)
+          .catch(() => false))
+      ) {
         const content = await fs.readFile(filePath, 'utf-8');
         fsContext += content.length;
         fsOps++;
@@ -197,18 +213,21 @@ class RealWorldValidator {
     let lspOps = 0;
 
     const findUsagesTool = new FindUsagesTool(this.connectionPool);
-    
+
     // Find a file that uses logger
     const testFile = path.join(this.projectRoot, 'src/server.ts');
     const fileContent = await fs.readFile(testFile, 'utf-8');
     const lines = fileContent.split('\n');
     let position = { line: 0, character: 0 };
-    
+
     for (let i = 0; i < lines.length; i++) {
-      const charIndex = lines[i].indexOf(targetSymbol);
-      if (charIndex !== -1 && !lines[i].includes('//') && !lines[i].includes('import')) {
-        position = { line: i, character: charIndex };
-        break;
+      const line = lines[i];
+      if (line) {
+        const charIndex = line.indexOf(targetSymbol);
+        if (charIndex !== -1 && !line.includes('//') && !line.includes('import')) {
+          position = { line: i, character: charIndex };
+          break;
+        }
       }
     }
 
@@ -259,14 +278,25 @@ class RealWorldValidator {
 
     // Step 2: Parse results
     const matches = grepResult.split('\n').filter(Boolean);
-    const uniqueFiles = new Set(matches.map(m => {
-      const parts = m.split(':');
-      return parts[0] || '';
-    }).filter(Boolean));
-    
+    const uniqueFiles = new Set(
+      matches
+        .map((m) => {
+          const parts = m.split(':');
+          return parts[0] || '';
+        })
+        .filter(Boolean)
+    );
+
     // Step 3: Read files for more context
     for (const filePath of uniqueFiles) {
-      if (filePath && filePath.length > 0 && await fs.access(filePath).then(() => true).catch(() => false)) {
+      if (
+        filePath &&
+        filePath.length > 0 &&
+        (await fs
+          .access(filePath)
+          .then(() => true)
+          .catch(() => false))
+      ) {
         const content = await fs.readFile(filePath, 'utf-8');
         fsContext += content.length;
         fsOps++;
@@ -325,29 +355,39 @@ class RealWorldValidator {
 
     // Group results by operation
     const operations = ['find-definition', 'find-references', 'symbol-search'];
-    
+
     for (const op of operations) {
-      const fsResult = this.results.find(r => r.approach === 'filesystem' && r.operation === op);
-      const lspResult = this.results.find(r => r.approach === 'lsp' && r.operation === op);
+      const fsResult = this.results.find((r) => r.approach === 'filesystem' && r.operation === op);
+      const lspResult = this.results.find((r) => r.approach === 'lsp' && r.operation === op);
 
       if (fsResult && lspResult) {
         console.log(`\n### ${op.toUpperCase().replace('-', ' ')}`);
         console.log('\nFilesystem Approach:');
-        console.log(`  Context: ${fsResult.contextChars.toLocaleString()} chars (~${fsResult.contextTokens.toLocaleString()} tokens)`);
+        console.log(
+          `  Context: ${fsResult.contextChars.toLocaleString()} chars (~${fsResult.contextTokens.toLocaleString()} tokens)`
+        );
         console.log(`  Operations: ${fsResult.operationCount}`);
         console.log(`  Files Read: ${fsResult.filesRead}`);
         console.log(`  Time: ${fsResult.timeMs.toFixed(2)}ms`);
         console.log(`  Accuracy: ${fsResult.accuracy}`);
 
         console.log('\nLSP Approach:');
-        console.log(`  Context: ${lspResult.contextChars.toLocaleString()} chars (~${lspResult.contextTokens.toLocaleString()} tokens)`);
+        console.log(
+          `  Context: ${lspResult.contextChars.toLocaleString()} chars (~${lspResult.contextTokens.toLocaleString()} tokens)`
+        );
         console.log(`  Operations: ${lspResult.operationCount}`);
         console.log(`  Files Read: ${lspResult.filesRead}`);
         console.log(`  Time: ${lspResult.timeMs.toFixed(2)}ms`);
         console.log(`  Accuracy: ${lspResult.accuracy}`);
 
-        const contextReduction = ((fsResult.contextTokens - lspResult.contextTokens) / fsResult.contextTokens * 100).toFixed(1);
-        const opsReduction = ((fsResult.operationCount - lspResult.operationCount) / fsResult.operationCount * 100).toFixed(1);
+        const contextReduction = (
+          ((fsResult.contextTokens - lspResult.contextTokens) / fsResult.contextTokens) *
+          100
+        ).toFixed(1);
+        const opsReduction = (
+          ((fsResult.operationCount - lspResult.operationCount) / fsResult.operationCount) *
+          100
+        ).toFixed(1);
         const speedup = (fsResult.timeMs / lspResult.timeMs).toFixed(1);
 
         console.log('\n🎯 Improvements:');
@@ -359,10 +399,18 @@ class RealWorldValidator {
     }
 
     // Overall summary
-    const totalFsTokens = this.results.filter(r => r.approach === 'filesystem').reduce((sum, r) => sum + r.contextTokens, 0);
-    const totalLspTokens = this.results.filter(r => r.approach === 'lsp').reduce((sum, r) => sum + r.contextTokens, 0);
-    const totalFsOps = this.results.filter(r => r.approach === 'filesystem').reduce((sum, r) => sum + r.operationCount, 0);
-    const totalLspOps = this.results.filter(r => r.approach === 'lsp').reduce((sum, r) => sum + r.operationCount, 0);
+    const totalFsTokens = this.results
+      .filter((r) => r.approach === 'filesystem')
+      .reduce((sum, r) => sum + r.contextTokens, 0);
+    const totalLspTokens = this.results
+      .filter((r) => r.approach === 'lsp')
+      .reduce((sum, r) => sum + r.contextTokens, 0);
+    const totalFsOps = this.results
+      .filter((r) => r.approach === 'filesystem')
+      .reduce((sum, r) => sum + r.operationCount, 0);
+    const totalLspOps = this.results
+      .filter((r) => r.approach === 'lsp')
+      .reduce((sum, r) => sum + r.operationCount, 0);
 
     console.log('\n' + '='.repeat(80));
     console.log('🏆 OVERALL SUMMARY');
@@ -370,12 +418,14 @@ class RealWorldValidator {
     console.log(`\nTotal Context Tokens:`);
     console.log(`  Filesystem: ${totalFsTokens.toLocaleString()}`);
     console.log(`  LSP: ${totalLspTokens.toLocaleString()}`);
-    console.log(`  Reduction: ${((totalFsTokens - totalLspTokens) / totalFsTokens * 100).toFixed(1)}%`);
-    
+    console.log(
+      `  Reduction: ${(((totalFsTokens - totalLspTokens) / totalFsTokens) * 100).toFixed(1)}%`
+    );
+
     console.log(`\nTotal Operations:`);
     console.log(`  Filesystem: ${totalFsOps}`);
     console.log(`  LSP: ${totalLspOps}`);
-    console.log(`  Reduction: ${((totalFsOps - totalLspOps) / totalFsOps * 100).toFixed(1)}%`);
+    console.log(`  Reduction: ${(((totalFsOps - totalLspOps) / totalFsOps) * 100).toFixed(1)}%`);
 
     console.log('\n✅ All LSP operations provide EXACT semantic accuracy');
     console.log('❌ Filesystem operations include false positives from strings/comments');
@@ -389,17 +439,16 @@ async function main() {
   try {
     console.log('🚀 Starting real-world validation of MCP-LSP efficiency...');
     console.log(`📂 Project root: ${process.cwd()}`);
-    
+
     await validator.setup();
-    
+
     // Run tests
     await validator.testFindDefinition();
     await validator.testFindReferences();
     await validator.testSymbolSearch();
-    
+
     // Generate report
     validator.generateReport();
-    
   } catch (error) {
     console.error('❌ Validation failed:', error);
   } finally {
