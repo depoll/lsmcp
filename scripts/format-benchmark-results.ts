@@ -33,7 +33,13 @@ async function main() {
         const baseData = await fs.readFile(baseFile, 'utf-8');
         base = JSON.parse(baseData);
       } catch (error) {
-        console.warn(`Warning: Could not read base file ${baseFile}:`, error);
+        if (error instanceof SyntaxError) {
+          console.warn(`Warning: Invalid JSON in base file ${baseFile}:`, error.message);
+        } else if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+          console.warn(`Warning: Base file not found: ${baseFile}`);
+        } else {
+          console.warn(`Warning: Could not read base file ${baseFile}:`, error);
+        }
       }
     }
     
