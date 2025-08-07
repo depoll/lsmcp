@@ -1,5 +1,5 @@
 {
-  "timestamp": "2025-08-07T04:56:49.481Z",
+  "timestamp": "2025-08-07T18:09:26.569Z",
   "environment": {
     "node": "v24.4.1",
     "platform": "darwin",
@@ -8,7 +8,7 @@
   "summary": {
     "averageContextReduction": 98.37127594962733,
     "averageOperationReduction": 76.66666666666667,
-    "averageSpeedup": 8.671645021645022
+    "averageSpeedup": 9.030952380952382
   },
   "results": [
     {
@@ -16,8 +16,8 @@
       "filesystem": {
         "contextTokens": 3700,
         "operationCount": 4,
-        "executionTimeMs": 44,
-        "memoryUsageMB": 0.049102783203125,
+        "executionTimeMs": 45,
+        "memoryUsageMB": 0.0556182861328125,
         "accuracy": 0.75
       },
       "lsp": {
@@ -30,7 +30,7 @@
       "improvement": {
         "operationReduction": 75,
         "contextReduction": 98.64864864864865,
-        "speedup": 7.333333333333333,
+        "speedup": 7.5,
         "accuracyGain": 0.22999999999999998
       },
       "passedExpectations": true,
@@ -45,7 +45,7 @@
         "contextTokens": 8300,
         "operationCount": 10,
         "executionTimeMs": 109,
-        "memoryUsageMB": 0.02466583251953125,
+        "memoryUsageMB": 0.0244903564453125,
         "accuracy": 0.75
       },
       "lsp": {
@@ -73,7 +73,7 @@
         "contextTokens": 3700,
         "operationCount": 4,
         "executionTimeMs": 44,
-        "memoryUsageMB": 0.02020263671875,
+        "memoryUsageMB": 0.00637054443359375,
         "accuracy": 0.75
       },
       "lsp": {
@@ -100,8 +100,8 @@
       "filesystem": {
         "contextTokens": 7800,
         "operationCount": 5,
-        "executionTimeMs": 53,
-        "memoryUsageMB": 0.00795745849609375,
+        "executionTimeMs": 55,
+        "memoryUsageMB": 0.00765228271484375,
         "accuracy": 0.75
       },
       "lsp": {
@@ -114,7 +114,7 @@
       "improvement": {
         "operationReduction": 60,
         "contextReduction": 98.07692307692307,
-        "speedup": 4.818181818181818,
+        "speedup": 5,
         "accuracyGain": 0.22999999999999998
       },
       "passedExpectations": true,
@@ -129,7 +129,7 @@
         "contextTokens": 7900,
         "operationCount": 6,
         "executionTimeMs": 66,
-        "memoryUsageMB": 0.0095062255859375,
+        "memoryUsageMB": 0.0092315673828125,
         "accuracy": 0.75
       },
       "lsp": {
@@ -156,21 +156,21 @@
       "filesystem": {
         "contextTokens": 17600,
         "operationCount": 5,
-        "executionTimeMs": 54,
-        "memoryUsageMB": -0.09711456298828125,
+        "executionTimeMs": 55,
+        "memoryUsageMB": -0.0007781982421875,
         "accuracy": 0.75
       },
       "lsp": {
         "contextTokens": 100,
         "operationCount": 1,
-        "executionTimeMs": 6,
+        "executionTimeMs": 5,
         "memoryUsageMB": 0.00225067138671875,
         "accuracy": 0.98
       },
       "improvement": {
         "operationReduction": 80,
         "contextReduction": 99.43181818181817,
-        "speedup": 9,
+        "speedup": 11,
         "accuracyGain": 0.22999999999999998
       },
       "passedExpectations": true,
@@ -184,8 +184,8 @@
       "filesystem": {
         "contextTokens": 7900,
         "operationCount": 6,
-        "executionTimeMs": 64,
-        "memoryUsageMB": 0.00919342041015625,
+        "executionTimeMs": 65,
+        "memoryUsageMB": 0.009002685546875,
         "accuracy": 0.75
       },
       "lsp": {
@@ -198,7 +198,7 @@
       "improvement": {
         "operationReduction": 83.33333333333334,
         "contextReduction": 97.46835443037975,
-        "speedup": 10.666666666666666,
+        "speedup": 10.833333333333334,
         "accuracyGain": 0.22999999999999998
       },
       "passedExpectations": true,

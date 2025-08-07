@@ -1,12 +1,12 @@
 # Performance Benchmark Report
 
-Generated: 2025-08-07T04:56:49.479Z
+Generated: 2025-08-07T18:09:26.567Z
 
 ## Summary
 
 - **Average Context Reduction**: 98.4%
 - **Average Operation Reduction**: 76.7%
-- **Average Speedup**: 8.7x
+- **Average Speedup**: 9.0x
 
 - **Best Context Reduction**: 99.4% (Navigate to type definition)
 - **Worst Context Reduction**: 97.5% (Find all references to popular function)
@@ -19,7 +19,7 @@ Generated: 2025-08-07T04:56:49.479Z
 |--------|------------|-----|-------------|
 | Operations | 4 | 1 | 75.0% reduction |
 | Context Tokens | 3700 | 50 | 98.6% reduction |
-| Execution Time | 44ms | 6ms | 7.3x faster |
+| Execution Time | 45ms | 6ms | 7.5x faster |
 | Accuracy | 75% | 98% | +23% |
 | **Status** | ✅ Passed | | |
 
@@ -49,7 +49,7 @@ Generated: 2025-08-07T04:56:49.479Z
 |--------|------------|-----|-------------|
 | Operations | 5 | 2 | 60.0% reduction |
 | Context Tokens | 7800 | 150 | 98.1% reduction |
-| Execution Time | 53ms | 11ms | 4.8x faster |
+| Execution Time | 55ms | 11ms | 5.0x faster |
 | Accuracy | 75% | 98% | +23% |
 | **Status** | ✅ Passed | | |
 
@@ -69,7 +69,7 @@ Generated: 2025-08-07T04:56:49.479Z
 |--------|------------|-----|-------------|
 | Operations | 5 | 1 | 80.0% reduction |
 | Context Tokens | 17600 | 100 | 99.4% reduction |
-| Execution Time | 54ms | 6ms | 9.0x faster |
+| Execution Time | 55ms | 5ms | 11.0x faster |
 | Accuracy | 75% | 98% | +23% |
 | **Status** | ✅ Passed | | |
 
@@ -79,7 +79,7 @@ Generated: 2025-08-07T04:56:49.479Z
 |--------|------------|-----|-------------|
 | Operations | 6 | 1 | 83.3% reduction |
 | Context Tokens | 7900 | 200 | 97.5% reduction |
-| Execution Time | 64ms | 6ms | 10.7x faster |
+| Execution Time | 65ms | 6ms | 10.8x faster |
 | Accuracy | 75% | 98% | +23% |
 | **Status** | ✅ Passed | | |
 

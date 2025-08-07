@@ -106,7 +106,7 @@ jobs:
     
     - name: Run base branch benchmarks
       run: |
-        npm run test:efficiency -- --quick
+        npx tsx tests/efficiency/run-benchmarks.ts --quick
         mv benchmark-results.json base-benchmark-results.json
       continue-on-error: true
     
@@ -114,7 +114,7 @@ jobs:
       run: git checkout ${{ github.head_ref }}
     
     - name: Run current branch benchmarks
-      run: npm run test:efficiency -- --quick
+      run: npx tsx tests/efficiency/run-benchmarks.ts --quick
     
     - name: Format benchmark results
       id: format
