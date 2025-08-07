@@ -1,0 +1,211 @@
+{
+  "timestamp": "2025-08-07T18:09:26.569Z",
+  "environment": {
+    "node": "v24.4.1",
+    "platform": "darwin",
+    "arch": "arm64"
+  },
+  "summary": {
+    "averageContextReduction": 98.37127594962733,
+    "averageOperationReduction": 76.66666666666667,
+    "averageSpeedup": 9.030952380952382
+  },
+  "results": [
+    {
+      "name": "Find function definition in same file",
+      "filesystem": {
+        "contextTokens": 3700,
+        "operationCount": 4,
+        "executionTimeMs": 45,
+        "memoryUsageMB": 0.0556182861328125,
+        "accuracy": 0.75
+      },
+      "lsp": {
+        "contextTokens": 50,
+        "operationCount": 1,
+        "executionTimeMs": 6,
+        "memoryUsageMB": 0.00287628173828125,
+        "accuracy": 0.98
+      },
+      "improvement": {
+        "operationReduction": 75,
+        "contextReduction": 98.64864864864865,
+        "speedup": 7.5,
+        "accuracyGain": 0.22999999999999998
+      },
+      "passedExpectations": true,
+      "expectedReduction": {
+        "context": 70,
+        "operations": 75
+      }
+    },
+    {
+      "name": "Rename symbol across 50 files",
+      "filesystem": {
+        "contextTokens": 8300,
+        "operationCount": 10,
+        "executionTimeMs": 109,
+        "memoryUsageMB": 0.0244903564453125,
+        "accuracy": 0.75
+      },
+      "lsp": {
+        "contextTokens": 200,
+        "operationCount": 2,
+        "executionTimeMs": 12,
+        "memoryUsageMB": 0.00347137451171875,
+        "accuracy": 0.98
+      },
+      "improvement": {
+        "operationReduction": 80,
+        "contextReduction": 97.59036144578313,
+        "speedup": 9.083333333333334,
+        "accuracyGain": 0.22999999999999998
+      },
+      "passedExpectations": true,
+      "expectedReduction": {
+        "context": 97,
+        "operations": 80
+      }
+    },
+    {
+      "name": "Find function definition in same file",
+      "filesystem": {
+        "contextTokens": 3700,
+        "operationCount": 4,
+        "executionTimeMs": 44,
+        "memoryUsageMB": 0.00637054443359375,
+        "accuracy": 0.75
+      },
+      "lsp": {
+        "contextTokens": 50,
+        "operationCount": 1,
+        "executionTimeMs": 5,
+        "memoryUsageMB": 0.0020599365234375,
+        "accuracy": 0.98
+      },
+      "improvement": {
+        "operationReduction": 75,
+        "contextReduction": 98.64864864864865,
+        "speedup": 8.8,
+        "accuracyGain": 0.22999999999999998
+      },
+      "passedExpectations": true,
+      "expectedReduction": {
+        "context": 70,
+        "operations": 75
+      }
+    },
+    {
+      "name": "Find class definition across project",
+      "filesystem": {
+        "contextTokens": 7800,
+        "operationCount": 5,
+        "executionTimeMs": 55,
+        "memoryUsageMB": 0.00765228271484375,
+        "accuracy": 0.75
+      },
+      "lsp": {
+        "contextTokens": 150,
+        "operationCount": 2,
+        "executionTimeMs": 11,
+        "memoryUsageMB": 0.00341033935546875,
+        "accuracy": 0.98
+      },
+      "improvement": {
+        "operationReduction": 60,
+        "contextReduction": 98.07692307692307,
+        "speedup": 5,
+        "accuracyGain": 0.22999999999999998
+      },
+      "passedExpectations": true,
+      "expectedReduction": {
+        "context": 80,
+        "operations": 60
+      }
+    },
+    {
+      "name": "Find interface implementation",
+      "filesystem": {
+        "contextTokens": 7900,
+        "operationCount": 6,
+        "executionTimeMs": 66,
+        "memoryUsageMB": 0.0092315673828125,
+        "accuracy": 0.75
+      },
+      "lsp": {
+        "contextTokens": 100,
+        "operationCount": 1,
+        "executionTimeMs": 6,
+        "memoryUsageMB": 0.00261688232421875,
+        "accuracy": 0.98
+      },
+      "improvement": {
+        "operationReduction": 83.33333333333334,
+        "contextReduction": 98.73417721518987,
+        "speedup": 11,
+        "accuracyGain": 0.22999999999999998
+      },
+      "passedExpectations": true,
+      "expectedReduction": {
+        "context": 90,
+        "operations": 83
+      }
+    },
+    {
+      "name": "Navigate to type definition",
+      "filesystem": {
+        "contextTokens": 17600,
+        "operationCount": 5,
+        "executionTimeMs": 55,
+        "memoryUsageMB": -0.0007781982421875,
+        "accuracy": 0.75
+      },
+      "lsp": {
+        "contextTokens": 100,
+        "operationCount": 1,
+        "executionTimeMs": 5,
+        "memoryUsageMB": 0.00225067138671875,
+        "accuracy": 0.98
+      },
+      "improvement": {
+        "operationReduction": 80,
+        "contextReduction": 99.43181818181817,
+        "speedup": 11,
+        "accuracyGain": 0.22999999999999998
+      },
+      "passedExpectations": true,
+      "expectedReduction": {
+        "context": 85,
+        "operations": 80
+      }
+    },
+    {
+      "name": "Find all references to popular function",
+      "filesystem": {
+        "contextTokens": 7900,
+        "operationCount": 6,
+        "executionTimeMs": 65,
+        "memoryUsageMB": 0.009002685546875,
+        "accuracy": 0.75
+      },
+      "lsp": {
+        "contextTokens": 200,
+        "operationCount": 1,
+        "executionTimeMs": 6,
+        "memoryUsageMB": 0.00213623046875,
+        "accuracy": 0.98
+      },
+      "improvement": {
+        "operationReduction": 83.33333333333334,
+        "contextReduction": 97.46835443037975,
+        "speedup": 10.833333333333334,
+        "accuracyGain": 0.22999999999999998
+      },
+      "passedExpectations": true,
+      "expectedReduction": {
+        "context": 90,
+        "operations": 83
+      }
+    }
+  ]
+}
