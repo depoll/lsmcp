@@ -170,11 +170,12 @@ jobs:
           npm run benchmark:stress -- --large
         continue-on-error: true
 
-      - name: Memory leak detection
-        run: |
-          # Run with memory monitoring
-          node --expose-gc tests/efficiency/memory-leak-test.js
-        continue-on-error: true
+      # - name: Memory leak detection
+      #   run: |
+      #     # Run with memory monitoring
+      #     # TODO: Create memory-leak-test.js when needed
+      #     # node --expose-gc tests/efficiency/memory-leak-test.js
+      #   continue-on-error: true
 
       - name: Upload stress test results
         if: always()

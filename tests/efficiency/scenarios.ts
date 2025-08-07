@@ -1,6 +1,11 @@
 /**
  * Benchmark scenarios for all MCP-LSP tools
  * These scenarios compare LSP operations vs filesystem alternatives
+ * 
+ * @note expectedReduction values represent target percentage reductions:
+ *   - context: Expected reduction in context tokens (0-100%)
+ *   - operations: Expected reduction in operation count (0-100%)
+ *   Example: context: 70 means we expect 70% fewer context tokens with LSP
  */
 
 import { BenchmarkScenario } from './framework.js';
