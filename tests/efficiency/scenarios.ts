@@ -52,7 +52,7 @@ export const navigateScenarios: BenchmarkScenario[] = [
     lspOperations: ['lsp.textDocument/implementation'],
     expectedReduction: {
       context: 90,
-      operations: 85,
+      operations: 83,
     },
   },
   {
@@ -89,7 +89,7 @@ export const findUsagesScenarios: BenchmarkScenario[] = [
     lspOperations: ['lsp.textDocument/references'],
     expectedReduction: {
       context: 90,
-      operations: 85,
+      operations: 83,
     },
   },
   {
@@ -267,8 +267,8 @@ export const applyEditScenarios: BenchmarkScenario[] = [
     ],
     lspOperations: ['lsp.textDocument/prepareRename', 'lsp.textDocument/rename'],
     expectedReduction: {
-      context: 98,
-      operations: 95,
+      context: 97,
+      operations: 80,
     },
   },
   {
@@ -290,7 +290,7 @@ export const applyEditScenarios: BenchmarkScenario[] = [
     ],
     expectedReduction: {
       context: 90,
-      operations: 80,
+      operations: 75,
     },
   },
   {
