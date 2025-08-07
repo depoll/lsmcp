@@ -3,10 +3,7 @@
  */
 
 import { describe, it, expect } from '@jest/globals';
-import {
-  BenchmarkFormatter,
-  type BenchmarkResults,
-} from './formatter.js';
+import { BenchmarkFormatter, type BenchmarkResults } from './formatter.js';
 
 describe('BenchmarkFormatter', () => {
   const formatter = new BenchmarkFormatter();
@@ -34,12 +31,12 @@ describe('BenchmarkFormatter', () => {
           memoryUsageMB: 10,
           accuracy: 0.75,
         },
-        lsp: { 
-          operationCount: 1, 
-          contextTokens: 100, 
-          executionTimeMs: 20, 
+        lsp: {
+          operationCount: 1,
+          contextTokens: 100,
+          executionTimeMs: 20,
           memoryUsageMB: 5,
-          accuracy: 0.98 
+          accuracy: 0.98,
         },
         improvement: {
           operationReduction: 80,
@@ -59,12 +56,12 @@ describe('BenchmarkFormatter', () => {
           memoryUsageMB: 15,
           accuracy: 0.7,
         },
-        lsp: { 
-          operationCount: 2, 
-          contextTokens: 500, 
-          executionTimeMs: 40, 
+        lsp: {
+          operationCount: 2,
+          contextTokens: 500,
+          executionTimeMs: 40,
           memoryUsageMB: 8,
-          accuracy: 0.95 
+          accuracy: 0.95,
         },
         improvement: {
           operationReduction: 80,
@@ -125,21 +122,36 @@ describe('BenchmarkFormatter', () => {
         results: [
           {
             name: 'Navigate to definition',
-            filesystem: { operationCount: 5, contextTokens: 5000, executionTimeMs: 100, memoryUsageMB: 10 },
+            filesystem: {
+              operationCount: 5,
+              contextTokens: 5000,
+              executionTimeMs: 100,
+              memoryUsageMB: 10,
+            },
             lsp: { operationCount: 1, contextTokens: 100, executionTimeMs: 20, memoryUsageMB: 5 },
             improvement: { operationReduction: 80, contextReduction: 98, speedup: 5 },
             passedExpectations: true,
           },
           {
             name: 'Rename symbol',
-            filesystem: { operationCount: 10, contextTokens: 10000, executionTimeMs: 200, memoryUsageMB: 15 },
+            filesystem: {
+              operationCount: 10,
+              contextTokens: 10000,
+              executionTimeMs: 200,
+              memoryUsageMB: 15,
+            },
             lsp: { operationCount: 2, contextTokens: 500, executionTimeMs: 40, memoryUsageMB: 8 },
             improvement: { operationReduction: 80, contextReduction: 95, speedup: 5 },
             passedExpectations: true,
           },
           {
             name: 'Find symbol',
-            filesystem: { operationCount: 8, contextTokens: 8000, executionTimeMs: 150, memoryUsageMB: 12 },
+            filesystem: {
+              operationCount: 8,
+              contextTokens: 8000,
+              executionTimeMs: 150,
+              memoryUsageMB: 12,
+            },
             lsp: { operationCount: 1, contextTokens: 200, executionTimeMs: 25, memoryUsageMB: 6 },
             improvement: { operationReduction: 87.5, contextReduction: 97.5, speedup: 6 },
             passedExpectations: true,
@@ -159,8 +171,18 @@ describe('BenchmarkFormatter', () => {
         results: [
           {
             name: 'Failed scenario',
-            filesystem: { operationCount: 10, contextTokens: 10000, executionTimeMs: 200, memoryUsageMB: 15 },
-            lsp: { operationCount: 5, contextTokens: 5000, executionTimeMs: 100, memoryUsageMB: 10 },
+            filesystem: {
+              operationCount: 10,
+              contextTokens: 10000,
+              executionTimeMs: 200,
+              memoryUsageMB: 15,
+            },
+            lsp: {
+              operationCount: 5,
+              contextTokens: 5000,
+              executionTimeMs: 100,
+              memoryUsageMB: 10,
+            },
             improvement: { operationReduction: 50, contextReduction: 50, speedup: 2 },
             passedExpectations: false,
             expectedReduction: { context: 80, operations: 70 },
@@ -309,7 +331,12 @@ describe('BenchmarkFormatter', () => {
         results: [
           {
             name: 'Test scenario',
-            filesystem: { operationCount: 5, contextTokens: 5000, executionTimeMs: 100, memoryUsageMB: 10 },
+            filesystem: {
+              operationCount: 5,
+              contextTokens: 5000,
+              executionTimeMs: 100,
+              memoryUsageMB: 10,
+            },
             lsp: { operationCount: 1, contextTokens: 100, executionTimeMs: 20, memoryUsageMB: 5 },
             improvement: { operationReduction: 80, contextReduction: 98, speedup: 5 },
             passedExpectations: true,
@@ -341,7 +368,12 @@ describe('BenchmarkFormatter', () => {
         results: [
           {
             name: 'Regression scenario',
-            filesystem: { operationCount: 1, contextTokens: 100, executionTimeMs: 10, memoryUsageMB: 2 },
+            filesystem: {
+              operationCount: 1,
+              contextTokens: 100,
+              executionTimeMs: 10,
+              memoryUsageMB: 2,
+            },
             lsp: { operationCount: 5, contextTokens: 500, executionTimeMs: 50, memoryUsageMB: 10 },
             improvement: { operationReduction: -400, contextReduction: -400, speedup: 0.2 },
             passedExpectations: false,
