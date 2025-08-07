@@ -57,7 +57,7 @@ jobs:
 
       - name: Upload benchmark results
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: benchmark-results
           path: |
@@ -134,7 +134,7 @@ jobs:
 
       - name: Cache benchmark results (main branch only)
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-        uses: actions/cache/save@v3
+        uses: actions/cache/save@v4
         with:
           path: benchmark-results.json
           key: benchmark-baseline-${{ github.sha }}
@@ -173,7 +173,7 @@ jobs:
 
       - name: Upload stress test results
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: stress-test-results
           path: |
