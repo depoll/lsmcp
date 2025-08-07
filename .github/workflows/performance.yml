@@ -1,0 +1,187 @@
+name: Performance Benchmarks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      scenarios:
+        description: 'Benchmark scenarios to run'
+        required: false
+        default: 'quick'
+        type: choice
+        options:
+          - quick
+          - all
+          - navigate
+          - apply
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write  # Needed to comment on PRs
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Need full history for baseline comparison
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install language servers
+        run: |
+          # Install TypeScript language server globally
+          npm install -g typescript typescript-language-server
+          
+          # Install Python language server if needed
+          # pip install python-lsp-server
+
+      - name: Build project
+        run: npm run build
+
+      - name: Run benchmarks
+        id: benchmarks
+        run: |
+          SCENARIOS="${{ github.event.inputs.scenarios || 'quick' }}"
+          npm run benchmark:ci -- --$SCENARIOS --output=benchmark-results.json
+        continue-on-error: true
+
+      - name: Upload benchmark results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results
+          path: |
+            benchmark-results.json
+            benchmark-results.md
+
+      - name: Compare with baseline (PR only)
+        if: github.event_name == 'pull_request'
+        continue-on-error: true  # Don't fail if commenting fails
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            
+            // Read current results
+            let currentResults;
+            try {
+              currentResults = JSON.parse(fs.readFileSync('benchmark-results.json', 'utf8'));
+            } catch (error) {
+              console.log('No benchmark results found');
+              return;
+            }
+            
+            // Format summary for PR comment
+            const summary = currentResults.summary;
+            const comment = `## 📊 Performance Benchmark Results
+            
+            | Metric | Value |
+            |--------|-------|
+            | **Context Reduction** | ${summary.averageContextReduction?.toFixed(1) || 'N/A'}% |
+            | **Operation Reduction** | ${summary.averageOperationReduction?.toFixed(1) || 'N/A'}% |
+            | **Average Speedup** | ${summary.averageSpeedup?.toFixed(1) || 'N/A'}x |
+            
+            <details>
+            <summary>View detailed results</summary>
+            
+            \`\`\`json
+            ${JSON.stringify(currentResults.results, null, 2)}
+            \`\`\`
+            
+            </details>
+            `;
+            
+            // Post comment on PR
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });
+
+      - name: Performance regression check
+        if: github.event_name == 'pull_request'
+        continue-on-error: true  # Don't fail the workflow if targets aren't met
+        run: |
+          # Check if performance targets are met
+          node -e "
+          const results = require('./benchmark-results.json');
+          const summary = results.summary || {};
+          
+          const minContextReduction = 50; // 50% minimum
+          const minOperationReduction = 50; // 2x fewer operations (50% reduction)
+          
+          if (summary.averageContextReduction < minContextReduction) {
+            console.error(\`❌ Context reduction \${summary.averageContextReduction.toFixed(1)}% is below target of \${minContextReduction}%\`);
+            process.exit(1);
+          }
+          
+          if (summary.averageOperationReduction < minOperationReduction) {
+            console.error(\`❌ Operation reduction \${summary.averageOperationReduction.toFixed(1)}% is below target of \${minOperationReduction}%\`);
+            process.exit(1);
+          }
+          
+          console.log('✅ All performance targets met!');
+          "
+
+      - name: Cache benchmark results (main branch only)
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        uses: actions/cache/save@v4
+        with:
+          path: benchmark-results.json
+          key: benchmark-baseline-${{ github.sha }}
+
+  stress-test:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build project
+        run: npm run build
+
+      - name: Run stress tests
+        run: |
+          # Test with large project (500 files)
+          npm run benchmark:stress -- --large
+        continue-on-error: true
+
+      # - name: Memory leak detection
+      #   run: |
+      #     # Run with memory monitoring
+      #     # TODO: Create memory-leak-test.js when needed
+      #     # node --expose-gc tests/efficiency/memory-leak-test.js
+      #   continue-on-error: true
+
+      - name: Upload stress test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stress-test-results
+          path: |
+            stress-test-*.json
+            memory-profile-*.heapsnapshot
