@@ -1,0 +1,1 @@
+If we're not in a worktree or if there's no @NEXT_TASK.local.md in this directory, instruct the user to run "/next-task-setup" with the work they'd like to do.  Otherwise, read and start working on @NEXT_TASK.local.md.

@@ -1,0 +1,1 @@
+Create and open a new worktree called $ARGUMENTS using @scripts/create-worktree.sh.

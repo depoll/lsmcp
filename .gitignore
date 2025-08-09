@@ -140,3 +140,6 @@ vite.config.ts.timestamp-*
 
 # Test fixtures (dynamically generated)
 tests/fixtures/
+
+# Local files
+*.local.*
