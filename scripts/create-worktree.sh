@@ -78,11 +78,10 @@ elif git show-ref --verify --quiet "refs/remotes/origin/$BRANCH_NAME"; then
     print_info "Creating worktree for remote branch: origin/$BRANCH_NAME"
     git worktree add "$WORKTREE_PATH" -b "$BRANCH_NAME" "origin/$BRANCH_NAME"
 else
-    # Create new branch
-    print_info "Creating worktree with new branch: $BRANCH_NAME"
-    read -p "Base this new branch on (default: main): " BASE_BRANCH
-    BASE_BRANCH="${BASE_BRANCH:-main}"
-    git worktree add "$WORKTREE_PATH" -b "$BRANCH_NAME" "$BASE_BRANCH"
+    # Create new branch based on current branch
+    CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+    print_info "Creating worktree with new branch: $BRANCH_NAME (based on current branch: $CURRENT_BRANCH)"
+    git worktree add "$WORKTREE_PATH" -b "$BRANCH_NAME" "$CURRENT_BRANCH"
 fi
 
 if [ $? -ne 0 ]; then
