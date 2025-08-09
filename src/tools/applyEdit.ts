@@ -213,11 +213,11 @@ export class ApplyEditTool extends BatchableTool<ApplyEditParams, ApplyEditResul
               `Language server not connected for ${language}, continuing with direct file edit`
             );
           }
-        } catch {
+        } catch (error) {
           // Language server not available - this is fine for many file types
           // Log for debugging but continue with the edit
           this.logger.debug(
-            { language, uri },
+            { language, uri, error: error instanceof Error ? error.message : String(error) },
             `No language server for ${language}, applying edit directly to filesystem`
           );
         }
