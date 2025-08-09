@@ -104,8 +104,9 @@ else
         filename=$(basename "$file")
         dest_file="$WORKTREE_PATH/$filename"
         
-        # Get relative path from repo root
-        rel_path=$(realpath --relative-to="$REPO_ROOT" "$file")
+        # Get relative path from repo root (portable method)
+        # Remove the repo root path from the file path
+        rel_path="${file#$REPO_ROOT/}"
         dest_dir=$(dirname "$WORKTREE_PATH/$rel_path")
         
         # Create destination directory if needed
