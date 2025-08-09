@@ -208,14 +208,18 @@ export class ApplyEditTool extends BatchableTool<ApplyEditParams, ApplyEditResul
 
           if (client && !client.isConnected()) {
             // Log warning but continue - we can still apply filesystem edits
-            console.warn(
+            this.logger.warn(
+              { language, uri },
               `Language server not connected for ${language}, continuing with direct file edit`
             );
           }
         } catch {
           // Language server not available - this is fine for many file types
           // Log for debugging but continue with the edit
-          console.debug(`No language server for ${language}, applying edit directly to filesystem`);
+          this.logger.debug(
+            { language, uri },
+            `No language server for ${language}, applying edit directly to filesystem`
+          );
         }
       }
 
