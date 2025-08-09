@@ -75,6 +75,12 @@ The project has a comprehensive implementation plan (see PLAN.md) and foundation
      - `getForFile()` method for file-based language detection
    - **Comprehensive Testing**: Unit and integration tests with mocking
 
+### ✅ applyEdit Universal File Support
+   - **Graceful Fallback**: `applyEdit` now works with ANY file type
+     - Files without language servers (JSON, YAML, Markdown, etc.) are edited directly
+     - Language servers used for validation when available but not required
+     - Prevents "No language server available" errors for common file types
+
 ### Next dependencies to install (when needed):
    - `p-queue` - Request queuing and batching (for Issue #3)
 
@@ -87,7 +93,7 @@ The project implements:
    - `getCodeIntelligence` - Hover, signatures, and completions
    - `findSymbols` - Document and workspace symbol search
    - `findUsages` - References and call hierarchy
-   - `applyEdit` - Code actions, rename, format with transaction support
+   - `applyEdit` - Apply edits to ANY file type (with or without LSP support), rename, format with transaction support
    - `getDiagnostics` - Errors, warnings, and quick fixes
 
 2. **Key Design Decisions**:

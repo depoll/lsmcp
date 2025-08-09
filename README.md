@@ -64,7 +64,7 @@ npm run build
   - `getCodeIntelligence` - Hover info, signatures, and completions
   - `findSymbols` - Document and workspace symbol search
   - `findUsages` - References and call hierarchy
-  - `applyEdit` - Code actions, rename, format with transactions
+  - `applyEdit` - Apply edits to ANY file type, with or without language server support
   - `getDiagnostics` - Errors, warnings, and quick fixes
 
 - **Container-First Architecture**:

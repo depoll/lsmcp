@@ -4,7 +4,7 @@ import { ApplyEditTool } from '../../../src/tools/applyEdit.js';
 import { ConnectionPool } from '../../../src/lsp/index.js';
 import { WorkspaceEdit, TextEdit } from 'vscode-languageserver-protocol';
 import type { LSPClient } from '../../../src/lsp/client-v2.js';
-import { writeFile, rm, mkdir } from 'fs/promises';
+import { writeFile, readFile, rm, mkdir } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
 
@@ -134,10 +134,18 @@ describe('ApplyEditTool', () => {
       expect(result.fallback).toBeDefined();
     });
 
-    it('should handle error when no client available', async () => {
+    it('should continue with edit when no client available', async () => {
+      // Create the test file first so the edit can be applied
+      await writeFile(testFile, 'const x = 5;\n');
+
       const edit: WorkspaceEdit = {
         changes: {
-          [testFileUri]: [],
+          [testFileUri]: [
+            {
+              range: { start: { line: 0, character: 6 }, end: { line: 0, character: 7 } },
+              newText: 'y',
+            },
+          ],
         },
       };
 
@@ -145,16 +153,28 @@ describe('ApplyEditTool', () => {
 
       const result = await tool.execute({ edit });
 
-      expect(result.data.applied).toBe(false);
-      expect(result.data.failureReason).toContain('No language server available');
-      expect(result.error).toContain('No language server available');
-      expect(result.fallback).toBeDefined();
+      // Should succeed even without language server
+      expect(result.data.applied).toBe(true);
+      expect(result.data.failureReason).toBeUndefined();
+      expect(result.error).toBeUndefined();
+
+      // Verify the file was actually edited
+      const content = await readFile(testFile, 'utf-8');
+      expect(content).toBe('const y = 5;\n');
     });
 
-    it('should handle error when client not connected', async () => {
+    it('should continue with edit when client not connected', async () => {
+      // Create the test file first so the edit can be applied
+      await writeFile(testFile, 'const x = 5;\n');
+
       const edit: WorkspaceEdit = {
         changes: {
-          [testFileUri]: [],
+          [testFileUri]: [
+            {
+              range: { start: { line: 0, character: 6 }, end: { line: 0, character: 7 } },
+              newText: 'y',
+            },
+          ],
         },
       };
 
@@ -162,10 +182,14 @@ describe('ApplyEditTool', () => {
 
       const result = await tool.execute({ edit });
 
-      expect(result.data.applied).toBe(false);
-      expect(result.data.failureReason).toContain('Language server not connected');
-      expect(result.error).toContain('Language server not connected');
-      expect(result.fallback).toBeDefined();
+      // Should succeed even when language server is not connected
+      expect(result.data.applied).toBe(true);
+      expect(result.data.failureReason).toBeUndefined();
+      expect(result.error).toBeUndefined();
+
+      // Verify the file was actually edited
+      const content = await readFile(testFile, 'utf-8');
+      expect(content).toBe('const y = 5;\n');
     });
 
     it('should extract URI from documentChanges', async () => {
