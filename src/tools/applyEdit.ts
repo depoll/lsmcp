@@ -121,6 +121,10 @@ export class ApplyEditTool extends BatchableTool<ApplyEditParams, ApplyEditResul
   readonly description =
     'Apply workspace edits to modify files with precise text changes, create/delete files, or rename files. ' +
     'Returns diff showing changes made. CAUTION: Makes destructive changes - review diff carefully.\n\n' +
+    'LANGUAGE SUPPORT:\n' +
+    '• Works with ANY file type - no language server required\n' +
+    '• Gracefully handles files without LSP support (JSON, YAML, plain text, etc.)\n' +
+    '• Language servers used when available for validation but not required\n\n' +
     'CRITICAL POSITIONING RULES:\n' +
     '• Lines are 0-indexed (first line = 0, second line = 1, etc.)\n' +
     '• Characters are 0-indexed within each line (first char = 0)\n' +
@@ -195,22 +199,23 @@ export class ApplyEditTool extends BatchableTool<ApplyEditParams, ApplyEditResul
         }
 
         const language = getLanguageFromUri(uri);
-        const client = await this.clientManager.get(language, uri);
 
-        if (!client) {
-          throw new MCPError(
-            MCPErrorCode.NO_LANGUAGE_SERVER,
-            `No language server available for ${language}`,
-            { language, uri }
-          );
-        }
+        // Try to get a language server, but don't fail if unavailable
+        // Many file types (JSON, YAML, plain text, etc.) don't have language servers
+        // but we can still apply edits to them directly
+        try {
+          const client = await this.clientManager.get(language, uri);
 
-        if (!client.isConnected()) {
-          throw new MCPError(
-            MCPErrorCode.NO_LANGUAGE_SERVER,
-            `Language server not connected for ${language}`,
-            { language, uri }
-          );
+          if (client && !client.isConnected()) {
+            // Log warning but continue - we can still apply filesystem edits
+            console.warn(
+              `Language server not connected for ${language}, continuing with direct file edit`
+            );
+          }
+        } catch {
+          // Language server not available - this is fine for many file types
+          // Log for debugging but continue with the edit
+          console.debug(`No language server for ${language}, applying edit directly to filesystem`);
         }
       }
 
