@@ -8,7 +8,6 @@ import { CodeIntelligenceTool } from './tools/codeIntelligence.js';
 import { NavigateTool } from './tools/navigate.js';
 import { SymbolSearchTool } from './tools/symbolSearch.js';
 import { FindUsagesTool } from './tools/find-usages.js';
-import { ApplyEditTool } from './tools/applyEdit.js';
 import { DiagnosticsTool } from './tools/diagnostics.js';
 import { ToolRegistry } from './tools/registry.js';
 import { ToolRouter } from './tools/router.js';
@@ -80,10 +79,6 @@ export class LSMCPServer {
     // Register Find Usages Tool
     const findUsagesTool = new FindUsagesTool(this.clientManager);
     this.toolRegistry.register(findUsagesTool);
-
-    // Register Apply Edit Tool
-    const applyEditTool = new ApplyEditTool(this.clientManager);
-    this.toolRegistry.register(applyEditTool);
 
     // Register Diagnostics Tool
     const diagnosticsTool = new DiagnosticsTool(this.clientManager);

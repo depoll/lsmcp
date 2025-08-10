@@ -33,7 +33,7 @@
     ],
     "PostToolUse": [
       {
-        "matcher": "Write|Edit|MultiEdit|NotebookEdit|Bash|Task|mcp__lsmcp__applyEdit",
+        "matcher": "Write|Edit|MultiEdit|NotebookEdit|Bash|Task",
         "hooks": [
           {
             "type": "command",

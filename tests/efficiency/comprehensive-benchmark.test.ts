@@ -8,7 +8,7 @@ import { EfficiencyBenchmark } from './framework.js';
 import {
   navigateScenarios,
   findUsagesScenarios,
-  applyEditScenarios,
+  // applyEditScenarios, // Removed - applyEdit tool no longer exists
   diagnosticsScenarios,
 } from './scenarios.js';
 
@@ -68,26 +68,6 @@ describe('MCP-LSP Efficiency Benchmarks', () => {
     });
   });
 
-  describe('Apply Edit Tool Efficiency', () => {
-    it('should achieve >98% context reduction for rename', async () => {
-      const scenario = applyEditScenarios[0]!; // Rename across 50 files
-      const result = await benchmark.measure('rename-symbol', scenario);
-
-      expect(result.improvement.contextReduction).toBeGreaterThan(97);
-      expect(result.improvement.operationReduction).toBeGreaterThan(79);
-      expect(result.passedExpectations).toBe(true);
-    });
-
-    it('should achieve >90% reduction for quick fixes', async () => {
-      const scenario = applyEditScenarios[1]!; // Apply 10 quick fixes
-      const result = await benchmark.measure('apply-fixes', scenario);
-
-      expect(result.improvement.contextReduction).toBeGreaterThan(90);
-      expect(result.improvement.operationReduction).toBeGreaterThanOrEqual(75);
-      expect(result.passedExpectations).toBe(true);
-    });
-  });
-
   describe('Diagnostics Tool Efficiency', () => {
     it('should achieve >85% context reduction for project errors', async () => {
       const scenario = diagnosticsScenarios[0]!; // Get all project errors
@@ -105,7 +85,7 @@ describe('MCP-LSP Efficiency Benchmarks', () => {
       const sampleScenarios = [
         navigateScenarios[0]!,
         findUsagesScenarios[0]!,
-        applyEditScenarios[0]!,
+        // applyEditScenarios[0]!, // applyEdit removed
         diagnosticsScenarios[0]!,
       ];
 
@@ -126,7 +106,7 @@ describe('MCP-LSP Efficiency Benchmarks', () => {
       const sampleScenarios = [
         navigateScenarios[1]!,
         findUsagesScenarios[1]!,
-        applyEditScenarios[0]!,
+        // applyEditScenarios[0]!, // applyEdit removed
       ];
 
       const results = [];

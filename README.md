@@ -59,12 +59,11 @@ npm run build
 
 ## Features
 
-- **6 Combined MCP Tools** for efficient code intelligence:
+- **5 Combined MCP Tools** for efficient code intelligence:
   - `navigate` - Definition, implementation, and type navigation
   - `getCodeIntelligence` - Hover info, signatures, and completions
   - `findSymbols` - Document and workspace symbol search
   - `findUsages` - References and call hierarchy
-  - `applyEdit` - Apply edits to ANY file type, with or without language server support
   - `getDiagnostics` - Errors, warnings, and quick fixes
 
 - **Container-First Architecture**:

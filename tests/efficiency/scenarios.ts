@@ -253,87 +253,6 @@ export const codeIntelligenceScenarios: BenchmarkScenario[] = [
   },
 ];
 
-// Apply Edit Benchmarks
-export const applyEditScenarios: BenchmarkScenario[] = [
-  {
-    name: 'Rename symbol across 50 files',
-    description: 'Rename a widely used class',
-    filesystemOperations: [
-      'grep for all occurrences',
-      'read all 50 files',
-      'verify each occurrence',
-      'create backup of files',
-      'perform replacements',
-      'write all files',
-      'verify changes',
-      'update imports',
-      'fix broken references',
-      'run type check',
-    ],
-    lspOperations: ['lsp.textDocument/prepareRename', 'lsp.textDocument/rename'],
-    expectedReduction: {
-      context: 97,
-      operations: 80,
-    },
-  },
-  {
-    name: 'Apply 10 quick fixes',
-    description: 'Fix multiple linting/type errors',
-    filesystemOperations: [
-      'run linter',
-      'parse linter output',
-      'read files with errors',
-      'identify fix for each',
-      'apply fixes manually',
-      'verify each fix',
-      're-run linter',
-      'handle cascading issues',
-    ],
-    lspOperations: [
-      'lsp.textDocument/codeAction (get fixes)',
-      'lsp.workspace/applyEdit (10 times)',
-    ],
-    expectedReduction: {
-      context: 90,
-      operations: 75,
-    },
-  },
-  {
-    name: 'Format large file',
-    description: 'Format a 5000-line file',
-    filesystemOperations: [
-      'read entire file',
-      'run formatter tool',
-      'diff the changes',
-      'write formatted file',
-      'verify formatting',
-    ],
-    lspOperations: ['lsp.textDocument/formatting', 'lsp.workspace/applyEdit'],
-    expectedReduction: {
-      context: 60,
-      operations: 60,
-    },
-  },
-  {
-    name: 'Organize imports',
-    description: 'Sort and remove unused imports',
-    filesystemOperations: [
-      'read file',
-      'parse imports',
-      'trace usage of each',
-      'identify unused',
-      'sort remaining',
-      'rewrite import block',
-      'handle side-effects',
-    ],
-    lspOperations: ['lsp.textDocument/codeAction (source.organizeImports)'],
-    expectedReduction: {
-      context: 75,
-      operations: 85,
-    },
-  },
-];
-
 // Diagnostics Benchmarks
 export const diagnosticsScenarios: BenchmarkScenario[] = [
   {
@@ -438,7 +357,6 @@ export const compositeScenarios: BenchmarkScenario[] = [
       'lsp.textDocument/hover',
       'lsp.textDocument/definition',
       'lsp.textDocument/codeAction',
-      'lsp.workspace/applyEdit',
     ],
     expectedReduction: {
       context: 88,
@@ -453,7 +371,6 @@ export const allScenarios: BenchmarkScenario[] = [
   ...findUsagesScenarios,
   ...symbolSearchScenarios,
   ...codeIntelligenceScenarios,
-  ...applyEditScenarios,
   ...diagnosticsScenarios,
   ...compositeScenarios,
 ];

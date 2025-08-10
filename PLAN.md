@@ -62,7 +62,7 @@ By integrating with Language Server Protocol, we provide AI agents with:
 |-----------|------------|----------|-------------|
 | Find Definition | 3-5 grep operations + 2-3 file reads | 1 navigate call | 80% fewer ops |
 | Find All References | Read 20+ files, text search | 1 findUsages call | 90% less context |
-| Rename Symbol | 50+ find/replace operations | 1 applyEdit transaction | 98% fewer ops |
+| Rename Symbol | 50+ find/replace operations | Multiple edit operations | 95% fewer ops |
 | Get Type Info | Read multiple files, parse | 1 getCodeIntelligence call | 85% less context |
 
 ### Measurement Methodology
@@ -142,10 +142,8 @@ We implement 6 combined tools to minimize prompt overhead while maintaining clar
 
 #### 5. Apply Edit Tool
 ```typescript
+// Removed applyEdit tool - editing capabilities handled through other means
 {
-  name: "applyEdit",
-  description: "Apply code actions, renames, or formatting with rollback support",
-  parameters: {
     type: "codeAction" | "rename" | "format" | "organizeImports",
     batch?: boolean,
     actions?: Array<{uri, range?, diagnostic?, actionKind?}>,

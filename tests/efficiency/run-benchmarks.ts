@@ -5,7 +5,7 @@
  */
 
 import { EfficiencyBenchmark, createTestProject, BenchmarkScenario } from './framework.js';
-import { allScenarios, navigateScenarios, applyEditScenarios } from './scenarios.js';
+import { allScenarios, navigateScenarios } from './scenarios.js';
 import { ConnectionPool } from '../../src/lsp/manager.js';
 import { logger } from '../../src/utils/logger.js';
 import * as fs from 'fs/promises';
@@ -18,7 +18,7 @@ import { NavigateTool } from '../../src/tools/navigate.js';
 import { SymbolSearchTool } from '../../src/tools/symbolSearch.js';
 import { CodeIntelligenceTool } from '../../src/tools/codeIntelligence.js';
 import { FindUsagesTool } from '../../src/tools/find-usages.js';
-import { ApplyEditTool } from '../../src/tools/applyEdit.js';
+// import { ApplyEditTool } from '../../src/tools/applyEdit.js'; // Removed - tool no longer exists
 import { DiagnosticsTool } from '../../src/tools/diagnostics.js';
 
 interface BenchmarkOptions {
@@ -38,7 +38,7 @@ class RealBenchmarkRunner {
     symbolSearch?: SymbolSearchTool;
     codeIntelligence?: CodeIntelligenceTool;
     findUsages?: FindUsagesTool;
-    applyEdit?: ApplyEditTool;
+    // applyEdit?: ApplyEditTool; // Removed
     diagnostics?: DiagnosticsTool;
   } = {};
 
@@ -62,7 +62,7 @@ class RealBenchmarkRunner {
       symbolSearch: new SymbolSearchTool(this.connectionPool),
       codeIntelligence: new CodeIntelligenceTool(this.connectionPool),
       findUsages: new FindUsagesTool(this.connectionPool),
-      applyEdit: new ApplyEditTool(this.connectionPool),
+      // applyEdit: new ApplyEditTool(this.connectionPool), // Removed
       diagnostics: new DiagnosticsTool(this.connectionPool),
     };
     // Log to indicate tools are ready (and satisfy unused variable check)
@@ -101,13 +101,13 @@ class RealBenchmarkRunner {
     if (options.scenarios === 'navigate') {
       scenarios = navigateScenarios;
     } else if (options.scenarios === 'apply') {
-      scenarios = applyEditScenarios;
+      scenarios = []; // applyEditScenarios removed - tool no longer exists
     } else if (options.scenarios === 'quick') {
       // Quick subset for CI
       const navScenario = navigateScenarios[0];
-      const applyScenario = applyEditScenarios[0];
-      if (navScenario && applyScenario) {
-        scenarios = [navScenario, applyScenario, ...allScenarios.slice(0, 5)];
+      // const applyScenario = applyEditScenarios[0]; // Removed
+      if (navScenario) {
+        scenarios = [navScenario, ...allScenarios.slice(0, 6)];
       } else {
         scenarios = allScenarios.slice(0, 7);
       }
