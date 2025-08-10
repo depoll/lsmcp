@@ -54,7 +54,6 @@ Claude: I have access to the following LSP tools:
 - getCodeIntelligence: For hover info, signatures, and completions
 - findSymbols: For searching symbols in files or workspace
 - findUsages: For finding references and call hierarchies
-- applyEdit: For code refactoring and fixes
 - getDiagnostics: For errors, warnings, and quick fixes
 ```
 
@@ -155,11 +154,12 @@ Claude: [Uses navigate tool to find definition]
 The UserService class is defined at src/services/user.service.ts:25
 ```
 
-### 2. Refactoring Code
+### 2. Finding All References for Refactoring
 ```
-You: "Rename the calculateTotal function to computeSum"
-Claude: [Uses applyEdit tool for semantic rename]
-Successfully renamed calculateTotal to computeSum across 15 files
+You: "Find all uses of the calculateTotal function"
+Claude: [Uses findUsages tool to locate all references]
+Found calculateTotal used in 15 files at 42 locations. 
+I can help you systematically rename these references.
 ```
 
 ### 3. Understanding Code

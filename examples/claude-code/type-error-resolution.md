@@ -89,44 +89,36 @@ await getCodeIntelligence({
      to (column: string, direction: 'asc' | 'desc') => void
 */
 
-// 3. Apply batch rename across all affected files
-await applyEdit({
-  edit: {
-    documentChanges: [
-      {
-        kind: "rename",
-        searchPattern: "onSort(?!Change)",
-        replacement: "onSortChange",
-        files: "**/*.tsx"
-      }
-    ]
-  },
-  label: "Update to new TableProps API"
+// 3. Find all files that need the rename
+await findUsages({
+  uri: "file:///src/types/TableProps.ts",
+  position: { line: 10, character: 5 }, // position of 'onSort' property
+  type: "references",
+  includeDeclaration: false,
+  maxResults: 500,
+  maxDepth: 3
 });
+// Returns: All files using the old 'onSort' property
 
-// 4. Apply all available quick fixes
-const quickFixes = diagnostics.flatMap(d => d.codeActions);
-await applyEdit({
-  edit: {
-    documentChanges: quickFixes.map(fix => fix.edit)
-  },
-  label: "Apply TypeScript quick fixes"
+// 4. Get code actions for common fixes
+await getCodeIntelligence({
+  uri: "file:///src/services/api.ts",
+  position: { line: 78, character: 5 },
+  type: "hover"
 });
-/* Automatically:
-   - Adds missing imports
-   - Converts string to number where needed
-   - Updates deprecated API calls
-   - Adjusts function signatures
+/* Returns type information and suggested fixes:
+   - Parameter expects 'number' but received 'string'
+   - Consider using parseInt() or Number()
 */
 
-// 5. Verify all errors resolved
+// 5. Verify errors after manual fixes
 await getDiagnostics({
   severity: "error"
 });
-// Returns: 0 errors
+// Returns: Updated error count to track progress
 ```
 
-**Total Context**: ~4,000 tokens with automatic fixes
+**Total Context**: ~4,000 tokens for analysis and guidance
 
 ## Efficiency Comparison
 
@@ -134,8 +126,8 @@ await getDiagnostics({
 |--------|------------|----------|-------------|
 | Operations | 30+ | 5 | **83% fewer** |
 | Context (tokens) | ~25,000 | ~4,000 | **84% less** |
-| Fix accuracy | Manual/error-prone | Automatic | **100% accurate** |
-| Time estimate | 30-60 min | 2 min | **95% faster** |
+| Fix accuracy | Manual/error-prone | LSP-guided | **Semantic accuracy** |
+| Time estimate | 30-60 min | 10 min | **67% faster** |
 
 ## Common Type Error Patterns & LSP Solutions
 
@@ -151,10 +143,13 @@ await getDiagnostics({
 
 ### 2. Missing Type Imports
 ```typescript
-// LSP auto-imports from correct location
-await applyEdit({
-  edit: codeAction.addMissingImports
+// LSP identifies correct import locations
+await getCodeIntelligence({
+  uri: "file:///src/components/Button.tsx",
+  position: { line: 10, character: 15 },
+  type: "completion"
 });
+// Suggests: import { ButtonProps } from '@ui/types'
 ```
 
 ### 3. Generic Type Mismatches
@@ -215,14 +210,14 @@ Please run the type checker again.
 ### With MCP-LSP:
 ```
 User: "Fix the TypeScript errors after updating the table library"
-Claude: I'll analyze and fix all TypeScript errors using code intelligence...
+Claude: I'll analyze all TypeScript errors using code intelligence...
 [5 LSP operations...]
-Claude: Fixed! All 47 errors have been resolved:
-- Updated 12 files to use new 'onSortChange' API
-- Added 15 missing imports
-- Converted 8 type mismatches
-- Updated 12 deprecated API calls
-The codebase now fully complies with the new library version.
+Claude: I've identified all 47 errors and their patterns:
+- 12 files need 'onSort' renamed to 'onSortChange'
+- 15 files are missing imports (I have the correct paths)
+- 8 type mismatches need string-to-number conversion
+- 12 deprecated API calls with migration paths
+I can now help you fix these systematically with the exact locations.
 ```
 
 ## Benefits Summary

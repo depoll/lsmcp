@@ -52,7 +52,7 @@ npx tsc --noEmit
 **Total Context Used**: ~30,000 tokens
 **Error-Prone Areas**: Missing references, inconsistent updates, type mismatches
 
-## With MCP-LSP (4 steps, ~5K tokens)
+## With MCP-LSP (3 steps, ~3K tokens)
 
 ### Step-by-Step Process:
 ```typescript
@@ -64,38 +64,31 @@ await findSymbols({
 });
 // Returns: UserProfile class at src/components/UserProfile.tsx:12
 
-// 2. Rename across entire codebase
-await applyEdit({
-  edit: {
-    documentChanges: [{
-      kind: "rename",
-      oldUri: "file:///src/components/UserProfile.tsx",
-      newName: "UserProfileCard",
-      position: { line: 12, character: 15 }
-    }]
-  },
-  label: "Rename UserProfile to UserProfileCard"
+// 2. Find all references to the component
+await findUsages({
+  uri: "file:///src/components/UserProfile.tsx",
+  position: { line: 12, character: 15 },
+  type: "references",
+  includeDeclaration: true,
+  maxResults: 500,
+  maxDepth: 3
 });
-// Automatically updates: component definition, all imports, JSX usage, type references
+// Returns: All 23 files with references to UserProfile
 
-// 3. Check for any errors
+// 3. Check for any errors after manual renaming
 await getDiagnostics({ 
   severity: "error" 
 });
-// Returns: 2 related type errors
-
-// 4. Apply quick fixes
-await applyEdit({
-  edit: {
-    documentChanges: diagnostics.map(d => d.quickFix)
-  },
-  label: "Apply TypeScript quick fixes"
-});
-// Fixes remaining type compatibility issues
+// Returns: TypeScript errors to help guide the refactoring
 ```
 
-**Total Operations**: 4 LSP operations
-**Total Context Used**: ~5,000 tokens
+**Note**: While the applyEdit tool has been removed, the remaining tools still provide significant value:
+- `findSymbols` quickly locates the component
+- `findUsages` identifies all references accurately
+- `getDiagnostics` helps verify the refactoring is correct
+
+**Total Operations**: 3 LSP operations + manual editing
+**Total Context Used**: ~3,000 tokens for discovery
 **Benefits**: 
 - Guaranteed consistency across all references
 - Automatic import updates
@@ -106,18 +99,17 @@ await applyEdit({
 
 | Metric | Without LSP | With LSP | Improvement |
 |--------|------------|----------|-------------|
-| Operations | 15 | 4 | **73% fewer** |
-| Context (tokens) | ~30,000 | ~5,000 | **83% less** |
-| Time estimate | 5-10 min | 30 sec | **90% faster** |
-| Error risk | High | Low | **Semantic accuracy** |
+| Operations | 15 | 3 (+ manual edit) | **80% fewer searches** |
+| Context (tokens) | ~30,000 | ~3,000 | **90% less** |
+| Time estimate | 5-10 min | 2-3 min | **50% faster** |
+| Error risk | High | Medium | **Semantic search accuracy** |
 
 ## Key Advantages
 
 1. **Semantic Understanding**: LSP knows the difference between a variable named `UserProfile` and the component class
-2. **Automatic Propagation**: One rename operation updates all references
-3. **Type Safety**: TypeScript language server ensures type compatibility
-4. **No Missed References**: LSP finds all usages, including dynamic imports
-5. **Rollback Capability**: Transaction-based edits can be reverted if issues arise
+2. **Accurate Reference Finding**: LSP finds all usages, including dynamic imports
+3. **Type Safety Verification**: TypeScript language server helps verify compatibility through diagnostics
+4. **No Missed References**: Semantic search is more accurate than text-based grep
 
 ## Real Claude Code Conversation
 
@@ -132,7 +124,7 @@ Claude: I've updated the component in 23 files. Please run your tests to ensure 
 ### With MCP-LSP:
 ```
 User: "Rename the UserProfile component to UserProfileCard"
-Claude: I'll rename that component using semantic refactoring...
-[4 operations later...]
-Claude: Done! The component has been renamed across all 23 files with type safety guaranteed.
+Claude: I'll find all references to that component using semantic search...
+[3 LSP operations later...]
+Claude: I found all 23 files that reference UserProfile. I can now help you rename them accurately with the list of exact locations.
 ```
