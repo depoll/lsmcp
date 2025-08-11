@@ -377,6 +377,26 @@ export class ConnectionPool {
   }
 
   /**
+   * Get all active connections with their language identifiers
+   */
+  getAllActive(): Array<{ language: string; connection: LSPClient }> {
+    const active: Array<{ language: string; connection: LSPClient }> = [];
+
+    for (const [key, info] of this.connections.entries()) {
+      if (info.client.isConnected()) {
+        // Extract language from the key (format: "language:workspace")
+        const parts = key.split(':');
+        if (parts.length >= 2 && parts[0]) {
+          const language = parts[0];
+          active.push({ language, connection: info.client });
+        }
+      }
+    }
+
+    return active;
+  }
+
+  /**
    * Gets an LSP client for a specific file path by detecting its language.
    * Returns null if the language cannot be detected or if the server is not available.
    * This method is more lenient than get() and will not throw errors.

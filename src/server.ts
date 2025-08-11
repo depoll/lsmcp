@@ -10,6 +10,9 @@ import { SymbolSearchTool } from './tools/symbolSearch.js';
 import { FindUsagesTool } from './tools/find-usages.js';
 import { ApplyEditTool } from './tools/applyEdit.js';
 import { DiagnosticsTool } from './tools/diagnostics.js';
+import { RenameSymbolTool } from './tools/renameSymbol.js';
+import { ApplyCodeActionTool } from './tools/applyCodeAction.js';
+import { ExecuteCommandTool } from './tools/executeCommand.js';
 import { ToolRegistry } from './tools/registry.js';
 import { ToolRouter } from './tools/router.js';
 import { logger } from './utils/logger.js';
@@ -88,6 +91,18 @@ export class LSMCPServer {
     // Register Diagnostics Tool
     const diagnosticsTool = new DiagnosticsTool(this.clientManager);
     this.toolRegistry.register(diagnosticsTool);
+
+    // Register Rename Symbol Tool
+    const renameSymbolTool = new RenameSymbolTool(this.clientManager);
+    this.toolRegistry.register(renameSymbolTool);
+
+    // Register Apply Code Action Tool
+    const applyCodeActionTool = new ApplyCodeActionTool(this.clientManager);
+    this.toolRegistry.register(applyCodeActionTool);
+
+    // Register Execute Command Tool
+    const executeCommandTool = new ExecuteCommandTool(this.clientManager);
+    this.toolRegistry.register(executeCommandTool);
 
     // Register all tools with MCP server
     for (const registration of this.toolRegistry.getAll()) {
