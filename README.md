@@ -59,12 +59,11 @@ npm run build
 
 ## Features
 
-- **9 MCP Tools** for code intelligence and refactoring:
+- **8 MCP Tools** for code intelligence and refactoring:
   - `navigate` - Definition, implementation, and type navigation
   - `getCodeIntelligence` - Hover info, signatures, and completions
   - `findSymbols` - Document and workspace symbol search
   - `findUsages` - References and call hierarchy
-  - `applyEdit` - Apply edits to ANY file type, with or without language server support
   - `getDiagnostics` - Errors, warnings, and quick fixes
   - `renameSymbol` - Semantic symbol renaming across files
   - `applyCodeAction` - Apply quick fixes and refactorings

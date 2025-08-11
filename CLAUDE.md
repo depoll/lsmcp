@@ -75,13 +75,7 @@ The project has a comprehensive implementation plan (see PLAN.md) and foundation
      - `getForFile()` method for file-based language detection
    - **Comprehensive Testing**: Unit and integration tests with mocking
 
-### ✅ applyEdit Universal File Support
-   - **Graceful Fallback**: `applyEdit` now works with ANY file type
-     - Files without language servers (JSON, YAML, Markdown, etc.) are edited directly
-     - Language servers used for validation when available but not required
-     - Prevents "No language server available" errors for common file types
-
-### ✅ NEW: Semantic Refactoring Tools (Issue #37)
+### ✅ Semantic Refactoring Tools (Issue #37)
    - **renameSymbol**: Reliable symbol renaming using LSP textDocument/rename
      - Accepts Location objects directly from other tools
      - No position calculation needed by LLMs
@@ -103,16 +97,15 @@ The project has a comprehensive implementation plan (see PLAN.md) and foundation
 
 The project implements:
 
-1. **9 MCP Tools**: Focused on semantic refactoring over text editing
+1. **8 MCP Tools**: Focused on semantic refactoring over text editing
    - `navigate` - Definition, implementation, and type navigation
    - `getCodeIntelligence` - Hover, signatures, and completions
    - `findSymbols` - Document and workspace symbol search
    - `findUsages` - References and call hierarchy
-   - `applyEdit` - Apply edits to ANY file type (with or without LSP support), rename, format with transaction support
    - `getDiagnostics` - Errors, warnings, and quick fixes
-   - `renameSymbol` - Semantic symbol renaming across files (NEW)
-   - `applyCodeAction` - Apply quick fixes and refactorings (NEW)
-   - `executeCommand` - Execute language-specific commands (NEW)
+   - `renameSymbol` - Semantic symbol renaming across files
+   - `applyCodeAction` - Apply quick fixes and refactorings
+   - `executeCommand` - Execute language-specific commands
 
 2. **Key Design Decisions**:
    - Batch operations by default for efficiency
