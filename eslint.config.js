@@ -37,6 +37,13 @@ export default [
     }
   },
   {
+    // Special rules for test files
+    files: ['tests/**/*.ts'],
+    rules: {
+      '@typescript-eslint/unbound-method': 'off' // False positives with jest mocks
+    }
+  },
+  {
     ignores: ['dist/**', 'node_modules/**', 'coverage/**', '*.config.js', 'tests/fixtures/**/*']
   }
 ];
