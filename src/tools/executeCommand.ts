@@ -5,9 +5,10 @@ import { MCPError, MCPErrorCode, StandardResult } from './common-types.js';
 import { ExecuteCommandParams } from 'vscode-languageserver-protocol';
 
 // Input schema for the execute command tool
+// Using z.any() instead of z.unknown() for better MCP client compatibility
 const ExecuteCommandParamsSchema = z.object({
   command: z.string().describe('Command identifier to execute'),
-  arguments: z.array(z.unknown()).optional().describe('Command-specific arguments'),
+  arguments: z.array(z.any()).optional().describe('Command-specific arguments'),
   language: z
     .string()
     .optional()

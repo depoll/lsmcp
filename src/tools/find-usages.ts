@@ -16,7 +16,7 @@ import {
   DidOpenTextDocumentParams,
 } from 'vscode-languageserver-protocol';
 import { logger as rootLogger } from '../utils/logger.js';
-import { createPositionSchema, USAGE_POSITION_DESCRIPTION } from './position-schema.js';
+import { USAGE_POSITION_DESCRIPTION } from './position-schema.js';
 import { FILE_URI_DESCRIPTION, BATCH_FILE_URI_DESCRIPTION } from './file-uri-description.js';
 import { retryWithBackoff } from '../utils/retry.js';
 import { StandardResult, ToolAnnotations } from './common-types.js';
@@ -26,18 +26,41 @@ const DEFAULT_STREAM_BATCH_SIZE = 20;
 
 const logger = rootLogger.child({ module: 'find-usages-tool' });
 
-const positionSchema = createPositionSchema();
-
-const batchItemSchema = z.object({
-  uri: z.string().url().describe(BATCH_FILE_URI_DESCRIPTION),
-  position: positionSchema.describe(USAGE_POSITION_DESCRIPTION),
-});
-
+// Create a flattened schema for MCP compatibility
+// This avoids nested schema issues that cause problems with some MCP clients like Gemini
 export const findUsagesParamsSchema = z.object({
-  uri: z.string().url().describe(FILE_URI_DESCRIPTION),
-  position: positionSchema.describe(USAGE_POSITION_DESCRIPTION),
+  uri: z.string().describe(FILE_URI_DESCRIPTION),
+  position: z
+    .object({
+      line: z
+        .number()
+        .min(0)
+        .describe(
+          'Zero-based line number. The first line in a file is line 0. ' +
+            'Example: line 0 = first line, line 10 = eleventh line. ' +
+            "Must be within the file's line count."
+        ),
+      character: z
+        .number()
+        .min(0)
+        .describe(
+          'Zero-based character offset within the line. The first character in a line is at position 0. ' +
+            'This counts UTF-16 code units (same as JavaScript string indexing). ' +
+            'Example: character 0 = start of line, character 10 = eleventh character. ' +
+            "Must be within the line's character count."
+        ),
+    })
+    .describe(USAGE_POSITION_DESCRIPTION),
   batch: z
-    .array(batchItemSchema)
+    .array(
+      z.object({
+        uri: z.string().describe(BATCH_FILE_URI_DESCRIPTION),
+        position: z.object({
+          line: z.number().min(0),
+          character: z.number().min(0),
+        }),
+      })
+    )
     .optional()
     .describe('Batch references (type="references" only). Each: uri, position. Auto-deduplicates.'),
   type: z

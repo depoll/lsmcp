@@ -12,7 +12,7 @@ import { pathToFileUri } from '../utils/logger.js';
 import { readFile } from 'fs/promises';
 import { fileURLToPath } from 'url';
 import { relative, dirname } from 'path';
-import { createPositionSchema, NAVIGATION_POSITION_DESCRIPTION } from './position-schema.js';
+import { NAVIGATION_POSITION_DESCRIPTION } from './position-schema.js';
 import { NAVIGATION_FILE_URI_DESCRIPTION } from './file-uri-description.js';
 import { retryWithBackoff } from '../utils/retry.js';
 import { StandardResult, MCPError, MCPErrorCode, ToolAnnotations } from './common-types.js';
@@ -22,21 +22,11 @@ const CACHE_SIZE = 200;
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 const DEFAULT_MAX_RESULTS = 100;
 
-// Schema definitions
-const PositionSchema = createPositionSchema();
+// Type definitions for navigation
+type NavigateTarget = 'definition' | 'implementation' | 'typeDefinition';
 
-const NavigateTargetSchema = z
-  .enum(['definition', 'implementation', 'typeDefinition'])
-  .describe(
-    'Navigation type: definition (declaration), implementation (concrete impl), typeDefinition (type decl)'
-  );
-
-const SingleNavigateSchema = z.object({
-  uri: z.string().describe(NAVIGATION_FILE_URI_DESCRIPTION),
-  position: PositionSchema.describe(NAVIGATION_POSITION_DESCRIPTION),
-  target: NavigateTargetSchema,
-});
-
+// Create a flattened schema for MCP compatibility
+// This avoids nested schema issues that cause problems with some MCP clients like Gemini
 const NavigateParamsSchema = z.object({
   uri: z
     .string()
@@ -47,14 +37,46 @@ const NavigateParamsSchema = z.object({
         'Required when not using batch mode. ' +
         'For batch navigation, use the batch parameter instead.'
     ),
-  position: PositionSchema.optional().describe(
-    NAVIGATION_POSITION_DESCRIPTION + ' Required unless using batch mode.'
-  ),
-  target: NavigateTargetSchema.optional().describe(
-    'Navigation type (required for single mode, specify in batch items for batch mode)'
-  ),
+  position: z
+    .object({
+      line: z
+        .number()
+        .min(0)
+        .describe(
+          'Zero-based line number. The first line in a file is line 0. ' +
+            'Example: line 0 = first line, line 10 = eleventh line. ' +
+            "Must be within the file's line count."
+        ),
+      character: z
+        .number()
+        .min(0)
+        .describe(
+          'Zero-based character offset within the line. The first character in a line is at position 0. ' +
+            'This counts UTF-16 code units (same as JavaScript string indexing). ' +
+            'Example: character 0 = start of line, character 10 = eleventh character. ' +
+            "Must be within the line's character count."
+        ),
+    })
+    .optional()
+    .describe(NAVIGATION_POSITION_DESCRIPTION + ' Required unless using batch mode.'),
+  target: z
+    .enum(['definition', 'implementation', 'typeDefinition'])
+    .optional()
+    .describe(
+      'Navigation type: definition (declaration), implementation (concrete impl), typeDefinition (type decl). ' +
+        'Required for single mode, specify in batch items for batch mode'
+    ),
   batch: z
-    .array(SingleNavigateSchema)
+    .array(
+      z.object({
+        uri: z.string().describe(NAVIGATION_FILE_URI_DESCRIPTION),
+        position: z.object({
+          line: z.number().min(0),
+          character: z.number().min(0),
+        }),
+        target: z.enum(['definition', 'implementation', 'typeDefinition']),
+      })
+    )
     .optional()
     .describe(
       'Batch navigation requests. Each item: uri, position, target. Results maintain order.'
@@ -70,7 +92,13 @@ const NavigateParamsSchema = z.object({
 });
 
 type NavigateParams = z.infer<typeof NavigateParamsSchema>;
-type SingleNavigateParams = z.infer<typeof SingleNavigateSchema>;
+
+// Define SingleNavigateParams directly without intermediate schema
+type SingleNavigateParams = {
+  uri: string;
+  position: { line: number; character: number };
+  target: NavigateTarget;
+};
 
 interface NavigateResultItem {
   uri: string;
@@ -349,7 +377,7 @@ Features: Batch support, relevance sorting, grep fallback suggestions.`;
     }
   }
 
-  private getNavigationMethod(target: z.infer<typeof NavigateTargetSchema>): string {
+  private getNavigationMethod(target: NavigateTarget): string {
     switch (target) {
       case 'definition':
         return 'textDocument/definition';
