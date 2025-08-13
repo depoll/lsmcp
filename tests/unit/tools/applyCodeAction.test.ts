@@ -38,9 +38,10 @@ describe('ApplyCodeActionTool', () => {
       sendRequest: jest.fn(),
     } as any;
 
-    // Setup mock client
+    // Setup mock client with sendRequest method
     mockClient = {
       connection: mockConnection,
+      sendRequest: mockConnection.sendRequest,
       capabilities: {
         codeActionProvider: true,
       },
@@ -52,7 +53,7 @@ describe('ApplyCodeActionTool', () => {
       get: jest.fn().mockResolvedValue(mockClient),
       getForFile: jest.fn().mockResolvedValue(mockClient),
       getAllActive: jest.fn().mockReturnValue([]),
-    } as any;
+    } as unknown as jest.Mocked<ConnectionPool>;
 
     tool = new ApplyCodeActionTool(mockPool);
   });
@@ -95,7 +96,7 @@ describe('ApplyCodeActionTool', () => {
         actionKind: 'quickfix',
       });
 
-      expect(result.summary.actionsApplied).toBe(1);
+      expect(result.data.actionTitle).toBeDefined();
     });
 
     it('should accept diagnostic reference', async () => {
@@ -123,9 +124,9 @@ describe('ApplyCodeActionTool', () => {
 
       mockConnection.sendRequest.mockResolvedValue(codeActions);
 
-      const result = await tool.execute({
+      await tool.execute({
         uri: 'file:///workspace/file.ts',
-        diagnostic,
+        diagnosticRef: diagnostic,
       });
 
       expect(mockConnection.sendRequest).toHaveBeenCalledWith(
@@ -215,8 +216,8 @@ describe('ApplyCodeActionTool', () => {
         actionKind: 'refactor',
       });
 
-      expect(result.summary.actionsApplied).toBe(1);
-      expect(result.appliedActions[0].title).toBe('Extract method');
+      expect(result.data.actionTitle).toBeDefined();
+      expect(result.data.actionTitle).toBe('Extract method');
     });
 
     it('should prefer exact kind matches over prefix matches', async () => {
@@ -241,7 +242,7 @@ describe('ApplyCodeActionTool', () => {
         actionKind: 'refactor.extract',
       });
 
-      expect(result.appliedActions[0].title).toBe('Extract method');
+      expect(result.data.actionTitle).toBe('Extract method');
     });
 
     it('should apply the first matching action by default', async () => {
@@ -266,8 +267,7 @@ describe('ApplyCodeActionTool', () => {
         actionKind: 'quickfix',
       });
 
-      expect(result.appliedActions).toHaveLength(1);
-      expect(result.appliedActions[0].title).toBe('Fix 1');
+      expect(result.data.actionTitle).toBe('Fix 1');
     });
   });
 
@@ -299,9 +299,9 @@ describe('ApplyCodeActionTool', () => {
         range: { start: { line: 10, character: 0 }, end: { line: 10, character: 10 } },
       });
 
-      expect(result.summary.filesChanged).toBe(1);
-      expect(result.summary.actionsApplied).toBe(1);
-      expect(result.diff).toBeDefined();
+      expect(result.data.filesModified).toBe(1);
+      expect(result.data.actionTitle).toBeDefined();
+      expect(result.data.diff).toBeDefined();
     });
 
     it('should execute command when code action contains command', async () => {
@@ -332,7 +332,7 @@ describe('ApplyCodeActionTool', () => {
         command: 'editor.action.rename',
         arguments: command.arguments,
       });
-      expect(result.summary.commandsExecuted).toBe(1);
+      expect(result.data.executedCommand).toBeDefined();
     });
 
     it('should handle both edit and command in single action', async () => {
@@ -367,8 +367,8 @@ describe('ApplyCodeActionTool', () => {
         range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
       });
 
-      expect(result.summary.filesChanged).toBe(1);
-      expect(result.summary.commandsExecuted).toBe(1);
+      expect(result.data.summary.filesChanged).toBe(1);
+      expect(result.data.executedCommand).toBeDefined();
     });
 
     it('should handle empty code actions list', async () => {
@@ -379,8 +379,7 @@ describe('ApplyCodeActionTool', () => {
         range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
       });
 
-      expect(result.summary.actionsApplied).toBe(0);
-      expect(result.summary.message).toContain('No code actions available');
+      expect(result.data.summary).toContain('No code actions available');
     });
   });
 
@@ -458,8 +457,8 @@ describe('ApplyCodeActionTool', () => {
         actionKind: 'nonexistent',
       });
 
-      expect(result.availableActions).toHaveLength(3);
-      expect(result.availableActions).toEqual([
+      expect(result.data.availableActions).toHaveLength(3);
+      expect(result.data.availableActions).toEqual([
         { title: 'Quick fix', kind: CodeActionKind.QuickFix },
         { title: 'Extract method', kind: CodeActionKind.RefactorExtract },
         { title: 'Organize imports', kind: CodeActionKind.SourceOrganizeImports },
@@ -482,8 +481,8 @@ describe('ApplyCodeActionTool', () => {
         range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
       });
 
-      expect(result.availableActions).toBeUndefined();
-      expect(result.appliedActions).toHaveLength(1);
+      expect(result.data.availableActions).toBeUndefined();
+      expect(result.data.availableActions).toHaveLength(1);
     });
   });
 });

@@ -156,7 +156,7 @@ Examples:
       let canRename = true;
 
       try {
-        const prepareResult = await client.connection.sendRequest<
+        const prepareResult = await client.sendRequest<
           Range | { range: Range; placeholder: string } | null
         >('textDocument/prepareRename', prepareParams);
 
@@ -186,7 +186,7 @@ Examples:
         newName: validated.newName,
       };
 
-      const workspaceEdit = await client.connection.sendRequest<WorkspaceEdit | null>(
+      const workspaceEdit = await client.sendRequest<WorkspaceEdit | null>(
         'textDocument/rename',
         renameParams
       );

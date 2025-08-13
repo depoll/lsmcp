@@ -30,9 +30,10 @@ describe('ExecuteCommandTool', () => {
       sendRequest: jest.fn(),
     } as any;
 
-    // Setup mock client
+    // Setup mock client with sendRequest method
     mockClient = {
       connection: mockConnection,
+      sendRequest: mockConnection.sendRequest,
       capabilities: {
         executeCommandProvider: {
           commands: ['editor.action.formatDocument', 'typescript.organizeImports'],
@@ -45,8 +46,8 @@ describe('ExecuteCommandTool', () => {
     mockPool = {
       get: jest.fn().mockResolvedValue(mockClient),
       getForFile: jest.fn().mockResolvedValue(mockClient),
-      getAllActive: jest.fn().mockReturnValue([{ language: 'typescript', client: mockClient }]),
-    } as any;
+      getAllActive: jest.fn().mockReturnValue([{ language: 'typescript', connection: mockClient }]),
+    } as unknown as jest.Mocked<ConnectionPool>;
 
     tool = new ExecuteCommandTool(mockPool);
   });
@@ -172,9 +173,9 @@ describe('ExecuteCommandTool', () => {
       } as any;
 
       mockPool.getAllActive.mockReturnValue([
-        { language: 'typescript', client: { connection: mockConnection } as any },
-        { language: 'python', client: { connection: mockConnection2 } as any },
-        { language: 'rust', client: { connection: mockConnection3 } as any },
+        { language: 'typescript', connection: { sendRequest: mockConnection.sendRequest } as any },
+        { language: 'python', connection: { sendRequest: mockConnection2.sendRequest } as any },
+        { language: 'rust', connection: { sendRequest: mockConnection3.sendRequest } as any },
       ]);
     });
 
@@ -235,8 +236,8 @@ describe('ExecuteCommandTool', () => {
       } as any;
 
       mockPool.getAllActive.mockReturnValue([
-        { language: 'typescript', client: { connection: mockConnection } as any },
-        { language: 'python', client: { connection: mockConnection2 } as any },
+        { language: 'typescript', connection: { sendRequest: mockConnection.sendRequest } as any },
+        { language: 'python', connection: { sendRequest: mockConnection2.sendRequest } as any },
       ]);
 
       mockConnection.sendRequest.mockResolvedValue({ success: true });

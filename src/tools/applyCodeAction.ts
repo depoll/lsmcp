@@ -244,7 +244,7 @@ Examples:
         },
       };
 
-      const actions = await client.connection.sendRequest<(CodeAction | Command)[] | null>(
+      const actions = await client.sendRequest<(CodeAction | Command)[] | null>(
         'textDocument/codeAction',
         codeActionParams
       );
@@ -343,7 +343,7 @@ Examples:
             ? { command: selectedAction.command, arguments: [] }
             : selectedAction.command;
 
-        await client.connection.sendRequest('workspace/executeCommand', command);
+        await client.sendRequest('workspace/executeCommand', command);
         executedCommand = {
           command: command.command,
           arguments: command.arguments,

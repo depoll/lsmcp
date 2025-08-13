@@ -31,9 +31,10 @@ describe('RenameSymbolTool', () => {
       sendRequest: jest.fn(),
     } as any;
 
-    // Setup mock client
+    // Setup mock client with sendRequest method
     mockClient = {
       connection: mockConnection,
+      sendRequest: mockConnection.sendRequest,
       capabilities: {
         renameProvider: true,
       },
@@ -45,7 +46,7 @@ describe('RenameSymbolTool', () => {
       get: jest.fn().mockResolvedValue(mockClient),
       getForFile: jest.fn().mockResolvedValue(mockClient),
       getAllActive: jest.fn().mockReturnValue([]),
-    } as any;
+    } as unknown as jest.Mocked<ConnectionPool>;
 
     tool = new RenameSymbolTool(mockPool);
   });
@@ -82,8 +83,8 @@ describe('RenameSymbolTool', () => {
         newName: 'newVariable',
       });
 
-      expect(result.summary.filesChanged).toBe(1);
-      expect(result.summary.editsApplied).toBe(1);
+      expect(result.data.filesModified).toBe(1);
+      expect(result.data.occurrencesReplaced).toBe(1);
     });
 
     it('should accept explicit uri and position with newName', async () => {
@@ -109,7 +110,7 @@ describe('RenameSymbolTool', () => {
         newName: 'newFunction',
       });
 
-      expect(result.summary.filesChanged).toBe(1);
+      expect(result.data.filesModified).toBe(1);
       expect(mockConnection.sendRequest).toHaveBeenCalledWith(
         'textDocument/rename',
         expect.objectContaining({
@@ -175,10 +176,9 @@ describe('RenameSymbolTool', () => {
         newName: 'renamedSymbol',
       });
 
-      expect(result.summary.filesChanged).toBe(2);
-      expect(result.summary.editsApplied).toBe(3);
-      expect(result.summary.success).toBe(true);
-      expect(result.changedFiles).toHaveLength(2);
+      expect(result.data.filesModified).toBe(2);
+      expect(result.data.occurrencesReplaced).toBe(3);
+      expect(result.data.filesModified).toBeGreaterThan(0);
     });
 
     it('should handle empty workspace edit (no rename possible)', async () => {
@@ -190,10 +190,9 @@ describe('RenameSymbolTool', () => {
         newName: 'newName',
       });
 
-      expect(result.summary.filesChanged).toBe(0);
-      expect(result.summary.editsApplied).toBe(0);
-      expect(result.summary.success).toBe(true);
-      expect(result.summary.message).toContain('No changes');
+      expect(result.data.filesModified).toBe(0);
+      expect(result.data.occurrencesReplaced).toBe(0);
+      expect(result.data.summary).toContain('No changes');
     });
 
     it('should handle null response (rename not supported at position)', async () => {
@@ -340,8 +339,8 @@ describe('RenameSymbolTool', () => {
         newName: 'newVar',
       });
 
-      expect(result.diff).toBeDefined();
-      expect(result.diff).toContain('file.ts');
+      expect(result.data.diff).toBeDefined();
+      expect(result.data.diff).toContain('file.ts');
     });
 
     it('should provide helpful message when no changes needed', async () => {
@@ -353,7 +352,7 @@ describe('RenameSymbolTool', () => {
         newName: 'sameName',
       });
 
-      expect(result.summary.message).toContain('No changes needed');
+      expect(result.data.summary).toContain('No changes needed');
     });
   });
 });

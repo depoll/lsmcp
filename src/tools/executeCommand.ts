@@ -124,10 +124,7 @@ Examples:
       }
 
       try {
-        const result = await client.connection.sendRequest<unknown>(
-          'workspace/executeCommand',
-          executeParams
-        );
+        const result = await client.sendRequest<unknown>('workspace/executeCommand', executeParams);
 
         return {
           data: {
@@ -168,7 +165,7 @@ Examples:
     // Try all servers in parallel with individual timeouts
     const COMMAND_TIMEOUT = 3000; // 3 seconds per server (reduced from 5)
 
-    const commandPromises = activeConnections.map(async ({ language, client }) => {
+    const commandPromises = activeConnections.map(async ({ language, connection }) => {
       try {
         // Create a timeout promise for this specific server
         const timeoutPromise = new Promise<never>((_, reject) => {
@@ -180,7 +177,7 @@ Examples:
 
         // Race between the command execution and timeout
         const result = await Promise.race([
-          client.connection.sendRequest<unknown>('workspace/executeCommand', executeParams),
+          connection.sendRequest<unknown>('workspace/executeCommand', executeParams),
           timeoutPromise,
         ]);
 
@@ -203,6 +200,7 @@ Examples:
       .filter(
         (r) =>
           !r.success &&
+          r.error &&
           !r.error.includes('not found') &&
           !r.error.includes('unknown command') &&
           !r.error.includes('timeout')
