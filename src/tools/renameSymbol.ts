@@ -136,9 +136,9 @@ Examples:
 
     // Get the appropriate language server
     const language = getLanguageFromUri(uri);
-    const connection = await this.clientManager.get(language, process.cwd());
+    const client = await this.clientManager.get(language, process.cwd());
 
-    if (!connection) {
+    if (!client) {
       throw new MCPError(
         MCPErrorCode.InternalError,
         `No language server available for ${language || 'unknown language'}`
@@ -156,7 +156,7 @@ Examples:
       let canRename = true;
 
       try {
-        const prepareResult = await connection.sendRequest<
+        const prepareResult = await client.connection.sendRequest<
           Range | { range: Range; placeholder: string } | null
         >('textDocument/prepareRename', prepareParams);
 
@@ -186,7 +186,7 @@ Examples:
         newName: validated.newName,
       };
 
-      const workspaceEdit = await connection.sendRequest<WorkspaceEdit | null>(
+      const workspaceEdit = await client.connection.sendRequest<WorkspaceEdit | null>(
         'textDocument/rename',
         renameParams
       );

@@ -224,9 +224,9 @@ Examples:
 
     // Get the appropriate language server
     const language = getLanguageFromUri(uri);
-    const connection = await this.clientManager.get(language, process.cwd());
+    const client = await this.clientManager.get(language, process.cwd());
 
-    if (!connection) {
+    if (!client) {
       throw new MCPError(
         MCPErrorCode.InternalError,
         `No language server available for ${language || 'unknown language'}`
@@ -244,7 +244,7 @@ Examples:
         },
       };
 
-      const actions = await connection.sendRequest<(CodeAction | Command)[] | null>(
+      const actions = await client.connection.sendRequest<(CodeAction | Command)[] | null>(
         'textDocument/codeAction',
         codeActionParams
       );
@@ -343,7 +343,7 @@ Examples:
             ? { command: selectedAction.command, arguments: [] }
             : selectedAction.command;
 
-        await connection.sendRequest('workspace/executeCommand', command);
+        await client.connection.sendRequest('workspace/executeCommand', command);
         executedCommand = {
           command: command.command,
           arguments: command.arguments,

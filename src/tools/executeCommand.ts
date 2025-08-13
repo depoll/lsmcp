@@ -114,9 +114,9 @@ Examples:
 
     // If a specific language is specified, use that server
     if (validated.language) {
-      const connection = await this.clientManager.get(validated.language, process.cwd());
+      const client = await this.clientManager.get(validated.language, process.cwd());
 
-      if (!connection) {
+      if (!client) {
         throw new MCPError(
           MCPErrorCode.InternalError,
           `No language server available for ${validated.language}`
@@ -124,7 +124,7 @@ Examples:
       }
 
       try {
-        const result = await connection.sendRequest<unknown>(
+        const result = await client.connection.sendRequest<unknown>(
           'workspace/executeCommand',
           executeParams
         );
@@ -165,51 +165,59 @@ Examples:
       throw new MCPError(MCPErrorCode.InternalError, 'No active language servers available');
     }
 
-    const failedServers: string[] = [];
-    let successfulResult: unknown;
-    let executedBy: string | undefined;
+    // Try all servers in parallel with individual timeouts
+    const COMMAND_TIMEOUT = 3000; // 3 seconds per server (reduced from 5)
 
-    // Try each active server until one succeeds (with timeout per attempt)
-    const COMMAND_TIMEOUT = 5000; // 5 seconds per server attempt
-
-    for (const { language, connection } of activeConnections) {
+    const commandPromises = activeConnections.map(async ({ language, client }) => {
       try {
-        // Create a timeout promise
+        // Create a timeout promise for this specific server
         const timeoutPromise = new Promise<never>((_, reject) => {
-          setTimeout(() => reject(new Error('Command execution timeout')), COMMAND_TIMEOUT);
+          setTimeout(
+            () => reject(new Error(`${language}: Command execution timeout`)),
+            COMMAND_TIMEOUT
+          );
         });
 
         // Race between the command execution and timeout
         const result = await Promise.race([
-          connection.sendRequest<unknown>('workspace/executeCommand', executeParams),
+          client.connection.sendRequest<unknown>('workspace/executeCommand', executeParams),
           timeoutPromise,
         ]);
 
-        successfulResult = result;
-        executedBy = language;
-        break; // Stop after first success
+        return { success: true, result, language };
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
-
-        // Only log as failed if it's not just "command not found" or timeout
-        if (
-          !errorMessage.includes('not found') &&
-          !errorMessage.includes('unknown command') &&
-          !errorMessage.includes('timeout')
-        ) {
-          failedServers.push(language);
-        }
-
         this.logger.debug(`Command execution failed on ${language} server`, { error });
+        return { success: false, error: errorMessage, language };
       }
-    }
+    });
 
-    if (!executedBy) {
+    // Wait for all attempts to complete
+    const results = await Promise.all(commandPromises);
+
+    // Find first successful result
+    const successfulExecution = results.find((r) => r.success);
+
+    // Collect failed servers (excluding timeout and not-found errors)
+    const failedServers = results
+      .filter(
+        (r) =>
+          !r.success &&
+          !r.error.includes('not found') &&
+          !r.error.includes('unknown command') &&
+          !r.error.includes('timeout')
+      )
+      .map((r) => r.language);
+
+    if (!successfulExecution) {
       throw new MCPError(
         MCPErrorCode.InvalidRequest,
         `Command "${validated.command}" not supported by any active language server`
       );
     }
+
+    const successfulResult = successfulExecution.result;
+    const executedBy = successfulExecution.language;
 
     return {
       data: {

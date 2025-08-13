@@ -65,16 +65,10 @@ await findSymbols({
 // Returns: UserProfile class at src/components/UserProfile.tsx:12
 
 // 2. Rename across entire codebase
-await applyEdit({
-  edit: {
-    documentChanges: [{
-      kind: "rename",
-      oldUri: "file:///src/components/UserProfile.tsx",
-      newName: "UserProfileCard",
-      position: { line: 12, character: 15 }
-    }]
-  },
-  label: "Rename UserProfile to UserProfileCard"
+await renameSymbol({
+  uri: "file:///src/components/UserProfile.tsx",
+  position: { line: 12, character: 15 },
+  newName: "UserProfileCard"
 });
 // Automatically updates: component definition, all imports, JSX usage, type references
 
@@ -85,11 +79,10 @@ await getDiagnostics({
 // Returns: 2 related type errors
 
 // 4. Apply quick fixes
-await applyEdit({
-  edit: {
-    documentChanges: diagnostics.map(d => d.quickFix)
-  },
-  label: "Apply TypeScript quick fixes"
+await applyCodeAction({
+  uri: "file:///src/components/UserProfile.tsx",
+  diagnostic: diagnostics[0],
+  actionKind: "quickfix"
 });
 // Fixes remaining type compatibility issues
 ```

@@ -51,7 +51,19 @@ export class LSPClient extends EventEmitter {
     });
 
     this.processManager.on('stderr', (message: string) => {
-      this.emit('error', new Error(`Language server error: ${message}`));
+      // Filter out non-critical Python LSP warnings
+      const lowerMessage = message.toLowerCase();
+      const isNonCritical =
+        lowerMessage.includes('attributeerror: _array_api not found') ||
+        lowerMessage.includes('experimental') ||
+        lowerMessage.includes('warning:') ||
+        lowerMessage.includes('deprecation') ||
+        (lowerMessage.includes('matplotlib') && lowerMessage.includes('import'));
+
+      if (!isNonCritical) {
+        // Only emit actual errors, not warnings or import issues
+        this.emit('error', new Error(`Language server error: ${message}`));
+      }
     });
   }
 
