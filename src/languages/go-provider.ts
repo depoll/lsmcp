@@ -1,27 +1,7 @@
-import { spawn } from 'child_process';
-import type { ChildProcessByStdio } from 'child_process';
-import type { Readable } from 'stream';
-import { existsSync } from 'fs';
-import { DetectedLanguage } from './detector.js';
 import { logger } from '../utils/logger.js';
-import { LanguageServerProvider } from './provider.js';
+import { BaseLanguageServerProvider } from './base-provider.js';
 
-export class GoLanguageServerProvider implements LanguageServerProvider {
-  private isContainer: boolean;
-
-  constructor(public readonly language: DetectedLanguage) {
-    this.isContainer = this.detectContainer();
-  }
-
-  private detectContainer(): boolean {
-    return (
-      process.env['CONTAINER'] === 'true' ||
-      process.env['DOCKER'] === 'true' ||
-      // Check for /.dockerenv file (most reliable container indicator)
-      existsSync('/.dockerenv')
-    );
-  }
-
+export class GoLanguageServerProvider extends BaseLanguageServerProvider {
   async isAvailable(): Promise<boolean> {
     try {
       // Try simple which check (Unix-style since we're container-first)
@@ -64,9 +44,7 @@ export class GoLanguageServerProvider implements LanguageServerProvider {
     }
 
     if (!options?.force) {
-      throw new Error(
-        'Auto-installation requires explicit user consent. Pass { force: true } to confirm installation.'
-      );
+      throw this.getForceInstallError();
     }
 
     logger.info('Installing gopls...');
@@ -103,88 +81,5 @@ export class GoLanguageServerProvider implements LanguageServerProvider {
       return ['gopls', 'serve'];
     }
     return baseCommand;
-  }
-
-  private executeCommand(command: string[], timeout = 30000): Promise<string> {
-    return new Promise((resolve, reject) => {
-      if (command.length === 0) {
-        reject(new Error('Command array is empty'));
-        return;
-      }
-
-      const [cmd, ...args] = command;
-      if (!cmd) {
-        reject(new Error('Command is undefined'));
-        return;
-      }
-
-      // Use spawn for security - no shell interpretation (container environment)
-      let child: ChildProcessByStdio<null, Readable, Readable> | undefined;
-      try {
-        child = spawn(cmd, args, {
-          cwd: this.language.rootPath || process.cwd(),
-          env: process.env,
-          stdio: ['ignore', 'pipe', 'pipe'],
-          shell: false,
-        });
-      } catch (error) {
-        reject(
-          new Error(
-            `Failed to spawn ${cmd}: ${error instanceof Error ? error.message : String(error)}`
-          )
-        );
-        return;
-      }
-
-      let stdout = '';
-      let stderr = '';
-      let timedOut = false;
-
-      // Set timeout after successful spawn
-      const timer = setTimeout(() => {
-        timedOut = true;
-        if (child) {
-          child.kill('SIGTERM');
-          // Force kill after grace period
-          const killTimer = setTimeout(() => {
-            if (child && !child.killed) {
-              child.kill('SIGKILL');
-            }
-          }, 5000);
-          killTimer.unref();
-        }
-      }, timeout);
-      timer.unref();
-
-      if (!child) {
-        reject(new Error('Failed to create child process'));
-        return;
-      }
-
-      child.stdout.on('data', (data: Buffer) => {
-        stdout += data.toString();
-      });
-
-      child.stderr.on('data', (data: Buffer) => {
-        stderr += data.toString();
-      });
-
-      child.on('close', (code: number | null) => {
-        clearTimeout(timer);
-        if (timedOut) {
-          reject(new Error(`Command timed out after ${timeout}ms: ${command.join(' ')}`));
-        } else if (code === 0) {
-          resolve(stdout.trim());
-        } else {
-          const errorMessage = stderr || `Command failed with code ${code}`;
-          reject(new Error(`${cmd} failed: ${errorMessage}`));
-        }
-      });
-
-      child.on('error', (error: Error) => {
-        clearTimeout(timer);
-        reject(new Error(`Failed to execute ${cmd}: ${error.message}`));
-      });
-    });
   }
 }

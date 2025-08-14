@@ -6,6 +6,7 @@ const mockExistsSync = jest.fn<typeof import('fs').existsSync>();
 
 jest.unstable_mockModule('fs', () => ({
   existsSync: mockExistsSync,
+  constants: { F_OK: 0, R_OK: 4, W_OK: 2, X_OK: 1 },
 }));
 
 // Import after mocking

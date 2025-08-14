@@ -1,28 +1,11 @@
-import { spawn } from 'child_process';
-import type { ChildProcessByStdio } from 'child_process';
-import type { Readable } from 'stream';
-import { existsSync } from 'fs';
 import { join } from 'path';
-import { DetectedLanguage } from './detector.js';
+import { existsSync } from 'fs';
 import { logger } from '../utils/logger.js';
-import { LanguageServerProvider } from './provider.js';
+import { BaseLanguageServerProvider } from './base-provider.js';
 
-export class PythonLanguageServerProvider implements LanguageServerProvider {
-  private isContainer: boolean;
+export class PythonLanguageServerProvider extends BaseLanguageServerProvider {
   private pythonPath: string | null = null;
   private venvPath: string | null = null;
-
-  constructor(public readonly language: DetectedLanguage) {
-    this.isContainer = this.detectContainer();
-  }
-
-  private detectContainer(): boolean {
-    return (
-      process.env['CONTAINER'] === 'true' ||
-      process.env['DOCKER'] === 'true' ||
-      existsSync('/.dockerenv')
-    );
-  }
 
   async isAvailable(): Promise<boolean> {
     try {
@@ -63,16 +46,11 @@ export class PythonLanguageServerProvider implements LanguageServerProvider {
   async install(options?: { force?: boolean }): Promise<void> {
     if (this.isContainer) {
       logger.info('Running in container - language servers should be pre-installed');
-      throw new Error(
-        'Language server installation in containers is not supported. ' +
-          'The python-lsp-server should be pre-installed in the container image.'
-      );
+      throw this.getContainerInstallError('python-lsp-server');
     }
 
     if (!options?.force) {
-      throw new Error(
-        'Auto-installation requires explicit user consent. Pass { force: true } to confirm installation.'
-      );
+      throw this.getForceInstallError();
     }
 
     // Detect Python environment if not already done
@@ -113,10 +91,7 @@ export class PythonLanguageServerProvider implements LanguageServerProvider {
         ]);
         logger.info('Python language server installed successfully (minimal)');
       } catch {
-        throw new Error(
-          'Failed to install python-lsp-server. ' +
-            'Please install it manually: pip install python-lsp-server[all]'
-        );
+        throw this.getManualInstallError('python-lsp-server', 'pip install python-lsp-server[all]');
       }
     }
   }
@@ -232,84 +207,5 @@ export class PythonLanguageServerProvider implements LanguageServerProvider {
     }
 
     return null;
-  }
-
-  private executeCommand(command: string[], timeout = 30000): Promise<string> {
-    return new Promise((resolve, reject) => {
-      if (command.length === 0) {
-        reject(new Error('Command array is empty'));
-        return;
-      }
-
-      const [cmd, ...args] = command;
-      if (!cmd) {
-        reject(new Error('Command is undefined'));
-        return;
-      }
-
-      let child: ChildProcessByStdio<null, Readable, Readable> | undefined;
-      try {
-        child = spawn(cmd, args, {
-          cwd: this.language.rootPath || process.cwd(),
-          env: {
-            ...process.env,
-            // Ensure virtual environment is activated
-            ...(this.venvPath ? { VIRTUAL_ENV: this.venvPath } : {}),
-          },
-          stdio: ['ignore', 'pipe', 'pipe'],
-          shell: false,
-        });
-      } catch (error) {
-        reject(
-          new Error(
-            `Failed to spawn ${cmd}: ${error instanceof Error ? error.message : String(error)}`
-          )
-        );
-        return;
-      }
-
-      let stdout = '';
-      let stderr = '';
-      let timedOut = false;
-
-      const timer = setTimeout(() => {
-        timedOut = true;
-        if (child) {
-          child.kill('SIGTERM');
-          const killTimer = setTimeout(() => {
-            if (child && !child.killed) {
-              child.kill('SIGKILL');
-            }
-          }, 5000);
-          killTimer.unref();
-        }
-      }, timeout);
-      timer.unref();
-
-      child.stdout.on('data', (data: Buffer) => {
-        stdout += data.toString();
-      });
-
-      child.stderr.on('data', (data: Buffer) => {
-        stderr += data.toString();
-      });
-
-      child.on('close', (code: number | null) => {
-        clearTimeout(timer);
-        if (timedOut) {
-          reject(new Error(`Command timed out after ${timeout}ms: ${command.join(' ')}`));
-        } else if (code === 0) {
-          resolve(stdout.trim());
-        } else {
-          const errorMessage = stderr || `Command failed with code ${code}`;
-          reject(new Error(`${cmd} failed: ${errorMessage}`));
-        }
-      });
-
-      child.on('error', (error: Error) => {
-        clearTimeout(timer);
-        reject(new Error(`Failed to execute ${cmd}: ${error.message}`));
-      });
-    });
   }
 }

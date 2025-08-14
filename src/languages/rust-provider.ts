@@ -1,189 +1,119 @@
-import { spawn } from 'child_process';
-import type { ChildProcessByStdio } from 'child_process';
-import type { Readable } from 'stream';
-import { existsSync } from 'fs';
-import { DetectedLanguage } from './detector.js';
+import { createWriteStream, chmodSync } from 'fs';
+import { pipeline } from 'stream/promises';
+import { createGunzip } from 'zlib';
+import https from 'https';
+
 import { logger } from '../utils/logger.js';
-import { LanguageServerProvider } from './provider.js';
+import { BaseLanguageServerProvider } from './base-provider.js';
 
-export class RustLanguageServerProvider implements LanguageServerProvider {
-  private isContainer: boolean;
-
-  constructor(public readonly language: DetectedLanguage) {
-    this.isContainer = this.detectContainer();
-  }
-
-  private detectContainer(): boolean {
-    return (
-      process.env['CONTAINER'] === 'true' ||
-      process.env['DOCKER'] === 'true' ||
-      // Check for /.dockerenv file (most reliable container indicator)
-      existsSync('/.dockerenv')
-    );
-  }
-
+export class RustLanguageServerProvider extends BaseLanguageServerProvider {
   async isAvailable(): Promise<boolean> {
-    try {
-      // Try simple which check (Unix-style since we're container-first)
-      await this.executeCommand(['which', 'rust-analyzer']);
+    // Try simple which check first
+    if (await this.commandExists('rust-analyzer')) {
       logger.info('Rust analyzer found in PATH');
       return true;
-    } catch (whichError) {
-      logger.debug({ whichError }, 'Rust analyzer not found via which, trying version check');
-
-      try {
-        // Try direct version check
-        const result = await this.executeCommand(['rust-analyzer', '--version']);
-        logger.info({ version: result }, 'Rust analyzer is available');
-        return true;
-      } catch (versionError) {
-        logger.warn({ versionError }, 'Rust analyzer version check failed');
-        return false;
-      }
     }
+
+    // Try direct version check
+    const version = await this.checkVersion('rust-analyzer');
+    if (version) {
+      logger.info({ version }, 'Rust analyzer is available');
+      return true;
+    }
+
+    logger.debug('Rust analyzer not found');
+    return false;
   }
 
   async install(options?: { force?: boolean }): Promise<void> {
     // In containers, language servers should already be pre-installed
     if (this.isContainer) {
       logger.info('Running in container - language servers should be pre-installed');
-      throw new Error(
-        'Language server installation in containers is not supported. ' +
-          'The rust-analyzer should be pre-installed in the container image.'
-      );
+      throw this.getContainerInstallError('rust-analyzer');
     }
 
     if (!options?.force) {
-      throw new Error(
-        'Auto-installation requires explicit user consent. Pass { force: true } to confirm installation.'
-      );
+      throw this.getForceInstallError();
     }
 
     logger.info('Installing rust-analyzer...');
 
     try {
-      // Download and install rust-analyzer
-      const platform = process.platform;
-      const arch = process.arch;
+      // Determine platform-specific download URL
+      const downloadUrl = this.getDownloadUrl();
 
-      let downloadUrl = '';
-      if (platform === 'linux' && arch === 'x64') {
-        downloadUrl =
-          'https://github.com/rust-lang/rust-analyzer/releases/latest/download/rust-analyzer-x86_64-unknown-linux-gnu.gz';
-      } else if (platform === 'darwin' && arch === 'x64') {
-        downloadUrl =
-          'https://github.com/rust-lang/rust-analyzer/releases/latest/download/rust-analyzer-x86_64-apple-darwin.gz';
-      } else if (platform === 'darwin' && arch === 'arm64') {
-        downloadUrl =
-          'https://github.com/rust-lang/rust-analyzer/releases/latest/download/rust-analyzer-aarch64-apple-darwin.gz';
-      } else if (platform === 'win32' && arch === 'x64') {
-        downloadUrl =
-          'https://github.com/rust-lang/rust-analyzer/releases/latest/download/rust-analyzer-x86_64-pc-windows-msvc.gz';
-      } else {
-        throw new Error(`Unsupported platform: ${platform} ${arch}`);
-      }
-
-      // Download and extract
-      await this.executeCommand([
-        'sh',
-        '-c',
-        `curl -L "${downloadUrl}" | gunzip -c - > /usr/local/bin/rust-analyzer && chmod +x /usr/local/bin/rust-analyzer`,
-      ]);
+      // Download and install using Node.js HTTP client (secure approach)
+      await this.downloadAndInstall(downloadUrl);
 
       logger.info('Rust analyzer installed successfully');
     } catch (error) {
       logger.error({ error }, 'Failed to install rust-analyzer');
-      throw new Error(
-        'Failed to install rust-analyzer. ' +
-          'Please install it manually from https://rust-analyzer.github.io/manual.html#installation'
+      throw this.getManualInstallError(
+        'rust-analyzer',
+        'https://rust-analyzer.github.io/manual.html#installation'
       );
     }
   }
 
-  getCommand(): string[] {
-    return this.language.serverCommand;
+  private getDownloadUrl(): string {
+    const platform = process.platform;
+    const arch = process.arch;
+
+    if (platform === 'linux' && arch === 'x64') {
+      return 'https://github.com/rust-lang/rust-analyzer/releases/latest/download/rust-analyzer-x86_64-unknown-linux-gnu.gz';
+    } else if (platform === 'darwin' && arch === 'x64') {
+      return 'https://github.com/rust-lang/rust-analyzer/releases/latest/download/rust-analyzer-x86_64-apple-darwin.gz';
+    } else if (platform === 'darwin' && arch === 'arm64') {
+      return 'https://github.com/rust-lang/rust-analyzer/releases/latest/download/rust-analyzer-aarch64-apple-darwin.gz';
+    } else if (platform === 'win32' && arch === 'x64') {
+      return 'https://github.com/rust-lang/rust-analyzer/releases/latest/download/rust-analyzer-x86_64-pc-windows-msvc.gz';
+    } else {
+      throw new Error(`Unsupported platform: ${platform} ${arch}`);
+    }
   }
 
-  private executeCommand(command: string[], timeout = 30000): Promise<string> {
+  private async downloadAndInstall(url: string): Promise<void> {
     return new Promise((resolve, reject) => {
-      if (command.length === 0) {
-        reject(new Error('Command array is empty'));
-        return;
-      }
-
-      const [cmd, ...args] = command;
-      if (!cmd) {
-        reject(new Error('Command is undefined'));
-        return;
-      }
-
-      // Use spawn for security - no shell interpretation (container environment)
-      let child: ChildProcessByStdio<null, Readable, Readable> | undefined;
-      try {
-        child = spawn(cmd, args, {
-          cwd: this.language.rootPath || process.cwd(),
-          env: process.env,
-          stdio: ['ignore', 'pipe', 'pipe'],
-          shell: false,
-        });
-      } catch (error) {
-        reject(
-          new Error(
-            `Failed to spawn ${cmd}: ${error instanceof Error ? error.message : String(error)}`
-          )
-        );
-        return;
-      }
-
-      let stdout = '';
-      let stderr = '';
-      let timedOut = false;
-
-      // Set timeout after successful spawn
-      const timer = setTimeout(() => {
-        timedOut = true;
-        if (child) {
-          child.kill('SIGTERM');
-          // Force kill after grace period
-          const killTimer = setTimeout(() => {
-            if (child && !child.killed) {
-              child.kill('SIGKILL');
+      // Follow redirects to get the actual download URL
+      https
+        .get(url, { headers: { 'User-Agent': 'lsmcp' } }, (response) => {
+          if (response.statusCode === 302 || response.statusCode === 301) {
+            // Handle redirect
+            const redirectUrl = response.headers.location;
+            if (!redirectUrl) {
+              reject(new Error('Redirect URL not found'));
+              return;
             }
-          }, 5000);
-          killTimer.unref();
-        }
-      }, timeout);
-      timer.unref();
+            this.downloadAndInstall(redirectUrl).then(resolve).catch(reject);
+            return;
+          }
 
-      if (!child) {
-        reject(new Error('Failed to create child process'));
-        return;
-      }
+          if (response.statusCode !== 200) {
+            reject(new Error(`Failed to download: HTTP ${response.statusCode}`));
+            return;
+          }
 
-      child.stdout.on('data', (data: Buffer) => {
-        stdout += data.toString();
-      });
+          const targetPath = '/usr/local/bin/rust-analyzer';
+          const gunzip = createGunzip();
+          const writeStream = createWriteStream(targetPath);
 
-      child.stderr.on('data', (data: Buffer) => {
-        stderr += data.toString();
-      });
-
-      child.on('close', (code: number | null) => {
-        clearTimeout(timer);
-        if (timedOut) {
-          reject(new Error(`Command timed out after ${timeout}ms: ${command.join(' ')}`));
-        } else if (code === 0) {
-          resolve(stdout.trim());
-        } else {
-          const errorMessage = stderr || `Command failed with code ${code}`;
-          reject(new Error(`${cmd} failed: ${errorMessage}`));
-        }
-      });
-
-      child.on('error', (error: Error) => {
-        clearTimeout(timer);
-        reject(new Error(`Failed to execute ${cmd}: ${error.message}`));
-      });
+          pipeline(response, gunzip, writeStream)
+            .then(() => {
+              // Make the file executable
+              try {
+                chmodSync(targetPath, 0o755);
+                resolve();
+              } catch (error) {
+                reject(new Error(`Failed to make rust-analyzer executable: ${String(error)}`));
+              }
+            })
+            .catch((error) => {
+              reject(new Error(`Failed to download and extract rust-analyzer: ${String(error)}`));
+            });
+        })
+        .on('error', (error) => {
+          reject(new Error(`Failed to download rust-analyzer: ${error.message}`));
+        });
     });
   }
 }
