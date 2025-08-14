@@ -192,6 +192,7 @@ Examples:
   }
 
   async execute(params: ApplyCodeActionParams): Promise<StandardResult<ApplyCodeActionData>> {
+    const startTime = Date.now();
     const validated = this.validateParams(params);
     // Apply defaults since they're optional in the input but required for logic
     const autoApply = validated.autoApply ?? false;
@@ -256,7 +257,7 @@ Examples:
             availableActions: [],
           },
           metadata: {
-            processingTime: Date.now(),
+            processingTime: Date.now() - startTime,
             cached: false,
           },
           fallback: 'No code actions available at this location',
@@ -278,11 +279,13 @@ Examples:
       }
 
       // Filter by preferred status unless includeAll is true
+      // If no preferred actions exist, fall back to all filtered actions
       if (!includeAll) {
         const preferredActions = filteredActions.filter((action) => action.isPreferred);
         if (preferredActions.length > 0) {
           filteredActions = preferredActions;
         }
+        // Note: If preferredActions.length === 0, we keep all filteredActions as fallback
       }
 
       // If not auto-applying, return available actions
@@ -299,7 +302,7 @@ Examples:
             availableActions,
           },
           metadata: {
-            processingTime: Date.now(),
+            processingTime: Date.now() - startTime,
             cached: false,
           },
         };
@@ -360,7 +363,7 @@ Examples:
           executedCommand,
         },
         metadata: {
-          processingTime: Date.now(),
+          processingTime: Date.now() - startTime,
           cached: false,
         },
       };

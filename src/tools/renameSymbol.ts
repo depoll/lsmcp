@@ -119,6 +119,7 @@ Examples:
   }
 
   async execute(params: RenameSymbolParams): Promise<StandardResult<RenameSymbolData>> {
+    const startTime = Date.now();
     const validated = this.validateParams(params);
 
     // Extract uri and position from location or direct params
@@ -236,7 +237,7 @@ Examples:
           originalName,
         },
         metadata: {
-          processingTime: Date.now(),
+          processingTime: Date.now() - startTime,
           cached: false,
         },
       };

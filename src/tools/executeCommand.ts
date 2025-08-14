@@ -104,6 +104,7 @@ Examples:
   }
 
   async execute(params: ExecuteCommandToolParams): Promise<StandardResult<ExecuteCommandData>> {
+    const startTime = Date.now();
     const validated = this.validateParams(params);
 
     // Build the execute command params
@@ -134,7 +135,7 @@ Examples:
             executedBy: validated.language,
           },
           metadata: {
-            processingTime: Date.now(),
+            processingTime: Date.now() - startTime,
             cached: false,
           },
         };
@@ -226,7 +227,7 @@ Examples:
         failedServers: failedServers.length > 0 ? failedServers : undefined,
       },
       metadata: {
-        processingTime: Date.now(),
+        processingTime: Date.now() - startTime,
         cached: false,
       },
     };
