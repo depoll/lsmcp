@@ -145,6 +145,12 @@ interface ApplyCodeActionData {
  *
  * This tool provides access to language server code actions like quick fixes,
  * refactorings, and source actions without manual text editing.
+ *
+ * Action Selection Behavior:
+ * - When includeAll is false (default), preferred actions are prioritized
+ * - If no preferred actions exist, all matching actions are considered as fallback
+ * - The first matching action is selected when autoApply is true
+ * - When autoApply is false, all available actions are returned for manual selection
  */
 export class ApplyCodeActionTool extends BatchableTool<
   ApplyCodeActionParams,

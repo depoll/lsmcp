@@ -99,6 +99,9 @@ Examples:
 
   readonly inputSchema = ExecuteCommandParamsSchema;
 
+  // Timeout for command execution per language server (in milliseconds)
+  private readonly COMMAND_TIMEOUT = 3000;
+
   constructor(clientManager: ConnectionPool) {
     super(clientManager);
   }
@@ -164,15 +167,13 @@ Examples:
     }
 
     // Try all servers in parallel with individual timeouts
-    const COMMAND_TIMEOUT = 3000; // 3 seconds per server (reduced from 5)
-
     const commandPromises = activeConnections.map(async ({ language, connection }) => {
       try {
         // Create a timeout promise for this specific server
         const timeoutPromise = new Promise<never>((_, reject) => {
           setTimeout(
             () => reject(new Error(`${language}: Command execution timeout`)),
-            COMMAND_TIMEOUT
+            this.COMMAND_TIMEOUT
           );
         });
 
