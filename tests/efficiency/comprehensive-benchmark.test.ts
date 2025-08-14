@@ -8,7 +8,7 @@ import { EfficiencyBenchmark } from './framework.js';
 import {
   navigateScenarios,
   findUsagesScenarios,
-  applyEditScenarios,
+  refactoringScenarios,
   diagnosticsScenarios,
 } from './scenarios.js';
 
@@ -68,9 +68,9 @@ describe('MCP-LSP Efficiency Benchmarks', () => {
     });
   });
 
-  describe('Apply Edit Tool Efficiency', () => {
+  describe('Refactoring Tools Efficiency', () => {
     it('should achieve >98% context reduction for rename', async () => {
-      const scenario = applyEditScenarios[0]!; // Rename across 50 files
+      const scenario = refactoringScenarios[0]!; // Rename across 50 files
       const result = await benchmark.measure('rename-symbol', scenario);
 
       expect(result.improvement.contextReduction).toBeGreaterThan(97);
@@ -79,7 +79,7 @@ describe('MCP-LSP Efficiency Benchmarks', () => {
     });
 
     it('should achieve >90% reduction for quick fixes', async () => {
-      const scenario = applyEditScenarios[1]!; // Apply 10 quick fixes
+      const scenario = refactoringScenarios[1]!; // Apply 10 quick fixes
       const result = await benchmark.measure('apply-fixes', scenario);
 
       expect(result.improvement.contextReduction).toBeGreaterThan(90);
@@ -105,7 +105,7 @@ describe('MCP-LSP Efficiency Benchmarks', () => {
       const sampleScenarios = [
         navigateScenarios[0]!,
         findUsagesScenarios[0]!,
-        applyEditScenarios[0]!,
+        refactoringScenarios[0]!,
         diagnosticsScenarios[0]!,
       ];
 
@@ -126,7 +126,7 @@ describe('MCP-LSP Efficiency Benchmarks', () => {
       const sampleScenarios = [
         navigateScenarios[1]!,
         findUsagesScenarios[1]!,
-        applyEditScenarios[0]!,
+        refactoringScenarios[0]!,
       ];
 
       const results = [];

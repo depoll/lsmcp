@@ -5,7 +5,7 @@
  */
 
 import { EfficiencyBenchmark, createTestProject, BenchmarkScenario } from './framework.js';
-import { allScenarios, navigateScenarios, applyEditScenarios } from './scenarios.js';
+import { allScenarios, navigateScenarios, refactoringScenarios } from './scenarios.js';
 import { ConnectionPool } from '../../src/lsp/manager.js';
 import { logger } from '../../src/utils/logger.js';
 import * as fs from 'fs/promises';
@@ -18,11 +18,10 @@ import { NavigateTool } from '../../src/tools/navigate.js';
 import { SymbolSearchTool } from '../../src/tools/symbolSearch.js';
 import { CodeIntelligenceTool } from '../../src/tools/codeIntelligence.js';
 import { FindUsagesTool } from '../../src/tools/find-usages.js';
-import { ApplyEditTool } from '../../src/tools/applyEdit.js';
 import { DiagnosticsTool } from '../../src/tools/diagnostics.js';
 
 interface BenchmarkOptions {
-  scenarios?: 'all' | 'navigate' | 'apply' | 'quick';
+  scenarios?: 'all' | 'navigate' | 'refactor' | 'quick';
   output?: string;
   realMeasurements?: boolean;
   projectSize?: 'small' | 'medium' | 'large';
@@ -38,7 +37,6 @@ class RealBenchmarkRunner {
     symbolSearch?: SymbolSearchTool;
     codeIntelligence?: CodeIntelligenceTool;
     findUsages?: FindUsagesTool;
-    applyEdit?: ApplyEditTool;
     diagnostics?: DiagnosticsTool;
   } = {};
 
@@ -62,7 +60,6 @@ class RealBenchmarkRunner {
       symbolSearch: new SymbolSearchTool(this.connectionPool),
       codeIntelligence: new CodeIntelligenceTool(this.connectionPool),
       findUsages: new FindUsagesTool(this.connectionPool),
-      applyEdit: new ApplyEditTool(this.connectionPool),
       diagnostics: new DiagnosticsTool(this.connectionPool),
     };
     // Log to indicate tools are ready (and satisfy unused variable check)
@@ -100,14 +97,14 @@ class RealBenchmarkRunner {
     // Select scenarios based on options
     if (options.scenarios === 'navigate') {
       scenarios = navigateScenarios;
-    } else if (options.scenarios === 'apply') {
-      scenarios = applyEditScenarios;
+    } else if (options.scenarios === 'refactor') {
+      scenarios = refactoringScenarios;
     } else if (options.scenarios === 'quick') {
       // Quick subset for CI
       const navScenario = navigateScenarios[0];
-      const applyScenario = applyEditScenarios[0];
-      if (navScenario && applyScenario) {
-        scenarios = [navScenario, applyScenario, ...allScenarios.slice(0, 5)];
+      const refactorScenario = refactoringScenarios[0];
+      if (navScenario && refactorScenario) {
+        scenarios = [navScenario, refactorScenario, ...allScenarios.slice(0, 5)];
       } else {
         scenarios = allScenarios.slice(0, 7);
       }
@@ -224,8 +221,8 @@ async function main(): Promise<void> {
     options.scenarios = 'all';
   } else if (args.includes('--navigate')) {
     options.scenarios = 'navigate';
-  } else if (args.includes('--apply')) {
-    options.scenarios = 'apply';
+  } else if (args.includes('--refactor')) {
+    options.scenarios = 'refactor';
   }
 
   if (args.includes('--medium')) {

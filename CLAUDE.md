@@ -75,11 +75,20 @@ The project has a comprehensive implementation plan (see PLAN.md) and foundation
      - `getForFile()` method for file-based language detection
    - **Comprehensive Testing**: Unit and integration tests with mocking
 
-### ✅ applyEdit Universal File Support
-   - **Graceful Fallback**: `applyEdit` now works with ANY file type
-     - Files without language servers (JSON, YAML, Markdown, etc.) are edited directly
-     - Language servers used for validation when available but not required
-     - Prevents "No language server available" errors for common file types
+### ✅ Semantic Refactoring Tools (Issue #37)
+   - **renameSymbol**: Reliable symbol renaming using LSP textDocument/rename
+     - Accepts Location objects directly from other tools
+     - No position calculation needed by LLMs
+     - Handles all occurrences automatically
+   - **applyCodeAction**: Apply quick fixes and refactorings
+     - Fix diagnostics automatically
+     - Extract methods/functions/variables
+     - Organize imports
+     - Apply language-specific refactorings
+   - **executeCommand**: Execute language server commands
+     - Run language-specific operations
+     - Trigger custom refactorings
+     - Restart language servers
 
 ### Next dependencies to install (when needed):
    - `p-queue` - Request queuing and batching (for Issue #3)
@@ -88,13 +97,15 @@ The project has a comprehensive implementation plan (see PLAN.md) and foundation
 
 The project implements:
 
-1. **6 Combined MCP Tools**: Minimizing prompt overhead while maintaining clarity
+1. **8 MCP Tools**: Focused on semantic refactoring over text editing
    - `navigate` - Definition, implementation, and type navigation
    - `getCodeIntelligence` - Hover, signatures, and completions
    - `findSymbols` - Document and workspace symbol search
    - `findUsages` - References and call hierarchy
-   - `applyEdit` - Apply edits to ANY file type (with or without LSP support), rename, format with transaction support
    - `getDiagnostics` - Errors, warnings, and quick fixes
+   - `renameSymbol` - Semantic symbol renaming across files
+   - `applyCodeAction` - Apply quick fixes and refactorings
+   - `executeCommand` - Execute language-specific commands
 
 2. **Key Design Decisions**:
    - Batch operations by default for efficiency

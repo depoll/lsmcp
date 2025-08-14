@@ -8,8 +8,10 @@ import { CodeIntelligenceTool } from './tools/codeIntelligence.js';
 import { NavigateTool } from './tools/navigate.js';
 import { SymbolSearchTool } from './tools/symbolSearch.js';
 import { FindUsagesTool } from './tools/find-usages.js';
-import { ApplyEditTool } from './tools/applyEdit.js';
 import { DiagnosticsTool } from './tools/diagnostics.js';
+import { RenameSymbolTool } from './tools/renameSymbol.js';
+import { ApplyCodeActionTool } from './tools/applyCodeAction.js';
+import { ExecuteCommandTool } from './tools/executeCommand.js';
 import { ToolRegistry } from './tools/registry.js';
 import { ToolRouter } from './tools/router.js';
 import { logger } from './utils/logger.js';
@@ -81,19 +83,28 @@ export class LSMCPServer {
     const findUsagesTool = new FindUsagesTool(this.clientManager);
     this.toolRegistry.register(findUsagesTool);
 
-    // Register Apply Edit Tool
-    const applyEditTool = new ApplyEditTool(this.clientManager);
-    this.toolRegistry.register(applyEditTool);
-
     // Register Diagnostics Tool
     const diagnosticsTool = new DiagnosticsTool(this.clientManager);
     this.toolRegistry.register(diagnosticsTool);
+
+    // Register Rename Symbol Tool
+    const renameSymbolTool = new RenameSymbolTool(this.clientManager);
+    this.toolRegistry.register(renameSymbolTool);
+
+    // Register Apply Code Action Tool
+    const applyCodeActionTool = new ApplyCodeActionTool(this.clientManager);
+    this.toolRegistry.register(applyCodeActionTool);
+
+    // Register Execute Command Tool
+    const executeCommandTool = new ExecuteCommandTool(this.clientManager);
+    this.toolRegistry.register(executeCommandTool);
 
     // Register all tools with MCP server
     for (const registration of this.toolRegistry.getAll()) {
       const { metadata } = registration;
 
       // MCP SDK expects ZodRawShape, so we need to extract the shape from ZodObject schemas
+      // The schemas have been flattened to avoid nested schema issues with some MCP clients
       const inputSchema =
         metadata.inputSchema instanceof z.ZodObject
           ? (metadata.inputSchema as z.ZodObject<z.ZodRawShape>).shape

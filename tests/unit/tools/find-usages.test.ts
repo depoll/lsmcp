@@ -107,7 +107,6 @@ Required parameters:
 
       const result = await tool.execute(params);
 
-      // eslint-disable-next-line @typescript-eslint/unbound-method
       const getForFileMock = jest.mocked(mockPool.getForFile);
       const expectedWorkspaceRoot = '/';
       expect(getForFileMock).toHaveBeenCalledWith('file:///test.ts', expectedWorkspaceRoot);
@@ -396,7 +395,6 @@ Required parameters:
 
       const result = await tool.execute(params);
 
-      // eslint-disable-next-line @typescript-eslint/unbound-method
       const getForFileMock = jest.mocked(mockPool.getForFile);
       expect(getForFileMock).toHaveBeenCalledTimes(2);
       expect(result.data.references).toHaveLength(2);

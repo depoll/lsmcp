@@ -68,7 +68,6 @@ describe('DiagnosticsTool', () => {
 
         const result = await tool.execute({ uri });
 
-        // eslint-disable-next-line @typescript-eslint/unbound-method
         expect(mockConnectionPool.getForFile).toHaveBeenCalledWith(
           uri,
           expect.stringMatching(/.*/)
@@ -194,7 +193,6 @@ describe('DiagnosticsTool', () => {
 
         const result = await tool.execute({});
 
-        // eslint-disable-next-line @typescript-eslint/unbound-method
         expect(mockConnectionPool.getAllConnections).toHaveBeenCalled();
         expect(result.summary.total).toBe(2);
         expect(result.summary.errors).toBe(1);

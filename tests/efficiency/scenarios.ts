@@ -253,8 +253,8 @@ export const codeIntelligenceScenarios: BenchmarkScenario[] = [
   },
 ];
 
-// Apply Edit Benchmarks
-export const applyEditScenarios: BenchmarkScenario[] = [
+// Refactoring Benchmarks (using new semantic tools)
+export const refactoringScenarios: BenchmarkScenario[] = [
   {
     name: 'Rename symbol across 50 files',
     description: 'Rename a widely used class',
@@ -291,7 +291,7 @@ export const applyEditScenarios: BenchmarkScenario[] = [
     ],
     lspOperations: [
       'lsp.textDocument/codeAction (get fixes)',
-      'lsp.workspace/applyEdit (10 times)',
+      'lsp.textDocument/codeAction (apply 10 times)',
     ],
     expectedReduction: {
       context: 90,
@@ -308,7 +308,7 @@ export const applyEditScenarios: BenchmarkScenario[] = [
       'write formatted file',
       'verify formatting',
     ],
-    lspOperations: ['lsp.textDocument/formatting', 'lsp.workspace/applyEdit'],
+    lspOperations: ['lsp.textDocument/formatting', 'lsp.textDocument/codeAction'],
     expectedReduction: {
       context: 60,
       operations: 60,
@@ -438,7 +438,7 @@ export const compositeScenarios: BenchmarkScenario[] = [
       'lsp.textDocument/hover',
       'lsp.textDocument/definition',
       'lsp.textDocument/codeAction',
-      'lsp.workspace/applyEdit',
+      'lsp.textDocument/codeAction',
     ],
     expectedReduction: {
       context: 88,
@@ -453,7 +453,7 @@ export const allScenarios: BenchmarkScenario[] = [
   ...findUsagesScenarios,
   ...symbolSearchScenarios,
   ...codeIntelligenceScenarios,
-  ...applyEditScenarios,
+  ...refactoringScenarios,
   ...diagnosticsScenarios,
   ...compositeScenarios,
 ];

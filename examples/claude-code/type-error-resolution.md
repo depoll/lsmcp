@@ -90,27 +90,18 @@ await getCodeIntelligence({
 */
 
 // 3. Apply batch rename across all affected files
-await applyEdit({
-  edit: {
-    documentChanges: [
-      {
-        kind: "rename",
-        searchPattern: "onSort(?!Change)",
-        replacement: "onSortChange",
-        files: "**/*.tsx"
-      }
-    ]
-  },
-  label: "Update to new TableProps API"
+await renameSymbol({
+  uri: "file:///src/components/DataTable.tsx",
+  position: { line: 45, character: 12 },
+  newName: "onSortChange"
 });
+// Automatically renames across all files that use this symbol
 
 // 4. Apply all available quick fixes
-const quickFixes = diagnostics.flatMap(d => d.codeActions);
-await applyEdit({
-  edit: {
-    documentChanges: quickFixes.map(fix => fix.edit)
-  },
-  label: "Apply TypeScript quick fixes"
+await applyCodeAction({
+  uri: "file:///src/components/DataTable.tsx",
+  diagnostic: diagnostics[0],  // Pass the diagnostic to get relevant fixes
+  actionKind: "quickfix"
 });
 /* Automatically:
    - Adds missing imports
@@ -152,8 +143,10 @@ await getDiagnostics({
 ### 2. Missing Type Imports
 ```typescript
 // LSP auto-imports from correct location
-await applyEdit({
-  edit: codeAction.addMissingImports
+await applyCodeAction({
+  uri: "file:///src/file.ts",
+  range: errorRange,
+  actionKind: "source.addMissingImports"
 });
 ```
 
