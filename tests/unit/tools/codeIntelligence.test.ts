@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/unbound-method */
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 import { CodeIntelligenceTool } from '../../../src/tools/codeIntelligence.js';
 import { ConnectionPool } from '../../../src/lsp/index.js';

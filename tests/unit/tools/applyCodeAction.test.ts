@@ -2,7 +2,6 @@ import { describe, it, expect, jest, beforeEach, afterEach } from '@jest/globals
 import { ApplyCodeActionTool } from '../../../src/tools/applyCodeAction.js';
 import { ConnectionPool } from '../../../src/lsp/manager.js';
 import { LSPClient } from '../../../src/lsp/client-v2.js';
-import { MCPError } from '../../../src/tools/common-types.js';
 import type { MessageConnection } from 'vscode-languageserver-protocol';
 import { CodeActionKind } from 'vscode-languageserver-protocol';
 import type {
@@ -187,7 +186,7 @@ describe('ApplyCodeActionTool', () => {
       const codeActions: CodeAction[] = [];
       mockConnection.sendRequest.mockResolvedValue(codeActions);
 
-      const result = await tool.execute({
+      await tool.execute({
         location: {
           uri: 'file:///workspace/file.ts',
           range: { start: { line: 0, character: 0 }, end: { line: 0, character: 5 } },
@@ -209,19 +208,22 @@ describe('ApplyCodeActionTool', () => {
   describe('Code action filtering', () => {
     it('should filter actions by kind when specified', async () => {
       // Mock the language server to properly filter by kind when requested
-      mockConnection.sendRequest.mockImplementation((method, params: any) => {
-        if (method === 'textDocument/codeAction' && params.context?.only?.includes('refactor')) {
-          // Return only refactor actions when filtered
-          return Promise.resolve([
-            {
-              title: 'Extract method',
-              kind: CodeActionKind.RefactorExtract,
-              edit: { changes: {} },
-            },
-          ]);
+      mockConnection.sendRequest.mockImplementation(
+        // @ts-expect-error - Mock implementation
+        (method: string, params?: { context?: { only?: string[] } }) => {
+          if (method === 'textDocument/codeAction' && params?.context?.only?.includes('refactor')) {
+            // Return only refactor actions when filtered
+            return Promise.resolve([
+              {
+                title: 'Extract method',
+                kind: CodeActionKind.RefactorExtract,
+                edit: { changes: {} },
+              },
+            ]);
+          }
+          return Promise.resolve([]);
         }
-        return Promise.resolve([]);
-      });
+      );
 
       const result = await tool.execute({
         uri: 'file:///workspace/file.ts',
@@ -235,21 +237,24 @@ describe('ApplyCodeActionTool', () => {
 
     it('should prefer exact kind matches over prefix matches', async () => {
       // Mock to return both actions when 'refactor.extract' is requested
-      mockConnection.sendRequest.mockImplementation((method, params: any) => {
-        if (
-          method === 'textDocument/codeAction' &&
-          params.context?.only?.includes('refactor.extract')
-        ) {
-          return Promise.resolve([
-            {
-              title: 'Extract method',
-              kind: 'refactor.extract' as CodeActionKind,
-              edit: { changes: {} },
-            },
-          ]);
+      mockConnection.sendRequest.mockImplementation(
+        // @ts-expect-error - Mock implementation
+        (method: string, params?: { context?: { only?: string[] } }) => {
+          if (
+            method === 'textDocument/codeAction' &&
+            params?.context?.only?.includes('refactor.extract')
+          ) {
+            return Promise.resolve([
+              {
+                title: 'Extract method',
+                kind: 'refactor.extract' as CodeActionKind,
+                edit: { changes: {} },
+              },
+            ]);
+          }
+          return Promise.resolve([]);
         }
-        return Promise.resolve([]);
-      });
+      );
 
       const result = await tool.execute({
         uri: 'file:///workspace/file.ts',
@@ -338,7 +343,8 @@ describe('ApplyCodeActionTool', () => {
       ];
 
       // Setup different responses for different requests
-      mockConnection.sendRequest.mockImplementation((method) => {
+      // @ts-expect-error - Mock implementation
+      mockConnection.sendRequest.mockImplementation((method: string) => {
         if (method === 'textDocument/codeAction') {
           return Promise.resolve(codeActions);
         }
