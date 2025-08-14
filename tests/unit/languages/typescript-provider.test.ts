@@ -401,12 +401,27 @@ describe('createLanguageServerProvider', () => {
     expect(provider).toBeInstanceOf(TypeScriptLanguageServerProvider);
   });
 
-  it('should return null for unsupported language', async () => {
+  it('should return RubyLanguageServerProvider for Ruby language', async () => {
     const language: DetectedLanguage = {
       id: 'ruby',
       name: 'Ruby',
       fileExtensions: ['.rb'],
       serverCommand: ['solargraph', 'stdio'],
+      rootPath: '/test',
+    };
+
+    const provider = await createLanguageServerProvider(language);
+
+    expect(provider).toBeDefined();
+    expect(provider?.language.id).toBe('ruby');
+  });
+
+  it('should return null for truly unsupported language', async () => {
+    const language: DetectedLanguage = {
+      id: 'cobol',
+      name: 'COBOL',
+      fileExtensions: ['.cob'],
+      serverCommand: ['cobol-lsp'],
       rootPath: '/test',
     };
 

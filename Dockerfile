@@ -6,6 +6,7 @@ RUN apt-get update && apt-get install -y \
     # Basic utilities
     curl \
     git \
+    unzip \
     python3 \
     python3-pip \
     python3-venv \
@@ -31,13 +32,50 @@ RUN npm install -g \
     intelephense \
     @tailwindcss/language-server \
     vscode-langservers-extracted \
-    yaml-language-server
+    yaml-language-server \
+    bash-language-server
 
 # Install Go language server (use a stable version)
 RUN go install golang.org/x/tools/gopls@v0.16.1
 
 # Install Ruby language server
 RUN gem install solargraph
+
+# Install Rust analyzer
+RUN curl -L https://github.com/rust-lang/rust-analyzer/releases/latest/download/rust-analyzer-x86_64-unknown-linux-gnu.gz | \
+    gunzip -c - > /usr/local/bin/rust-analyzer && \
+    chmod +x /usr/local/bin/rust-analyzer
+
+# Install .NET SDK and C# language server
+RUN apt-get update && apt-get install -y wget && \
+    wget https://dot.net/v1/dotnet-install.sh -O dotnet-install.sh && \
+    chmod +x dotnet-install.sh && \
+    ./dotnet-install.sh --channel 8.0 --install-dir /usr/share/dotnet && \
+    ln -s /usr/share/dotnet/dotnet /usr/bin/dotnet && \
+    rm dotnet-install.sh && \
+    dotnet tool install --global csharp-ls && \
+    rm -rf /var/lib/apt/lists/*
+
+# Add .NET tools to PATH
+ENV PATH="/root/.dotnet/tools:$PATH"
+
+# Install Java LSP (eclipse.jdt.ls)
+RUN mkdir -p /opt/eclipse.jdt.ls && \
+    curl -L "https://download.eclipse.org/jdtls/snapshots/jdt-language-server-latest.tar.gz" | \
+    tar -xz -C /opt/eclipse.jdt.ls
+
+# Install Kotlin language server
+RUN curl -L "https://github.com/fwcd/kotlin-language-server/releases/latest/download/server.zip" -o /tmp/kotlin-ls.zip && \
+    unzip /tmp/kotlin-ls.zip -d /opt/kotlin-language-server && \
+    chmod +x /opt/kotlin-language-server/bin/kotlin-language-server && \
+    ln -s /opt/kotlin-language-server/bin/kotlin-language-server /usr/local/bin/kotlin-language-server && \
+    rm /tmp/kotlin-ls.zip
+
+# Install Swift (for Swift language server)
+# Note: Swift installation is complex and platform-specific
+# For production, consider using a Swift base image or installing via package manager
+# This is a placeholder - Swift LSP (sourcekit-lsp) comes with Swift toolchain
+RUN echo "Swift installation skipped - use swift:latest base image for Swift support"
 
 # Set up environment variables
 ENV PATH="/opt/python-lsp/bin:$PATH"

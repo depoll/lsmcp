@@ -5,7 +5,7 @@ import { existsSync } from 'fs';
 import { join } from 'path';
 import { DetectedLanguage } from './detector.js';
 import { logger } from '../utils/logger.js';
-import type { LanguageServerProvider } from './typescript-provider.js';
+import { LanguageServerProvider } from './provider.js';
 
 export class PythonLanguageServerProvider implements LanguageServerProvider {
   private isContainer: boolean;
