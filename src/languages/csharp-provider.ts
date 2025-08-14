@@ -34,9 +34,12 @@ export class CSharpLanguageServerProvider extends BaseLanguageServerProvider {
     logger.info('Installing OmniSharp...');
 
     // OmniSharp installation is complex and platform-specific
-    throw new Error(
-      'OmniSharp installation is complex and requires manual setup. ' +
-        'Please install OmniSharp manually from https://github.com/OmniSharp/omnisharp-roslyn'
+    // Using Promise.reject to satisfy async requirement
+    await Promise.reject(
+      new Error(
+        'OmniSharp installation is complex and requires manual setup. ' +
+          'Please install OmniSharp manually from https://github.com/OmniSharp/omnisharp-roslyn'
+      )
     );
   }
 
