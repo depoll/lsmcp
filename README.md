@@ -87,7 +87,7 @@ npm run build
 - **Python** - Full support with virtual environment detection (venv, Poetry, Pipenv, Conda)
 - **Rust** - rust-analyzer for Rust projects
 - **Go** - gopls for Go modules and packages
-- **C#/.NET** - csharp-ls for C# development
+- **C#/.NET** - OmniSharp for C# development
 - **Java** - Eclipse JDT.LS for Java projects
 - **C/C++/Objective-C** - clangd for C-family languages
 - **Bash/Shell** - bash-language-server for shell scripts

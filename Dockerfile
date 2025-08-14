@@ -46,15 +46,21 @@ RUN curl -L https://github.com/rust-lang/rust-analyzer/releases/latest/download/
     gunzip -c - > /usr/local/bin/rust-analyzer && \
     chmod +x /usr/local/bin/rust-analyzer
 
-# Install .NET SDK and C# language server
+# Install .NET SDK and OmniSharp C# language server
 RUN apt-get update && apt-get install -y wget && \
     wget https://dot.net/v1/dotnet-install.sh -O dotnet-install.sh && \
     chmod +x dotnet-install.sh && \
     ./dotnet-install.sh --channel 8.0 --install-dir /usr/share/dotnet && \
     ln -s /usr/share/dotnet/dotnet /usr/bin/dotnet && \
     rm dotnet-install.sh && \
-    dotnet tool install --global csharp-ls && \
     rm -rf /var/lib/apt/lists/*
+
+# Install OmniSharp separately as it's not a dotnet tool
+RUN mkdir -p /opt/omnisharp && \
+    curl -L https://github.com/OmniSharp/omnisharp-roslyn/releases/latest/download/omnisharp-linux-x64-net6.0.tar.gz | \
+    tar xz -C /opt/omnisharp && \
+    chmod +x /opt/omnisharp/OmniSharp && \
+    ln -s /opt/omnisharp/OmniSharp /usr/local/bin/omnisharp
 
 # Add .NET tools to PATH
 ENV PATH="/root/.dotnet/tools:$PATH"
@@ -67,8 +73,8 @@ RUN mkdir -p /opt/eclipse.jdt.ls && \
 # Install Kotlin language server
 RUN curl -L "https://github.com/fwcd/kotlin-language-server/releases/latest/download/server.zip" -o /tmp/kotlin-ls.zip && \
     unzip /tmp/kotlin-ls.zip -d /opt/kotlin-language-server && \
-    chmod +x /opt/kotlin-language-server/bin/kotlin-language-server && \
-    ln -s /opt/kotlin-language-server/bin/kotlin-language-server /usr/local/bin/kotlin-language-server && \
+    chmod +x /opt/kotlin-language-server/server/bin/kotlin-language-server && \
+    ln -s /opt/kotlin-language-server/server/bin/kotlin-language-server /usr/local/bin/kotlin-language-server && \
     rm /tmp/kotlin-ls.zip
 
 # Install Swift (for Swift language server)

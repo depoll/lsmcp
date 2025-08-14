@@ -150,7 +150,7 @@ export class LanguageDetector {
           id: 'csharp',
           name: 'C#',
           fileExtensions: ['.cs', '.csx', '.cake'],
-          serverCommand: ['csharp-ls'],
+          serverCommand: ['omnisharp', '-lsp'],
         },
       ],
       [

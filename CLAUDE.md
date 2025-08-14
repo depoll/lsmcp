@@ -160,7 +160,7 @@ The project implements:
   - ✅ Python (fully implemented with virtual environment detection)
   - ✅ Rust (rust-analyzer)
   - ✅ Go (gopls)
-  - ✅ C#/.NET (csharp-ls)
+  - ✅ C#/.NET (OmniSharp)
   - ✅ Java (Eclipse JDT.LS)
   - ✅ C/C++/Objective-C (clangd)
   - ✅ Bash/Shell (bash-language-server)
