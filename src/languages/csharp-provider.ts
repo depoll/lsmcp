@@ -20,25 +20,23 @@ export class CSharpLanguageServerProvider extends BaseLanguageServerProvider {
     }
   }
 
-  install(options?: { force?: boolean }): Promise<void> {
+  async install(options?: { force?: boolean }): Promise<void> {
     // In containers, language servers should already be pre-installed
     if (this.isContainer) {
       logger.info('Running in container - language servers should be pre-installed');
-      return Promise.reject(this.getContainerInstallError('OmniSharp'));
+      throw this.getContainerInstallError('OmniSharp');
     }
 
     if (!options?.force) {
-      return Promise.reject(this.getForceInstallError());
+      throw this.getForceInstallError();
     }
 
     logger.info('Installing OmniSharp...');
 
     // OmniSharp installation is complex and platform-specific
-    return Promise.reject(
-      new Error(
-        'OmniSharp installation is complex and requires manual setup. ' +
-          'Please install OmniSharp manually from https://github.com/OmniSharp/omnisharp-roslyn'
-      )
+    throw new Error(
+      'OmniSharp installation is complex and requires manual setup. ' +
+        'Please install OmniSharp manually from https://github.com/OmniSharp/omnisharp-roslyn'
     );
   }
 

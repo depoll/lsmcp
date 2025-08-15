@@ -74,9 +74,23 @@ export class RustLanguageServerProvider extends BaseLanguageServerProvider {
 
   private async downloadAndInstall(url: string, redirectCount = 0): Promise<void> {
     const MAX_REDIRECTS = 5;
+    const ALLOWED_HOSTS = [
+      'github.com',
+      'github-releases.githubusercontent.com',
+      'objects.githubusercontent.com',
+    ];
 
     if (redirectCount >= MAX_REDIRECTS) {
       throw new Error(`Too many redirects (max ${MAX_REDIRECTS})`);
+    }
+
+    // Validate URL is HTTPS and from allowed hosts
+    const parsedUrl = new URL(url);
+    if (parsedUrl.protocol !== 'https:') {
+      throw new Error('Only HTTPS URLs are allowed for downloads');
+    }
+    if (!ALLOWED_HOSTS.includes(parsedUrl.hostname)) {
+      throw new Error(`Download host not allowed: ${parsedUrl.hostname}`);
     }
 
     return new Promise((resolve, reject) => {
@@ -90,6 +104,23 @@ export class RustLanguageServerProvider extends BaseLanguageServerProvider {
               reject(new Error('Redirect URL not found'));
               return;
             }
+
+            // Validate redirect URL before following
+            try {
+              const redirectParsed = new URL(redirectUrl);
+              if (redirectParsed.protocol !== 'https:') {
+                reject(new Error('Redirect to non-HTTPS URL not allowed'));
+                return;
+              }
+              if (!ALLOWED_HOSTS.includes(redirectParsed.hostname)) {
+                reject(new Error(`Redirect to unauthorized host: ${redirectParsed.hostname}`));
+                return;
+              }
+            } catch (error) {
+              reject(new Error(`Invalid redirect URL: ${redirectUrl}`));
+              return;
+            }
+
             this.downloadAndInstall(redirectUrl, redirectCount + 1)
               .then(resolve)
               .catch(reject);
