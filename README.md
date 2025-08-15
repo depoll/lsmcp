@@ -84,7 +84,7 @@ npm run build
 ### Fully Implemented with Providers
 
 - **TypeScript/JavaScript** - Full support with automatic project detection
-- **Python** - Full support with virtual environment detection (venv, Poetry, Pipenv, Conda)
+- **Python** - Pyright for advanced type checking and language features
 - **Rust** - rust-analyzer for Rust projects
 - **Go** - gopls for Go modules and packages
 - **C#/.NET** - OmniSharp for C# development

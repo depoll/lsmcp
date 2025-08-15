@@ -21,14 +21,13 @@ RUN apt-get update && apt-get install -y \
     # Clean up
     && rm -rf /var/lib/apt/lists/*
 
-# Set up Python virtual environment for language servers
-RUN python3 -m venv /opt/python-lsp && \
-    /opt/python-lsp/bin/pip install python-lsp-server[all]
+# Python is now handled by Pyright (installed via npm below)
 
 # Install global language servers via npm
 RUN npm install -g \
     typescript-language-server \
     typescript \
+    pyright \
     intelephense \
     @tailwindcss/language-server \
     vscode-langservers-extracted \

@@ -78,27 +78,15 @@ export class LanguageDetector {
           id: 'python',
           name: 'Python',
           fileExtensions: ['.py', '.pyw', '.pyi'],
-          serverCommand: ['python', '-m', 'pylsp'],
+          serverCommand: ['pyright-langserver', '--stdio'],
           initializationOptions: {
-            pylsp: {
-              plugins: {
-                // Disable slow plugins for AI usage
-                pycodestyle: { enabled: false },
-                mccabe: { enabled: false },
-                pyflakes: { enabled: true },
-                pylint: { enabled: false },
-                // Enable fast, useful plugins
-                jedi_completion: {
-                  enabled: true,
-                  include_params: true,
-                  include_class_objects: true,
-                  fuzzy: true,
-                },
-                jedi_definition: { enabled: true },
-                jedi_hover: { enabled: true },
-                jedi_references: { enabled: true },
-                jedi_signature_help: { enabled: true },
-                jedi_symbols: { enabled: true },
+            // Pyright configuration options
+            python: {
+              analysis: {
+                autoSearchPaths: true,
+                useLibraryCodeForTypes: true,
+                autoImportCompletions: true,
+                typeCheckingMode: 'basic', // 'off', 'basic', or 'strict'
               },
             },
           },

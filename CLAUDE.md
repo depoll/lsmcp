@@ -157,7 +157,7 @@ The project implements:
   - `pino` - Logging
 - **Supported Languages** (20+ languages):
   - ✅ TypeScript/JavaScript (fully implemented)
-  - ✅ Python (fully implemented with virtual environment detection)
+  - ✅ Python (Pyright for type checking and language features)
   - ✅ Rust (rust-analyzer)
   - ✅ Go (gopls)
   - ✅ C#/.NET (OmniSharp)
