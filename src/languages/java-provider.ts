@@ -5,6 +5,8 @@ import { BaseLanguageServerProvider } from './base-provider.js';
 import { glob } from 'glob';
 
 export class JavaLanguageServerProvider extends BaseLanguageServerProvider {
+  private cachedLauncherJar: string | null = null;
+
   async isAvailable(): Promise<boolean> {
     try {
       // Check if Java is available first
@@ -20,6 +22,17 @@ export class JavaLanguageServerProvider extends BaseLanguageServerProvider {
         return false;
       }
 
+      // Use cached launcher jar if available
+      if (this.cachedLauncherJar) {
+        try {
+          await access(this.cachedLauncherJar, constants.F_OK);
+          return true;
+        } catch {
+          // Cache is stale, clear it
+          this.cachedLauncherJar = null;
+        }
+      }
+
       // Find the launcher jar using async glob
       const launcherJars = await glob(
         join(jdtlsPath, 'plugins/org.eclipse.equinox.launcher_*.jar')
@@ -29,6 +42,9 @@ export class JavaLanguageServerProvider extends BaseLanguageServerProvider {
         logger.warn('Eclipse JDT.LS launcher jar not found');
         return false;
       }
+
+      // Cache the first launcher jar found
+      this.cachedLauncherJar = launcherJars[0];
 
       logger.info('Java language server (Eclipse JDT.LS) is available');
       return true;

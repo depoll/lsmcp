@@ -72,7 +72,13 @@ export class RustLanguageServerProvider extends BaseLanguageServerProvider {
     }
   }
 
-  private async downloadAndInstall(url: string): Promise<void> {
+  private async downloadAndInstall(url: string, redirectCount = 0): Promise<void> {
+    const MAX_REDIRECTS = 5;
+
+    if (redirectCount >= MAX_REDIRECTS) {
+      throw new Error(`Too many redirects (max ${MAX_REDIRECTS})`);
+    }
+
     return new Promise((resolve, reject) => {
       // Follow redirects to get the actual download URL
       https
@@ -84,7 +90,9 @@ export class RustLanguageServerProvider extends BaseLanguageServerProvider {
               reject(new Error('Redirect URL not found'));
               return;
             }
-            this.downloadAndInstall(redirectUrl).then(resolve).catch(reject);
+            this.downloadAndInstall(redirectUrl, redirectCount + 1)
+              .then(resolve)
+              .catch(reject);
             return;
           }
 

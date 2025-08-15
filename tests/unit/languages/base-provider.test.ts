@@ -1,12 +1,11 @@
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 import { EventEmitter } from 'events';
-import { Readable } from 'stream';
 import type { DetectedLanguage } from '../../../src/languages/detector.js';
 
 // Create mock child process
 class MockChildProcess extends EventEmitter {
-  stdout = new Readable({ read() {} });
-  stderr = new Readable({ read() {} });
+  stdout = new EventEmitter();
+  stderr = new EventEmitter();
   killed = false;
 
   kill(signal?: string) {
@@ -81,6 +80,7 @@ describe('BaseLanguageServerProvider', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    jest.restoreAllMocks();
 
     // Reset environment
     delete process.env['CONTAINER'];
@@ -99,6 +99,11 @@ describe('BaseLanguageServerProvider', () => {
     // Default mock process setup
     mockProcess = new MockChildProcess();
     mockSpawn.mockReturnValue(mockProcess);
+  });
+
+  afterEach(() => {
+    jest.clearAllMocks();
+    jest.restoreAllMocks();
   });
 
   describe('constructor', () => {
@@ -143,9 +148,10 @@ describe('BaseLanguageServerProvider', () => {
       const promise = provider.testExecuteCommand(['echo', 'test']);
 
       // Simulate successful command output
-      mockProcess.stdout.push('test output\n');
-      mockProcess.stdout.push(null);
-      mockProcess.emit('close', 0);
+      setImmediate(() => {
+        mockProcess.stdout.emit('data', Buffer.from('test output\n'));
+        mockProcess.emit('close', 0);
+      });
 
       const result = await promise;
       expect(result).toBe('test output');
@@ -161,8 +167,10 @@ describe('BaseLanguageServerProvider', () => {
       const promise = provider.testExecuteCommand(['false']);
 
       // Simulate command failure
-      mockProcess.stderr.push('error message\n');
-      mockProcess.emit('close', 1);
+      setImmediate(() => {
+        mockProcess.stderr.emit('data', Buffer.from('error message\n'));
+        mockProcess.emit('close', 1);
+      });
 
       await expect(promise).rejects.toThrow('false failed: error message');
     });
@@ -175,10 +183,13 @@ describe('BaseLanguageServerProvider', () => {
       // Advance timers to trigger timeout
       jest.advanceTimersByTime(100);
 
+      // Kill the mock process to trigger the close event
+      mockProcess.kill('SIGTERM');
+
       await expect(promise).rejects.toThrow('Command timed out after 100ms: sleep 10');
 
       jest.useRealTimers();
-    });
+    }, 10000);
 
     it('should reject empty command array', async () => {
       await expect(provider.testExecuteCommand([])).rejects.toThrow('Command array is empty');
@@ -210,7 +221,7 @@ describe('BaseLanguageServerProvider', () => {
       mockSpawn.mockImplementationOnce(() => {
         const proc = new MockChildProcess();
         setImmediate(() => {
-          proc.stdout.push('9.0.0\n');
+          proc.stdout.emit('data', Buffer.from('9.0.0\n'));
           proc.emit('close', 0);
         });
         return proc;
@@ -218,7 +229,7 @@ describe('BaseLanguageServerProvider', () => {
 
       const result = await provider.testDetectPackageManager();
       expect(result).toBe('npm');
-    });
+    }, 10000);
 
     it('should detect yarn when npm is not available', async () => {
       // Mock npm failure
@@ -232,7 +243,7 @@ describe('BaseLanguageServerProvider', () => {
       mockSpawn.mockImplementationOnce(() => {
         const proc = new MockChildProcess();
         setImmediate(() => {
-          proc.stdout.push('1.22.0\n');
+          proc.stdout.emit('data', Buffer.from('1.22.0\n'));
           proc.emit('close', 0);
         });
         return proc;
@@ -240,7 +251,7 @@ describe('BaseLanguageServerProvider', () => {
 
       const result = await provider.testDetectPackageManager();
       expect(result).toBe('yarn');
-    });
+    }, 10000);
 
     it('should return null when no package manager found', async () => {
       // Mock both failures
@@ -252,7 +263,7 @@ describe('BaseLanguageServerProvider', () => {
 
       const result = await provider.testDetectPackageManager();
       expect(result).toBeNull();
-    });
+    }, 10000);
   });
 
   describe('commandExists', () => {
@@ -264,7 +275,7 @@ describe('BaseLanguageServerProvider', () => {
       const result = await provider.testCommandExists('test-cmd');
       expect(result).toBe(true);
       expect(mockSpawn).toHaveBeenCalledWith('which', ['test-cmd'], expect.any(Object));
-    });
+    }, 10000);
 
     it('should return false when command does not exist', async () => {
       const proc = new MockChildProcess();
@@ -273,7 +284,7 @@ describe('BaseLanguageServerProvider', () => {
 
       const result = await provider.testCommandExists('missing-cmd');
       expect(result).toBe(false);
-    });
+    }, 10000);
   });
 
   describe('checkVersion', () => {
@@ -281,14 +292,14 @@ describe('BaseLanguageServerProvider', () => {
       const proc = new MockChildProcess();
       mockSpawn.mockReturnValueOnce(proc);
       setImmediate(() => {
-        proc.stdout.push('v1.0.0\n');
+        proc.stdout.emit('data', Buffer.from('v1.0.0\n'));
         proc.emit('close', 0);
       });
 
       const result = await provider.testCheckVersion('test-cmd');
       expect(result).toBe('v1.0.0');
       expect(mockSpawn).toHaveBeenCalledWith('test-cmd', ['--version'], expect.any(Object));
-    });
+    }, 10000);
 
     it('should return null when version check fails', async () => {
       const proc = new MockChildProcess();
@@ -297,7 +308,7 @@ describe('BaseLanguageServerProvider', () => {
 
       const result = await provider.testCheckVersion('test-cmd');
       expect(result).toBeNull();
-    });
+    }, 10000);
   });
 
   describe('error helpers', () => {

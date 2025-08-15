@@ -118,7 +118,7 @@ export abstract class BaseLanguageServerProvider implements LanguageServerProvid
         } else if (code === 0) {
           resolve(stdout.trim());
         } else {
-          const errorMessage = stderr || `Command failed with code ${code}`;
+          const errorMessage = stderr.trim() || `Command failed with code ${code}`;
           reject(new Error(`${cmd} failed: ${errorMessage}`));
         }
       });
