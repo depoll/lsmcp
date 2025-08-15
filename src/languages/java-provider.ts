@@ -43,8 +43,8 @@ export class JavaLanguageServerProvider extends BaseLanguageServerProvider {
         return false;
       }
 
-      // Cache the first launcher jar found
-      this.cachedLauncherJar = launcherJars[0];
+      // Cache the first launcher jar found (we know it exists due to length check)
+      this.cachedLauncherJar = launcherJars[0] ?? null;
 
       logger.info('Java language server (Eclipse JDT.LS) is available');
       return true;
