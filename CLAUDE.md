@@ -155,10 +155,22 @@ The project implements:
   - `vscode-languageclient` - LSP client
   - `jest` - Testing framework
   - `pino` - Logging
-- **Supported Languages**:
+- **Supported Languages** (20+ languages):
   - ✅ TypeScript/JavaScript (fully implemented)
-  - ✅ Python (fully implemented with virtual environment detection)
-  - (Extensible to any LSP-compatible language)
+  - ✅ Python (Pyright for type checking and language features)
+  - ✅ Rust (rust-analyzer)
+  - ✅ Go (gopls)
+  - ✅ C#/.NET (OmniSharp)
+  - ✅ Java (Eclipse JDT.LS)
+  - ✅ C/C++/Objective-C (clangd)
+  - ✅ Bash/Shell (bash-language-server)
+  - ✅ JSON (with schema validation)
+  - ✅ YAML (yaml-language-server)
+  - ✅ HTML/CSS/SCSS/SASS/LESS (vscode language servers)
+  - ✅ Ruby (Solargraph)
+  - ✅ PHP (Intelephense)
+  - ✅ Kotlin (kotlin-language-server)
+  - ✅ Swift (SourceKit-LSP)
 - **License**: Apache License 2.0
 
 ## Testing Strategy

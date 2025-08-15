@@ -49,6 +49,7 @@ jest.unstable_mockModule('child_process', () => ({
 
 jest.unstable_mockModule('fs', () => ({
   existsSync: mockExistsSync,
+  constants: { F_OK: 0, R_OK: 4, W_OK: 2, X_OK: 1 },
 }));
 
 // Import after mocks
@@ -300,9 +301,13 @@ describe('TypeScriptLanguageServerProvider', () => {
 
     describe('in container environment', () => {
       beforeEach(() => {
-        // Mock container environment - use /.dockerenv file detection
-        mockExistsSync.mockImplementation((path: string) => path === '/.dockerenv');
+        // Mock container environment using environment variable
+        process.env['CONTAINER'] = 'true';
         provider = new TypeScriptLanguageServerProvider(mockLanguage);
+      });
+
+      afterEach(() => {
+        delete process.env['CONTAINER'];
       });
 
       it('should reject installation in containers', async () => {
@@ -401,12 +406,27 @@ describe('createLanguageServerProvider', () => {
     expect(provider).toBeInstanceOf(TypeScriptLanguageServerProvider);
   });
 
-  it('should return null for unsupported language', async () => {
+  it('should return RubyLanguageServerProvider for Ruby language', async () => {
     const language: DetectedLanguage = {
       id: 'ruby',
       name: 'Ruby',
       fileExtensions: ['.rb'],
       serverCommand: ['solargraph', 'stdio'],
+      rootPath: '/test',
+    };
+
+    const provider = await createLanguageServerProvider(language);
+
+    expect(provider).toBeDefined();
+    expect(provider?.language.id).toBe('ruby');
+  });
+
+  it('should return null for truly unsupported language', async () => {
+    const language: DetectedLanguage = {
+      id: 'cobol',
+      name: 'COBOL',
+      fileExtensions: ['.cob'],
+      serverCommand: ['cobol-lsp'],
       rootPath: '/test',
     };
 

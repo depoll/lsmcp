@@ -267,7 +267,8 @@ describe('DiagnosticsTool Integration', () => {
   describe('Python diagnostics', () => {
     it('should detect Python syntax errors', async () => {
       if (!hasPythonServer) {
-        pending('Python language server not installed');
+        console.log('Skipping test: Python language server not installed');
+        return;
       }
       const filePath = path.join(testDir, 'syntax-error.py');
       await fs.writeFile(
@@ -298,7 +299,8 @@ def add(a, b)
 
     it('should detect Python type errors with type hints', async () => {
       if (!hasPythonServer) {
-        pending('Python language server not installed');
+        console.log('Skipping test: Python language server not installed');
+        return;
       }
       const filePath = path.join(testDir, 'type-hints.py');
       await fs.writeFile(

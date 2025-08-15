@@ -77,19 +77,28 @@ npm run build
 - **Zero-Config Language Support**:
   - Automatic language detection
   - Pre-installed language servers
-  - Support for 10+ programming languages
+  - Support for 20+ programming languages
 
 ## Supported Languages
 
+### Fully Implemented with Providers
+
 - **TypeScript/JavaScript** - Full support with automatic project detection
-- **Python** - Full support with virtual environment detection (venv, Poetry, Pipenv, Conda)
-- Go (configuration available)
-- Rust (configuration available)
-- Java (configuration available)
-- C/C++ (configuration available)
-- Ruby (configuration available)
-- PHP (configuration available)
-- And more...
+- **Python** - Pyright for advanced type checking and language features
+- **Rust** - rust-analyzer for Rust projects
+- **Go** - gopls for Go modules and packages
+- **C#/.NET** - OmniSharp for C# development
+- **Java** - Eclipse JDT.LS for Java projects
+- **C/C++/Objective-C** - clangd for C-family languages
+- **Bash/Shell** - bash-language-server for shell scripts
+- **JSON** - Schema validation and IntelliSense
+- **YAML** - YAML language server with schema support
+- **HTML** - HTML language server with tag completion
+- **CSS/SCSS/SASS/LESS** - CSS language server with property completion
+- **Ruby** - Solargraph for Ruby development
+- **PHP** - Intelephense for PHP projects
+- **Kotlin** - Kotlin language server
+- **Swift** - SourceKit-LSP for Swift development
 
 ## Architecture
 
