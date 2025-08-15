@@ -20,6 +20,7 @@ export class CSharpLanguageServerProvider extends BaseLanguageServerProvider {
     }
   }
 
+  // eslint-disable-next-line @typescript-eslint/require-await
   async install(options?: { force?: boolean }): Promise<void> {
     // In containers, language servers should already be pre-installed
     if (this.isContainer) {
@@ -34,12 +35,9 @@ export class CSharpLanguageServerProvider extends BaseLanguageServerProvider {
     logger.info('Installing OmniSharp...');
 
     // OmniSharp installation is complex and platform-specific
-    // Using Promise.reject to satisfy async requirement
-    await Promise.reject(
-      new Error(
-        'OmniSharp installation is complex and requires manual setup. ' +
-          'Please install OmniSharp manually from https://github.com/OmniSharp/omnisharp-roslyn'
-      )
+    throw new Error(
+      'OmniSharp installation is complex and requires manual setup. ' +
+        'Please install OmniSharp manually from https://github.com/OmniSharp/omnisharp-roslyn'
     );
   }
 

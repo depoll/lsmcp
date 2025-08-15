@@ -37,10 +37,7 @@ export class GoLanguageServerProvider extends BaseLanguageServerProvider {
     // In containers, language servers should already be pre-installed
     if (this.isContainer) {
       logger.info('Running in container - language servers should be pre-installed');
-      throw new Error(
-        'Language server installation in containers is not supported. ' +
-          'The gopls should be pre-installed in the container image.'
-      );
+      throw this.getContainerInstallError('gopls');
     }
 
     if (!options?.force) {
@@ -66,10 +63,7 @@ export class GoLanguageServerProvider extends BaseLanguageServerProvider {
       logger.info(`gopls installed to ${gopath}/bin. Make sure this directory is in your PATH.`);
     } catch (error) {
       logger.error({ error }, 'Failed to install gopls');
-      throw new Error(
-        'Failed to install gopls. ' +
-          'Please install it manually: go install golang.org/x/tools/gopls@latest'
-      );
+      throw this.getManualInstallError('gopls', 'go install golang.org/x/tools/gopls@latest');
     }
   }
 
