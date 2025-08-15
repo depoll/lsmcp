@@ -20,6 +20,7 @@ export class CSharpLanguageServerProvider extends BaseLanguageServerProvider {
     }
   }
 
+  // eslint-disable-next-line @typescript-eslint/require-await
   async install(options?: { force?: boolean }): Promise<void> {
     // In containers, language servers should already be pre-installed
     if (this.isContainer) {

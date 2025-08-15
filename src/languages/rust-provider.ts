@@ -116,7 +116,7 @@ export class RustLanguageServerProvider extends BaseLanguageServerProvider {
                 reject(new Error(`Redirect to unauthorized host: ${redirectParsed.hostname}`));
                 return;
               }
-            } catch (error) {
+            } catch {
               reject(new Error(`Invalid redirect URL: ${redirectUrl}`));
               return;
             }
