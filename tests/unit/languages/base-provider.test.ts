@@ -80,7 +80,6 @@ describe('BaseLanguageServerProvider', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    jest.restoreAllMocks();
 
     // Reset environment
     delete process.env['CONTAINER'];
@@ -103,7 +102,6 @@ describe('BaseLanguageServerProvider', () => {
 
   afterEach(() => {
     jest.clearAllMocks();
-    jest.restoreAllMocks();
   });
 
   describe('constructor', () => {
@@ -176,19 +174,18 @@ describe('BaseLanguageServerProvider', () => {
     });
 
     it('should handle command timeout', async () => {
-      jest.useFakeTimers();
-
+      // This test needs real timers to work properly with async operations
+      const startTime = Date.now();
       const promise = provider.testExecuteCommand(['sleep', '10'], 100);
 
-      // Advance timers to trigger timeout
-      jest.advanceTimersByTime(100);
-
-      // Kill the mock process to trigger the close event
-      mockProcess.kill('SIGTERM');
+      // Don't emit any close event, let the timeout trigger
 
       await expect(promise).rejects.toThrow('Command timed out after 100ms: sleep 10');
 
-      jest.useRealTimers();
+      // Verify it actually timed out around 100ms
+      const elapsed = Date.now() - startTime;
+      expect(elapsed).toBeGreaterThanOrEqual(95);
+      expect(elapsed).toBeLessThan(200);
     }, 10000);
 
     it('should reject empty command array', async () => {
@@ -218,13 +215,13 @@ describe('BaseLanguageServerProvider', () => {
   describe('detectPackageManager', () => {
     it('should detect npm', async () => {
       // Mock npm version check success
-      mockSpawn.mockImplementationOnce(() => {
-        const proc = new MockChildProcess();
-        setImmediate(() => {
-          proc.stdout.emit('data', Buffer.from('9.0.0\n'));
-          proc.emit('close', 0);
-        });
-        return proc;
+      const proc = new MockChildProcess();
+      mockSpawn.mockReturnValueOnce(proc);
+
+      // Trigger the events after the process is returned
+      setImmediate(() => {
+        proc.stdout.emit('data', Buffer.from('9.0.0\n'));
+        proc.emit('close', 0);
       });
 
       const result = await provider.testDetectPackageManager();
@@ -233,20 +230,24 @@ describe('BaseLanguageServerProvider', () => {
 
     it('should detect yarn when npm is not available', async () => {
       // Mock npm failure
-      mockSpawn.mockImplementationOnce(() => {
-        const proc = new MockChildProcess();
-        setImmediate(() => proc.emit('close', 1));
-        return proc;
-      });
+      const npmProc = new MockChildProcess();
+      mockSpawn.mockReturnValueOnce(npmProc);
 
       // Mock yarn success
-      mockSpawn.mockImplementationOnce(() => {
-        const proc = new MockChildProcess();
+      const yarnProc = new MockChildProcess();
+      mockSpawn.mockReturnValueOnce(yarnProc);
+
+      // Trigger npm failure first
+      setImmediate(() => {
+        npmProc.emit('close', 1); // npm fails
+      });
+
+      // Then trigger yarn success
+      setImmediate(() => {
         setImmediate(() => {
-          proc.stdout.emit('data', Buffer.from('1.22.0\n'));
-          proc.emit('close', 0);
+          yarnProc.stdout.emit('data', Buffer.from('1.22.0\n'));
+          yarnProc.emit('close', 0); // yarn succeeds
         });
-        return proc;
       });
 
       const result = await provider.testDetectPackageManager();
@@ -255,10 +256,21 @@ describe('BaseLanguageServerProvider', () => {
 
     it('should return null when no package manager found', async () => {
       // Mock both failures
-      mockSpawn.mockImplementation(() => {
-        const proc = new MockChildProcess();
-        setImmediate(() => proc.emit('close', 1));
-        return proc;
+      const npmProc = new MockChildProcess();
+      const yarnProc = new MockChildProcess();
+
+      mockSpawn.mockReturnValueOnce(npmProc).mockReturnValueOnce(yarnProc);
+
+      // Emit npm failure
+      setImmediate(() => {
+        npmProc.emit('close', 1);
+      });
+
+      // Emit yarn failure after npm
+      setImmediate(() => {
+        setImmediate(() => {
+          yarnProc.emit('close', 1);
+        });
       });
 
       const result = await provider.testDetectPackageManager();
@@ -291,6 +303,7 @@ describe('BaseLanguageServerProvider', () => {
     it('should return version when command supports --version', async () => {
       const proc = new MockChildProcess();
       mockSpawn.mockReturnValueOnce(proc);
+
       setImmediate(() => {
         proc.stdout.emit('data', Buffer.from('v1.0.0\n'));
         proc.emit('close', 0);
