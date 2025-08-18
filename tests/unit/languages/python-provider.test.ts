@@ -6,6 +6,7 @@ const mockExistsSync = jest.fn<typeof import('fs').existsSync>();
 
 jest.unstable_mockModule('fs', () => ({
   existsSync: mockExistsSync,
+  constants: { F_OK: 0, R_OK: 4, W_OK: 2, X_OK: 1 },
 }));
 
 // Import after mocking
@@ -27,7 +28,7 @@ describe('PythonLanguageServerProvider', () => {
       id: 'python',
       name: 'Python',
       fileExtensions: ['.py', '.pyw', '.pyi'],
-      serverCommand: ['python', '-m', 'pylsp'],
+      serverCommand: ['pyright-langserver', '--stdio'],
       rootPath: '/test/project',
     };
 
@@ -55,9 +56,9 @@ describe('PythonLanguageServerProvider', () => {
   });
 
   describe('getCommand', () => {
-    it('should return default command when no Python detected', () => {
+    it('should return default command', () => {
       const command = provider.getCommand();
-      expect(command).toEqual(['python', '-m', 'pylsp']);
+      expect(command).toEqual(['pyright-langserver', '--stdio']);
     });
   });
 

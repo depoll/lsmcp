@@ -78,30 +78,190 @@ export class LanguageDetector {
           id: 'python',
           name: 'Python',
           fileExtensions: ['.py', '.pyw', '.pyi'],
-          serverCommand: ['python', '-m', 'pylsp'],
+          serverCommand: ['pyright-langserver', '--stdio'],
           initializationOptions: {
-            pylsp: {
-              plugins: {
-                // Disable slow plugins for AI usage
-                pycodestyle: { enabled: false },
-                mccabe: { enabled: false },
-                pyflakes: { enabled: true },
-                pylint: { enabled: false },
-                // Enable fast, useful plugins
-                jedi_completion: {
-                  enabled: true,
-                  include_params: true,
-                  include_class_objects: true,
-                  fuzzy: true,
-                },
-                jedi_definition: { enabled: true },
-                jedi_hover: { enabled: true },
-                jedi_references: { enabled: true },
-                jedi_signature_help: { enabled: true },
-                jedi_symbols: { enabled: true },
+            // Pyright configuration options
+            python: {
+              analysis: {
+                autoSearchPaths: true,
+                useLibraryCodeForTypes: true,
+                autoImportCompletions: true,
+                typeCheckingMode: 'basic', // 'off', 'basic', or 'strict'
               },
             },
           },
+        },
+      ],
+      [
+        'rust',
+        {
+          id: 'rust',
+          name: 'Rust',
+          fileExtensions: ['.rs', '.toml'],
+          serverCommand: ['rust-analyzer'],
+          initializationOptions: {
+            checkOnSave: {
+              command: 'clippy',
+            },
+          },
+        },
+      ],
+      [
+        'go',
+        {
+          id: 'go',
+          name: 'Go',
+          fileExtensions: ['.go', '.mod'],
+          serverCommand: ['gopls'],
+          initializationOptions: {
+            // Enable all analyses
+            analyses: {
+              unusedparams: true,
+              unusedresult: true,
+            },
+            // Enable inlay hints
+            hints: {
+              assignVariableTypes: true,
+              compositeLiteralFields: true,
+              compositeLiteralTypes: true,
+              constantValues: true,
+              functionTypeParameters: true,
+              parameterNames: true,
+              rangeVariableTypes: true,
+            },
+          },
+        },
+      ],
+      [
+        'csharp',
+        {
+          id: 'csharp',
+          name: 'C#',
+          fileExtensions: ['.cs', '.csx', '.cake'],
+          serverCommand: ['omnisharp', '-lsp'],
+        },
+      ],
+      [
+        'java',
+        {
+          id: 'java',
+          name: 'Java',
+          fileExtensions: ['.java'],
+          serverCommand: [
+            'java',
+            '-jar',
+            '/opt/eclipse.jdt.ls/plugins/org.eclipse.equinox.launcher_*.jar',
+            '-configuration',
+            '/opt/eclipse.jdt.ls/config_linux',
+          ],
+        },
+      ],
+      [
+        'c',
+        {
+          id: 'c',
+          name: 'C',
+          fileExtensions: ['.c', '.h'],
+          serverCommand: ['clangd'],
+        },
+      ],
+      [
+        'cpp',
+        {
+          id: 'cpp',
+          name: 'C++',
+          fileExtensions: ['.cpp', '.cc', '.cxx', '.hpp', '.hh', '.hxx', '.h++'],
+          serverCommand: ['clangd'],
+        },
+      ],
+      [
+        'objective-c',
+        {
+          id: 'objective-c',
+          name: 'Objective-C',
+          fileExtensions: ['.m', '.mm'],
+          serverCommand: ['clangd'],
+        },
+      ],
+      [
+        'bash',
+        {
+          id: 'bash',
+          name: 'Bash',
+          fileExtensions: ['.sh', '.bash', '.zsh', '.fish'],
+          serverCommand: ['bash-language-server'],
+        },
+      ],
+      [
+        'json',
+        {
+          id: 'json',
+          name: 'JSON',
+          fileExtensions: ['.json', '.jsonc', '.json5'],
+          serverCommand: ['vscode-json-language-server'],
+        },
+      ],
+      [
+        'yaml',
+        {
+          id: 'yaml',
+          name: 'YAML',
+          fileExtensions: ['.yaml', '.yml'],
+          serverCommand: ['yaml-language-server', '--stdio'],
+        },
+      ],
+      [
+        'html',
+        {
+          id: 'html',
+          name: 'HTML',
+          fileExtensions: ['.html', '.htm'],
+          serverCommand: ['vscode-html-language-server', '--stdio'],
+        },
+      ],
+      [
+        'css',
+        {
+          id: 'css',
+          name: 'CSS',
+          fileExtensions: ['.css', '.scss', '.sass', '.less'],
+          serverCommand: ['vscode-css-language-server', '--stdio'],
+        },
+      ],
+      [
+        'ruby',
+        {
+          id: 'ruby',
+          name: 'Ruby',
+          fileExtensions: ['.rb', '.erb', '.rake', '.gemspec'],
+          serverCommand: ['solargraph', 'stdio'],
+        },
+      ],
+      [
+        'php',
+        {
+          id: 'php',
+          name: 'PHP',
+          fileExtensions: ['.php', '.phtml', '.php3', '.php4', '.php5', '.php7', '.phps'],
+          serverCommand: ['intelephense', '--stdio'],
+        },
+      ],
+      [
+        'kotlin',
+        {
+          id: 'kotlin',
+          name: 'Kotlin',
+          fileExtensions: ['.kt', '.kts', '.ktm'],
+          serverCommand: ['kotlin-language-server'],
+        },
+      ],
+      [
+        'swift',
+        {
+          id: 'swift',
+          name: 'Swift',
+          fileExtensions: ['.swift'],
+          serverCommand: ['sourcekit-lsp'],
         },
       ],
     ]);
@@ -109,6 +269,98 @@ export class LanguageDetector {
 
   async detectLanguage(rootPath: string): Promise<DetectedLanguage | null> {
     logger.info({ rootPath }, 'Detecting language for project');
+
+    // Check for Rust project files
+    if (existsSync(join(rootPath, 'Cargo.toml'))) {
+      logger.info({ rootPath }, 'Detected Rust project (Cargo.toml found)');
+      const config = this.languageConfigs.get('rust')!;
+      return { ...config, rootPath };
+    }
+
+    // Check for Go project files
+    if (existsSync(join(rootPath, 'go.mod'))) {
+      logger.info({ rootPath }, 'Detected Go project (go.mod found)');
+      const config = this.languageConfigs.get('go')!;
+      return { ...config, rootPath };
+    }
+
+    // Check for C# project files
+    const csharpFiles = ['.csproj', '.sln', '.fsproj', '.vbproj'];
+    for (const extension of csharpFiles) {
+      try {
+        const hasCSharpProject = readdirSync(rootPath).some((file) => file.endsWith(extension));
+        if (hasCSharpProject) {
+          logger.info({ rootPath, extension }, 'Detected C# project');
+          const config = this.languageConfigs.get('csharp')!;
+          return { ...config, rootPath };
+        }
+      } catch (e) {
+        logger.warn({ error: e, rootPath }, 'Failed to read directory for C# files');
+      }
+    }
+
+    // Check for Java project files
+    const javaProjectFiles = ['pom.xml', 'build.gradle', 'build.gradle.kts'];
+    for (const file of javaProjectFiles) {
+      if (existsSync(join(rootPath, file))) {
+        logger.info({ rootPath, file }, 'Detected Java project');
+        const config = this.languageConfigs.get('java')!;
+        return { ...config, rootPath };
+      }
+    }
+
+    // Check for Kotlin project files (often alongside Java)
+    if (
+      existsSync(join(rootPath, 'build.gradle.kts')) ||
+      existsSync(join(rootPath, 'settings.gradle.kts'))
+    ) {
+      logger.info({ rootPath }, 'Detected Kotlin project');
+      const config = this.languageConfigs.get('kotlin')!;
+      return { ...config, rootPath };
+    }
+
+    // Check for Swift project files
+    if (existsSync(join(rootPath, 'Package.swift')) || existsSync(join(rootPath, '.swiftpm'))) {
+      logger.info({ rootPath }, 'Detected Swift project');
+      const config = this.languageConfigs.get('swift')!;
+      return { ...config, rootPath };
+    }
+
+    // Check for C/C++ project files
+    const cppProjectFiles = [
+      'CMakeLists.txt',
+      'Makefile',
+      '.clang-format',
+      'compile_commands.json',
+    ];
+    for (const file of cppProjectFiles) {
+      if (existsSync(join(rootPath, file))) {
+        logger.info({ rootPath, file }, 'Detected C/C++ project');
+        // Default to C++ as it's more common and clangd handles both
+        const config = this.languageConfigs.get('cpp')!;
+        return { ...config, rootPath };
+      }
+    }
+
+    // Check for Ruby project files
+    const rubyFiles = ['Gemfile', 'Rakefile', '.ruby-version', '.rvmrc'];
+    for (const file of rubyFiles) {
+      if (existsSync(join(rootPath, file))) {
+        logger.info({ rootPath, file }, 'Detected Ruby project');
+        const config = this.languageConfigs.get('ruby')!;
+        return { ...config, rootPath };
+      }
+    }
+
+    // Check for PHP project files
+    const phpFiles = ['composer.json', 'composer.lock', '.php-version'];
+    for (const file of phpFiles) {
+      if (existsSync(join(rootPath, file))) {
+        logger.info({ rootPath, file }, 'Detected PHP project');
+        const config = this.languageConfigs.get('php')!;
+        return { ...config, rootPath };
+      }
+    }
 
     // Check for Python project files
     const pythonFiles = [

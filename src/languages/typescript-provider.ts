@@ -1,63 +1,30 @@
-import { spawn } from 'child_process';
-import type { ChildProcessByStdio } from 'child_process';
-import type { Readable } from 'stream';
-import { existsSync } from 'fs';
 import { DetectedLanguage } from './detector.js';
 import { logger } from '../utils/logger.js';
+import { BaseLanguageServerProvider } from './base-provider.js';
 
-export interface LanguageServerProvider {
-  language: DetectedLanguage;
-  isAvailable(): Promise<boolean>;
-  install(options?: { force?: boolean }): Promise<void>;
-  getCommand(): string[];
-}
-
-export class TypeScriptLanguageServerProvider implements LanguageServerProvider {
-  private isContainer: boolean;
-
-  constructor(public readonly language: DetectedLanguage) {
-    this.isContainer = this.detectContainer();
-  }
-
-  private detectContainer(): boolean {
-    return (
-      process.env['CONTAINER'] === 'true' ||
-      process.env['DOCKER'] === 'true' ||
-      // Check for /.dockerenv file (most reliable container indicator)
-      existsSync('/.dockerenv')
-    );
-  }
-
+export class TypeScriptLanguageServerProvider extends BaseLanguageServerProvider {
   async isAvailable(): Promise<boolean> {
-    try {
-      // Try simple which check (Unix-style since we're container-first)
-      await this.executeCommand(['which', 'typescript-language-server']);
+    // Try simple which check first
+    if (await this.commandExists('typescript-language-server')) {
       logger.info('TypeScript language server found in PATH');
       return true;
-    } catch (whichError) {
-      logger.debug(
-        { whichError },
-        'TypeScript language server not found via which, trying version check'
-      );
+    }
 
-      try {
-        // Try direct version check
-        const result = await this.executeCommand(['typescript-language-server', '--version']);
-        logger.info({ version: result }, 'TypeScript language server is available');
-        return true;
-      } catch (versionError) {
-        logger.warn({ versionError }, 'TypeScript language server version check failed');
+    // Try direct version check
+    const version = await this.checkVersion('typescript-language-server');
+    if (version) {
+      logger.info({ version }, 'TypeScript language server is available');
+      return true;
+    }
 
-        // Last resort: check if it's installed globally via npm
-        try {
-          await this.executeCommand(['npm', 'list', '-g', 'typescript-language-server']);
-          logger.info('TypeScript language server found via npm list');
-          return true;
-        } catch (npmError) {
-          logger.error({ npmError }, 'TypeScript language server not found via any method');
-          return false;
-        }
-      }
+    // Last resort: check if it's installed globally via npm
+    try {
+      await this.executeCommand(['npm', 'list', '-g', 'typescript-language-server']);
+      logger.info('TypeScript language server found via npm list');
+      return true;
+    } catch {
+      logger.debug('TypeScript language server not found via any method');
+      return false;
     }
   }
 
@@ -65,16 +32,11 @@ export class TypeScriptLanguageServerProvider implements LanguageServerProvider 
     // In containers, language servers should already be pre-installed
     if (this.isContainer) {
       logger.info('Running in container - language servers should be pre-installed');
-      throw new Error(
-        'Language server installation in containers is not supported. ' +
-          'The typescript-language-server should be pre-installed in the container image.'
-      );
+      throw this.getContainerInstallError('typescript-language-server');
     }
 
     if (!options?.force) {
-      throw new Error(
-        'Auto-installation requires explicit user consent. Pass { force: true } to confirm installation.'
-      );
+      throw this.getForceInstallError();
     }
 
     logger.info('Installing typescript-language-server...');
@@ -88,9 +50,9 @@ export class TypeScriptLanguageServerProvider implements LanguageServerProvider 
         logger.info('TypeScript language server installed successfully');
       } catch (error) {
         logger.error({ error }, 'Failed to install TypeScript language server');
-        throw new Error(
-          'Failed to install typescript-language-server. ' +
-            'Please install it manually: npm install -g typescript-language-server'
+        throw this.getManualInstallError(
+          'typescript-language-server',
+          'npm install -g typescript-language-server'
         );
       }
     } else if (packageManager === 'yarn') {
@@ -99,121 +61,20 @@ export class TypeScriptLanguageServerProvider implements LanguageServerProvider 
         logger.info('TypeScript language server installed successfully');
       } catch (error) {
         logger.error({ error }, 'Failed to install TypeScript language server');
-        throw new Error(
-          'Failed to install typescript-language-server. ' +
-            'Please install it manually: yarn global add typescript-language-server'
+        throw this.getManualInstallError(
+          'typescript-language-server',
+          'yarn global add typescript-language-server'
         );
       }
     } else {
-      throw new Error('No package manager found. Please install npm or yarn.');
+      throw this.getNoPackageManagerError();
     }
-  }
-
-  getCommand(): string[] {
-    return this.language.serverCommand;
-  }
-
-  private async detectPackageManager(): Promise<string | null> {
-    try {
-      await this.executeCommand(['npm', '--version']);
-      return 'npm';
-    } catch {
-      try {
-        await this.executeCommand(['yarn', '--version']);
-        return 'yarn';
-      } catch {
-        return null;
-      }
-    }
-  }
-
-  private executeCommand(command: string[], timeout = 30000): Promise<string> {
-    return new Promise((resolve, reject) => {
-      if (command.length === 0) {
-        reject(new Error('Command array is empty'));
-        return;
-      }
-
-      const [cmd, ...args] = command;
-      if (!cmd) {
-        reject(new Error('Command is undefined'));
-        return;
-      }
-
-      // Use spawn for security - no shell interpretation (container environment)
-      let child: ChildProcessByStdio<null, Readable, Readable> | undefined;
-      try {
-        child = spawn(cmd, args, {
-          cwd: this.language.rootPath || process.cwd(),
-          env: process.env,
-          stdio: ['ignore', 'pipe', 'pipe'],
-          shell: false,
-        });
-      } catch (error) {
-        reject(
-          new Error(
-            `Failed to spawn ${cmd}: ${error instanceof Error ? error.message : String(error)}`
-          )
-        );
-        return;
-      }
-
-      let stdout = '';
-      let stderr = '';
-      let timedOut = false;
-
-      // Set timeout after successful spawn
-      const timer = setTimeout(() => {
-        timedOut = true;
-        if (child) {
-          child.kill('SIGTERM');
-          // Force kill after grace period
-          const killTimer = setTimeout(() => {
-            if (child && !child.killed) {
-              child.kill('SIGKILL');
-            }
-          }, 5000);
-          killTimer.unref();
-        }
-      }, timeout);
-      timer.unref();
-
-      if (!child) {
-        reject(new Error('Failed to create child process'));
-        return;
-      }
-
-      child.stdout.on('data', (data: Buffer) => {
-        stdout += data.toString();
-      });
-
-      child.stderr.on('data', (data: Buffer) => {
-        stderr += data.toString();
-      });
-
-      child.on('close', (code: number | null) => {
-        clearTimeout(timer);
-        if (timedOut) {
-          reject(new Error(`Command timed out after ${timeout}ms: ${command.join(' ')}`));
-        } else if (code === 0) {
-          resolve(stdout.trim());
-        } else {
-          const errorMessage = stderr || `Command failed with code ${code}`;
-          reject(new Error(`${cmd} failed: ${errorMessage}`));
-        }
-      });
-
-      child.on('error', (error: Error) => {
-        clearTimeout(timer);
-        reject(new Error(`Failed to execute ${cmd}: ${error.message}`));
-      });
-    });
   }
 }
 
 export async function createLanguageServerProvider(
   language: DetectedLanguage
-): Promise<LanguageServerProvider | null> {
+): Promise<BaseLanguageServerProvider | null> {
   switch (language.id) {
     case 'typescript':
     case 'javascript':
@@ -222,6 +83,68 @@ export async function createLanguageServerProvider(
       // Dynamic import to avoid circular dependency
       const { PythonLanguageServerProvider } = await import('./python-provider.js');
       return new PythonLanguageServerProvider(language);
+    }
+    case 'rust': {
+      const { RustLanguageServerProvider } = await import('./rust-provider.js');
+      return new RustLanguageServerProvider(language);
+    }
+    case 'go': {
+      const { GoLanguageServerProvider } = await import('./go-provider.js');
+      return new GoLanguageServerProvider(language);
+    }
+    case 'csharp': {
+      const { CSharpLanguageServerProvider } = await import('./csharp-provider.js');
+      return new CSharpLanguageServerProvider(language);
+    }
+    case 'java': {
+      const { JavaLanguageServerProvider } = await import('./java-provider.js');
+      return new JavaLanguageServerProvider(language);
+    }
+    case 'c':
+    case 'cpp':
+    case 'objective-c': {
+      const { CppLanguageServerProvider } = await import('./cpp-provider.js');
+      return new CppLanguageServerProvider(language);
+    }
+    case 'bash': {
+      const { BashLanguageServerProvider } = await import('./bash-provider.js');
+      return new BashLanguageServerProvider(language);
+    }
+    case 'json':
+    case 'jsonc': {
+      const { JsonLanguageServerProvider } = await import('./json-provider.js');
+      return new JsonLanguageServerProvider(language);
+    }
+    case 'yaml': {
+      const { YamlLanguageServerProvider } = await import('./yaml-provider.js');
+      return new YamlLanguageServerProvider(language);
+    }
+    case 'html': {
+      const { HtmlLanguageServerProvider } = await import('./web-provider.js');
+      return new HtmlLanguageServerProvider(language);
+    }
+    case 'css':
+    case 'scss':
+    case 'sass':
+    case 'less': {
+      const { CssLanguageServerProvider } = await import('./web-provider.js');
+      return new CssLanguageServerProvider(language);
+    }
+    case 'ruby': {
+      const { RubyLanguageServerProvider } = await import('./ruby-provider.js');
+      return new RubyLanguageServerProvider(language);
+    }
+    case 'php': {
+      const { PhpLanguageServerProvider } = await import('./php-provider.js');
+      return new PhpLanguageServerProvider(language);
+    }
+    case 'kotlin': {
+      const { KotlinLanguageServerProvider } = await import('./kotlin-provider.js');
+      return new KotlinLanguageServerProvider(language);
+    }
+    case 'swift': {
+      const { SwiftLanguageServerProvider } = await import('./swift-provider.js');
+      return new SwiftLanguageServerProvider(language);
     }
     default:
       return null;

@@ -99,7 +99,22 @@ describe('Language Detection Integration Tests', () => {
       expect(detector.detectLanguageByExtension('test.js')?.id).toBe('javascript');
       expect(detector.detectLanguageByExtension('test.jsx')?.id).toBe('javascript');
       expect(detector.detectLanguageByExtension('test.py')?.id).toBe('python');
-      expect(detector.detectLanguageByExtension('test.rb')).toBeNull();
+      expect(detector.detectLanguageByExtension('test.rb')?.id).toBe('ruby');
+      expect(detector.detectLanguageByExtension('test.rs')?.id).toBe('rust');
+      expect(detector.detectLanguageByExtension('test.go')?.id).toBe('go');
+      expect(detector.detectLanguageByExtension('test.cs')?.id).toBe('csharp');
+      expect(detector.detectLanguageByExtension('test.java')?.id).toBe('java');
+      expect(detector.detectLanguageByExtension('test.cpp')?.id).toBe('cpp');
+      expect(detector.detectLanguageByExtension('test.sh')?.id).toBe('bash');
+      expect(detector.detectLanguageByExtension('test.json')?.id).toBe('json');
+      expect(detector.detectLanguageByExtension('test.yaml')?.id).toBe('yaml');
+      expect(detector.detectLanguageByExtension('test.html')?.id).toBe('html');
+      expect(detector.detectLanguageByExtension('test.css')?.id).toBe('css');
+      expect(detector.detectLanguageByExtension('test.php')?.id).toBe('php');
+      expect(detector.detectLanguageByExtension('test.kt')?.id).toBe('kotlin');
+      expect(detector.detectLanguageByExtension('test.swift')?.id).toBe('swift');
+      // Test unsupported extension
+      expect(detector.detectLanguageByExtension('test.cobol')).toBeNull();
     });
   });
 
