@@ -215,7 +215,7 @@ manager.addUser(testUser);
     }
 
     // Wait longer for language server to index files in CI environments
-    const waitTime = process.env.CI ? 8000 : 4000;
+    const waitTime = process.env['CI'] ? 8000 : 4000;
     await new Promise((resolve) => {
       setTimeout(resolve, waitTime);
     });
@@ -249,7 +249,7 @@ manager.addUser(testUser);
     }
 
     // In CI, language server indexing can be slower, so we accept fewer results
-    const minExpectedResults = process.env.CI ? 1 : 2;
+    const minExpectedResults = process.env['CI'] ? 1 : 2;
     expect(result.data.results.length).toBeGreaterThanOrEqual(minExpectedResults);
 
     // Check that we got results from different files (skip in CI if only 1 result)
