@@ -100,6 +100,7 @@ const SurroundingSymbolInfoSchema = z.object({
     name: z.string(),
     kind: z.string(),
     location: LocationSchema,
+    code: z.string().optional(),
 });
 
 export interface CallHierarchyResult {
@@ -209,17 +210,22 @@ export class SymbolContextTool extends BatchableTool<
 
       const symbolName = hover?.name || surroundings?.symbol?.name;
 
+      const surroundingSymbolsWithCode = surroundings ? await Promise.all(
+          surroundings.siblings.map(async s => ({
+              name: s.name,
+              kind: lspKindToString(s.kind),
+              location: { uri, range: s.range },
+              code: await this.getCodeSnippet({ uri, range: s.range }),
+          }))
+      ) : undefined;
+
       const resultData: SymbolContextResultData = {
         symbol: hover ? { ...hover, name: symbolName || 'unknown' } : undefined,
         signature: signatureHelp,
         references,
-        surroundings: surroundings ? {
+        surroundings: surroundings && surroundingSymbolsWithCode ? {
             containerName: surroundings.container?.name || 'file-level',
-            symbols: surroundings.siblings.map(s => ({
-                name: s.name,
-                kind: lspKindToString(s.kind),
-                location: { uri, range: s.range }
-            }))
+            symbols: surroundingSymbolsWithCode,
         } : undefined,
         callHierarchy,
       };
@@ -438,6 +444,34 @@ export class SymbolContextTool extends BatchableTool<
       return process.cwd();
     } catch {
       return process.cwd();
+    }
+  }
+
+  private async getCodeSnippet(location: Location): Promise<string> {
+    try {
+      const filePath = fileURLToPath(location.uri);
+      const content = await fs.readFile(filePath, 'utf-8');
+      const lines = content.split('\n');
+      const { start, end } = location.range;
+
+      if (start.line === end.line) {
+        return lines[start.line]?.substring(start.character, end.character) || '';
+      }
+
+      const snippetLines = [];
+      // First line
+      snippetLines.push(lines[start.line]?.substring(start.character) || '');
+      // Middle lines
+      for (let i = start.line + 1; i < end.line; i++) {
+        snippetLines.push(lines[i] || '');
+      }
+      // Last line
+      snippetLines.push(lines[end.line]?.substring(0, end.character) || '');
+
+      return snippetLines.join('\n');
+    } catch (error) {
+      logger.warn({ error, location }, 'Failed to get code snippet');
+      return '';
     }
   }
 

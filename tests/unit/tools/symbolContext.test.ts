@@ -1,8 +1,9 @@
-import { describe, it, expect, beforeEach, jest } from '@jest/globals';
+import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
 import { SymbolContextTool } from '../../../src/tools/symbolContext.js';
 import { ConnectionPool } from '../../../src/lsp/index.js';
 import { LSPClient } from '../../../src/lsp/client-v2.js';
 import { SymbolKind } from 'vscode-languageserver-protocol';
+import { promises as fs } from 'fs';
 
 jest.mock('../../../src/lsp/index.js');
 jest.mock('../../../src/utils/logger.js');
@@ -26,6 +27,10 @@ describe('SymbolContextTool', () => {
     tool = new SymbolContextTool(mockClientManager);
 
     jest.clearAllMocks();
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
   });
 
   it('should return a full symbol context', async () => {
@@ -54,26 +59,37 @@ describe('SymbolContextTool', () => {
       {
         name: 'MyClass',
         kind: SymbolKind.Class,
-        range: { start: { line: 1, character: 0 }, end: { line: 30, character: 1 } },
-        selectionRange: { start: { line: 1, character: 6 }, end: { line: 1, character: 13 } },
+        range: { start: { line: 0, character: 0 }, end: { line: 7, character: 1 } },
+        selectionRange: { start: { line: 0, character: 6 }, end: { line: 0, character: 13 } },
         children: [
           {
             name: 'myMethod',
             kind: SymbolKind.Method,
-            range: { start: { line: 10, character: 2 }, end: { line: 15, character: 3 } },
-            selectionRange: { start: { line: 10, character: 11 }, end: { line: 10, character: 19 } },
+            range: { start: { line: 1, character: 2 }, end: { line: 3, character: 3 } },
+            selectionRange: { start: { line: 1, character: 2 }, end: { line: 1, character: 10 } },
             children: [],
           },
           {
             name: 'otherMethod',
             kind: SymbolKind.Method,
-            range: { start: { line: 16, character: 2 }, end: { line: 20, character: 3 } },
-            selectionRange: { start: { line: 16, character: 11 }, end: { line: 16, character: 22 } },
+            range: { start: { line: 4, character: 2 }, end: { line: 6, character: 3 } },
+            selectionRange: { start: { line: 4, character: 2 }, end: { line: 4, character: 13 } },
             children: [],
           },
         ],
       },
     ];
+
+    jest.spyOn(fs, 'readFile').mockResolvedValue([
+      'class MyClass {',
+      '  myMethod(arg: string): number {',
+      '    return 1;',
+      '  }',
+      '  otherMethod(): void {',
+      '    // do something',
+      '  }',
+      '}',
+    ].join('\n'));
 
     // The order of resolved values should match the order in Promise.allSettled
     mockClient.sendRequest
@@ -84,7 +100,7 @@ describe('SymbolContextTool', () => {
 
     const result = await tool.execute({
       uri: 'file:///test.ts',
-      position: { line: 10, character: 15 },
+      position: { line: 1, character: 10 },
     });
 
     expect(result.data.symbol?.name).toBe('MyClass.myMethod');
@@ -93,10 +109,13 @@ describe('SymbolContextTool', () => {
     expect(result.data.surroundings?.containerName).toBe('MyClass');
     expect(result.data.surroundings?.symbols).toHaveLength(1);
     expect(result.data.surroundings?.symbols[0]?.name).toBe('otherMethod');
+    expect(result.data.surroundings?.symbols[0]?.code).toContain('otherMethod(): void');
     expect(result.data.callHierarchy).toBeUndefined();
   });
 
   it('should include call hierarchy when requested', async () => {
+    jest.spyOn(fs, 'readFile').mockResolvedValue(''); // Not needed for this test
+
     // Mocks for hover, signature, etc. can be minimal as they are not the focus of this test.
     mockClient.sendRequest
       .mockResolvedValueOnce({ contents: 'hover' }) // hover
