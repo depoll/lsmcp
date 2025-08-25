@@ -93,5 +93,57 @@ describe('SymbolContextTool', () => {
     expect(result.data.surroundings?.containerName).toBe('MyClass');
     expect(result.data.surroundings?.symbols).toHaveLength(1);
     expect(result.data.surroundings?.symbols[0]?.name).toBe('otherMethod');
+    expect(result.data.callHierarchy).toBeUndefined();
+  });
+
+  it('should include call hierarchy when requested', async () => {
+    // Mocks for hover, signature, etc. can be minimal as they are not the focus of this test.
+    mockClient.sendRequest
+      .mockResolvedValueOnce({ contents: 'hover' }) // hover
+      .mockResolvedValueOnce(null) // signatureHelp
+      .mockResolvedValueOnce([]) // references
+      .mockResolvedValueOnce([]); // documentSymbol
+
+    // Mocks for call hierarchy
+    const callHierarchyItem = {
+      name: 'myMethod',
+      kind: SymbolKind.Method,
+      uri: 'file:///test.ts',
+      range: { start: { line: 10, character: 2 }, end: { line: 15, character: 3 } },
+      selectionRange: { start: { line: 10, character: 11 }, end: { line: 10, character: 19 } },
+    };
+
+    const incomingCall = {
+      from: {
+        name: 'callerFunc',
+        kind: SymbolKind.Function,
+        uri: 'file:///caller.ts',
+        range: { start: { line: 5, character: 0 }, end: { line: 10, character: 1 } },
+        selectionRange: { start: { line: 5, character: 9 }, end: { line: 5, character: 19 } },
+      },
+      fromRanges: [{ start: { line: 7, character: 2 }, end: { line: 7, character: 10 } }],
+    };
+
+    // This is the 5th promise in the allSettled array
+    // textDocument/prepareCallHierarchy
+    mockClient.sendRequest.mockResolvedValueOnce([callHierarchyItem]);
+    // callHierarchy/incomingCalls
+    mockClient.sendRequest.mockResolvedValueOnce([incomingCall]);
+    // callHierarchy/outgoingCalls
+    mockClient.sendRequest.mockResolvedValueOnce([]);
+    // recursive call for incoming calls of callerFunc
+    mockClient.sendRequest.mockResolvedValueOnce([]);
+
+
+    const result = await tool.execute({
+      uri: 'file:///test.ts',
+      position: { line: 10, character: 15 },
+      includeCallHierarchy: true,
+    });
+
+    expect(result.data.callHierarchy).toBeDefined();
+    expect(result.data.callHierarchy?.incoming).toHaveLength(1);
+    expect(result.data.callHierarchy?.incoming[0]?.name).toBe('callerFunc');
+    expect(result.data.callHierarchy?.outgoing).toHaveLength(0);
   });
 });

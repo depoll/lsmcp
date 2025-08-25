@@ -10,6 +10,12 @@ import {
   SymbolKind,
   MarkupKind,
   Range as LSPRange,
+  CallHierarchyItem,
+  CallHierarchyIncomingCall,
+  CallHierarchyOutgoingCall,
+  CallHierarchyPrepareParams,
+  CallHierarchyIncomingCallsParams,
+  CallHierarchyOutgoingCallsParams,
 } from 'vscode-languageserver-protocol';
 import { marked } from 'marked';
 import { createPositionSchema, SYMBOL_POSITION_DESCRIPTION } from './position-schema.js';
@@ -51,6 +57,8 @@ const SymbolContextParamsSchema = z.object({
   uri: z.string().describe(FILE_URI_DESCRIPTION),
   position: createPositionSchema().describe(SYMBOL_POSITION_DESCRIPTION),
   maxReferences: z.number().min(1).max(50).default(10).optional().describe('Max number of references to return.'),
+  includeCallHierarchy: z.boolean().optional().describe('Whether to include call hierarchy information.'),
+  maxHierarchyDepth: z.number().min(1).max(10).default(3).optional().describe('Maximum depth for call hierarchy traversal.'),
 });
 
 type SymbolContextParams = z.infer<typeof SymbolContextParamsSchema>;
@@ -94,6 +102,31 @@ const SurroundingSymbolInfoSchema = z.object({
     location: LocationSchema,
 });
 
+export interface CallHierarchyResult {
+  name: string;
+  kind: SymbolKind;
+  uri: string;
+  range: LSPRange;
+  selectionRange: LSPRange;
+  detail?: string;
+  calls?: CallHierarchyResult[];
+}
+
+const CallHierarchyResultSchema: z.ZodType<CallHierarchyResult> = z.lazy(() => z.object({
+    name: z.string(),
+    kind: z.nativeEnum(SymbolKind),
+    uri: z.string(),
+    range: RangeSchema,
+    selectionRange: RangeSchema,
+    detail: z.string().optional(),
+    calls: z.array(CallHierarchyResultSchema).optional(),
+}));
+
+const CallHierarchyInfoSchema = z.object({
+    incoming: z.array(CallHierarchyResultSchema),
+    outgoing: z.array(CallHierarchyResultSchema),
+});
+
 const SymbolContextResultDataSchema = z.object({
   symbol: SymbolInfoSchema.optional(),
   signature: SignatureInfoSchema.optional(),
@@ -102,6 +135,7 @@ const SymbolContextResultDataSchema = z.object({
       containerName: z.string(),
       symbols: z.array(SurroundingSymbolInfoSchema),
   }).optional(),
+  callHierarchy: CallHierarchyInfoSchema.optional(),
 });
 
 type SymbolContextResultData = z.infer<typeof SymbolContextResultDataSchema>;
@@ -136,7 +170,7 @@ export class SymbolContextTool extends BatchableTool<
 
   async execute(params: SymbolContextParams): Promise<SymbolContextResult> {
     const startTime = Date.now();
-    const { uri, position, maxReferences } = params;
+    const { uri, position, maxReferences, includeCallHierarchy, maxHierarchyDepth } = params;
     const lspPosition: Position = {
       line: position.line,
       character: position.character,
@@ -151,17 +185,25 @@ export class SymbolContextTool extends BatchableTool<
         throw new Error(`No language client available for URI: ${uri}`);
       }
 
-      const [hoverResult, signatureHelpResult, referencesResult, documentSymbolsResult] = await Promise.allSettled([
+      const promises: Promise<any>[] = [
         this.getHoverInfo(client, uri, lspPosition),
         this.getSignatureHelpInfo(client, uri, lspPosition),
         this.getReferences(client, uri, lspPosition, maxReferences),
         this.getDocumentSymbols(client, uri),
-      ]);
+      ];
 
-      const hover = hoverResult.status === 'fulfilled' ? hoverResult.value : undefined;
-      const signatureHelp = signatureHelpResult.status === 'fulfilled' ? signatureHelpResult.value : undefined;
-      const references = referencesResult.status === 'fulfilled' ? referencesResult.value : [];
-      const documentSymbols = documentSymbolsResult.status === 'fulfilled' ? documentSymbolsResult.value : [];
+      if (includeCallHierarchy) {
+        promises.push(this.getCallHierarchyInfo(client, uri, lspPosition, maxHierarchyDepth || 3));
+      }
+
+      const results = await Promise.allSettled(promises);
+      const [hoverResult, signatureHelpResult, referencesResult, documentSymbolsResult, callHierarchyResult] = results;
+
+      const hover = hoverResult?.status === 'fulfilled' ? hoverResult.value : undefined;
+      const signatureHelp = signatureHelpResult?.status === 'fulfilled' ? signatureHelpResult.value : undefined;
+      const references = referencesResult?.status === 'fulfilled' ? referencesResult.value : [];
+      const documentSymbols = documentSymbolsResult?.status === 'fulfilled' ? documentSymbolsResult.value : [];
+      const callHierarchy = callHierarchyResult?.status === 'fulfilled' ? callHierarchyResult.value : undefined;
 
       const surroundings = this.getSurroundings(documentSymbols, lspPosition);
 
@@ -179,6 +221,7 @@ export class SymbolContextTool extends BatchableTool<
                 location: { uri, range: s.range }
             }))
         } : undefined,
+        callHierarchy,
       };
 
       return {
@@ -396,5 +439,89 @@ export class SymbolContextTool extends BatchableTool<
     } catch {
       return process.cwd();
     }
+  }
+
+  private async getCallHierarchyInfo(client: LSPClient, uri: string, position: Position, maxDepth: number): Promise<{ incoming: CallHierarchyResult[], outgoing: CallHierarchyResult[] } | undefined> {
+    const prepareParams: CallHierarchyPrepareParams = {
+      textDocument: { uri },
+      position,
+    };
+
+    const items = await client.sendRequest<CallHierarchyItem[] | null>('textDocument/prepareCallHierarchy', prepareParams);
+
+    if (!items || items.length === 0) {
+      return undefined;
+    }
+
+    const item = items[0];
+    if (!item) {
+        return undefined;
+    }
+
+    const [incoming, outgoing] = await Promise.all([
+        this.getIncomingCalls(client, item, maxDepth),
+        this.getOutgoingCalls(client, item, maxDepth),
+    ]);
+
+    return { incoming, outgoing };
+  }
+
+  private async getIncomingCalls(client: LSPClient, item: CallHierarchyItem, maxDepth: number, currentDepth = 0, visited = new Set<string>()): Promise<CallHierarchyResult[]> {
+    if (currentDepth >= maxDepth) {
+      return [];
+    }
+
+    const key = `${item.uri}:${item.selectionRange.start.line}:${item.selectionRange.start.character}`;
+    if (visited.has(key)) {
+      return []; // Avoid cycles
+    }
+    visited.add(key);
+
+    const params: CallHierarchyIncomingCallsParams = { item };
+    const incomingCalls = await client.sendRequest<CallHierarchyIncomingCall[] | null>('callHierarchy/incomingCalls', params);
+
+    const results: CallHierarchyResult[] = [];
+    for (const call of incomingCalls || []) {
+        const result: CallHierarchyResult = {
+          name: call.from.name,
+          kind: call.from.kind,
+          uri: call.from.uri,
+          range: call.from.range,
+          selectionRange: call.from.selectionRange,
+          detail: call.from.detail,
+          calls: await this.getIncomingCalls(client, call.from, maxDepth, currentDepth + 1, visited),
+        };
+        results.push(result);
+    }
+    return results;
+  }
+
+  private async getOutgoingCalls(client: LSPClient, item: CallHierarchyItem, maxDepth: number, currentDepth = 0, visited = new Set<string>()): Promise<CallHierarchyResult[]> {
+    if (currentDepth >= maxDepth) {
+      return [];
+    }
+    const key = `${item.uri}:${item.selectionRange.start.line}:${item.selectionRange.start.character}`;
+    if (visited.has(key)) {
+      return []; // Avoid cycles
+    }
+    visited.add(key);
+
+    const params: CallHierarchyOutgoingCallsParams = { item };
+    const outgoingCalls = await client.sendRequest<CallHierarchyOutgoingCall[] | null>('callHierarchy/outgoingCalls', params);
+
+    const results: CallHierarchyResult[] = [];
+    for (const call of outgoingCalls || []) {
+        const result: CallHierarchyResult = {
+          name: call.to.name,
+          kind: call.to.kind,
+          uri: call.to.uri,
+          range: call.to.range,
+          selectionRange: call.to.selectionRange,
+          detail: call.to.detail,
+          calls: await this.getOutgoingCalls(client, call.to, maxDepth, currentDepth + 1, visited),
+        };
+        results.push(result);
+    }
+    return results;
   }
 }
