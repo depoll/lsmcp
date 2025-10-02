@@ -21,7 +21,7 @@ describe('RelatedAPIsTool Integration Tests', () => {
   let tool: RelatedAPIsTool;
   let clientManager: ConnectionPool;
 
-  beforeAll(async () => {
+  beforeAll(() => {
     // Initialize the tool with the actual lsmcp project
     clientManager = new ConnectionPool({
       idleTimeout: 5 * 60 * 1000,

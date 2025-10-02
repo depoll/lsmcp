@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 import { RelatedAPIsTool } from '../../../src/tools/related-apis-tool.js';
-import type { ConnectionPool } from '../../../src/lsp/manager.js';
-import type { LSPClient } from '../../../src/lsp/client-v2.js';
+import { ConnectionPool } from '../../../src/lsp/manager.js';
+import { LSPClient } from '../../../src/lsp/client-v2.js';
 import {
   Hover,
   SymbolInformation,
@@ -10,10 +10,15 @@ import {
   Range,
 } from 'vscode-languageserver-protocol';
 
+// Mock dependencies
+jest.mock('../../../src/utils/retry.js', () => ({
+  retryWithBackoff: jest.fn(async <T>(fn: () => Promise<T>): Promise<T> => fn()),
+}));
+
 describe('RelatedAPIsTool', () => {
   let tool: RelatedAPIsTool;
-  let mockClientManager: ConnectionPool;
-  let mockClient: LSPClient;
+  let mockClientManager: jest.Mocked<ConnectionPool>;
+  let mockClient: jest.Mocked<LSPClient>;
 
   beforeEach(() => {
     // Mock LSP client
@@ -21,13 +26,13 @@ describe('RelatedAPIsTool', () => {
       sendRequest: jest.fn(),
       sendNotification: jest.fn(),
       isConnected: jest.fn().mockReturnValue(true),
-    } as unknown as LSPClient;
+    } as unknown as jest.Mocked<LSPClient>;
 
     // Mock connection pool
     mockClientManager = {
-      get: jest.fn().mockResolvedValue(mockClient),
-      getForFile: jest.fn().mockResolvedValue(mockClient),
-    } as unknown as ConnectionPool;
+      get: jest.fn(() => Promise.resolve(mockClient)),
+      getForFile: jest.fn(() => Promise.resolve(mockClient)),
+    } as unknown as jest.Mocked<ConnectionPool>;
 
     tool = new RelatedAPIsTool(mockClientManager);
   });
@@ -56,7 +61,8 @@ describe('RelatedAPIsTool', () => {
         range: symbolLocation.range,
       };
 
-      (mockClient.sendRequest as jest.Mock).mockImplementation((method: string) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call
+      (mockClient.sendRequest as any).mockImplementation((method: string): Promise<unknown> => {
         if (method === 'workspace/symbol') {
           return Promise.resolve([symbolInfo]);
         }
@@ -78,7 +84,8 @@ describe('RelatedAPIsTool', () => {
     });
 
     it('should handle symbols not found', async () => {
-      (mockClient.sendRequest as jest.Mock).mockResolvedValue([]);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call
+      (mockClient.sendRequest as any).mockResolvedValue([]);
 
       const result = await tool.execute({
         symbols: ['NonExistent'],
@@ -129,8 +136,9 @@ describe('RelatedAPIsTool', () => {
         },
       };
 
-      (mockClient.sendRequest as jest.Mock).mockImplementation(
-        (method: string, params: unknown) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call
+      (mockClient.sendRequest as any).mockImplementation(
+        (method: string, params: unknown): Promise<unknown> => {
           if (method === 'workspace/symbol') {
             const query = (params as { query: string }).query;
             if (query === 'UserService') return Promise.resolve([classSymbol]);
@@ -201,8 +209,9 @@ describe('RelatedAPIsTool', () => {
         },
       };
 
-      (mockClient.sendRequest as jest.Mock).mockImplementation(
-        (method: string, params: unknown) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call
+      (mockClient.sendRequest as any).mockImplementation(
+        (method: string, params: unknown): Promise<unknown> => {
           if (method === 'workspace/symbol') {
             const query = (params as { query: string }).query;
             if (query === 'ClassA') return Promise.resolve([aSymbol]);
@@ -263,7 +272,8 @@ describe('RelatedAPIsTool', () => {
         },
       };
 
-      (mockClient.sendRequest as jest.Mock).mockImplementation((method: string) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call
+      (mockClient.sendRequest as any).mockImplementation((method: string): Promise<unknown> => {
         if (method === 'workspace/symbol') return Promise.resolve([symbolInfo]);
         if (method === 'textDocument/hover') return Promise.resolve(hoverWithDocs);
         return Promise.resolve(null);
@@ -284,7 +294,7 @@ describe('RelatedAPIsTool', () => {
 
     it('should respect depth parameter', async () => {
       // Set up a chain of symbols: A -> B -> C -> D
-      const symbols: SymbolInformation[] = ['A', 'B', 'C', 'D'].map((name, idx) => ({
+      const symbols: SymbolInformation[] = ['A', 'B', 'C', 'D'].map((name) => ({
         name,
         kind: SymbolKind.Class,
         location: {
@@ -296,8 +306,9 @@ describe('RelatedAPIsTool', () => {
         },
       }));
 
-      (mockClient.sendRequest as jest.Mock).mockImplementation(
-        (method: string, params: unknown) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call
+      (mockClient.sendRequest as any).mockImplementation(
+        (method: string, params: unknown): Promise<unknown> => {
           if (method === 'workspace/symbol') {
             const query = (params as { query: string }).query;
             const found = symbols.find((s) => s.name === query);
@@ -380,8 +391,9 @@ describe('RelatedAPIsTool', () => {
         },
       ];
 
-      (mockClient.sendRequest as jest.Mock).mockImplementation(
-        (method: string, params: unknown) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call
+      (mockClient.sendRequest as any).mockImplementation(
+        (method: string, params: unknown): Promise<unknown> => {
           if (method === 'workspace/symbol') {
             const query = (params as { query: string }).query;
             return Promise.resolve(symbols.filter((s) => s.name === query));
@@ -416,7 +428,8 @@ describe('RelatedAPIsTool', () => {
         },
       };
 
-      (mockClient.sendRequest as jest.Mock).mockImplementation((method: string) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call
+      (mockClient.sendRequest as any).mockImplementation((method: string): Promise<unknown> => {
         if (method === 'workspace/symbol') return Promise.resolve([symbolInfo]);
         if (method === 'textDocument/hover') {
           return Promise.resolve({
@@ -463,7 +476,8 @@ describe('RelatedAPIsTool', () => {
         },
       };
 
-      (mockClient.sendRequest as jest.Mock).mockImplementation((method: string) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call
+      (mockClient.sendRequest as any).mockImplementation((method: string): Promise<unknown> => {
         if (method === 'workspace/symbol') return Promise.resolve([functionSymbol]);
         if (method === 'textDocument/hover') return Promise.resolve(hoverWithTypes);
         return Promise.resolve(null);

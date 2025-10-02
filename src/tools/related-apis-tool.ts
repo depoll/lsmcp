@@ -219,10 +219,7 @@ Use Cases:
 
       // If no primary symbols found, return error
       if (primarySymbols.length === 0) {
-        throw new MCPError(
-          MCPErrorCode.INTERNAL_ERROR,
-          `Symbols not found: ${notFound.join(', ')}`
-        );
+        throw new MCPError(MCPErrorCode.InternalError, `Symbols not found: ${notFound.join(', ')}`);
       }
 
       // Gather related symbols recursively
