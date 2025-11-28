@@ -55,7 +55,7 @@ const SYMBOL_KIND_MAP: Record<number, string> = {
 // Configuration constants
 const CACHE_SIZE = 200;
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
-const DEFAULT_MAX_DEPTH = 2;
+const DEFAULT_MAX_DEPTH = 3;
 const DEFAULT_MAX_SYMBOLS = 50;
 
 /**
@@ -103,7 +103,7 @@ const GetDocsParamsSchema = z.object({
     .optional()
     .describe(
       'Maximum depth for traversing related types (0 = no traversal, just direct docs). ' +
-        'Higher values find more related API docs but increase response size. Default: 2'
+        'Higher values find more related API docs but increase response size. Default: 3'
     ),
   maxSymbols: z
     .number()
@@ -184,7 +184,7 @@ type GetDocsResult = StandardResult<GetDocsResultData>;
  *     { uri: 'file:///src/api.ts', position: { line: 10, character: 5 } },
  *     { uri: 'file:///src/types.ts', position: { line: 20, character: 10 } }
  *   ],
- *   maxDepth: 2,
+ *   maxDepth: 3,
  *   maxSymbols: 50
  * });
  * ```
