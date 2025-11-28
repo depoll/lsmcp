@@ -750,10 +750,11 @@ Features: Depth traversal, caching, deduplication, private symbol filtering.`;
 
     for (const pattern of patterns) {
       const match = signature.match(pattern.regex);
-      if (match && match[pattern.nameGroup]) {
+      const capturedName = match?.[pattern.nameGroup];
+      if (match && capturedName) {
         return {
           kind: pattern.kind,
-          name: match[pattern.nameGroup],
+          name: capturedName,
         };
       }
     }
