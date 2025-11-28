@@ -41,7 +41,7 @@ interface SymbolDoc {
  */
 export class GetRelatedAPIsTool extends BaseTool<Input, string> {
   readonly name = 'getRelatedAPIs';
-  readonly description = 'Gather comprehensive API documentation for specified symbols with recursive dependency resolution. extracts signatures, docs, and members.';
+  readonly description = 'Retrieve API context, signatures, and dependency docs for a list of symbols. Use this tool BEFORE writing code to understand available types and methods.';
   readonly inputSchema = InputSchema as unknown as z.ZodSchema<Input>;
 
   private visited = new Set<string>();
