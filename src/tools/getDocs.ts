@@ -575,11 +575,10 @@ Features: Depth traversal, caching, deduplication, private symbol filtering.`;
       { regex: /^\(method\)\s+(?:\w+\.)?(\w+)/, kind: 'method', nameGroup: 1 },
       { regex: /^\(property\)\s+(?:\w+\.)?(\w+)/, kind: 'property', nameGroup: 1 },
       { regex: /^(\w+)\s*[=:]\s*\(/, kind: 'function' },
-      // Python patterns
+      // Python patterns (note: 'class' handled by TypeScript pattern above)
       { regex: /^async\s+def\s+(\w+)/, kind: 'function', nameGroup: 1 },
       { regex: /^def\s+(\w+)/, kind: 'function', nameGroup: 1 },
-      { regex: /^class\s+(\w+)/, kind: 'class', nameGroup: 1 },
-      // Rust patterns
+      // Rust patterns (note: 'struct' handled separately, 'enum' handled by TypeScript pattern)
       { regex: /^pub\s+fn\s+(\w+)/, kind: 'function', nameGroup: 1 },
       { regex: /^fn\s+(\w+)/, kind: 'function', nameGroup: 1 },
       { regex: /^pub\s+struct\s+(\w+)/, kind: 'struct', nameGroup: 1 },
@@ -595,7 +594,6 @@ Features: Depth traversal, caching, deduplication, private symbol filtering.`;
       { regex: /^protected\s+(?:static\s+)?(?:\w+\s+)?(\w+)\s*\(/, kind: 'method', nameGroup: 1 },
       // C/C++ patterns
       { regex: /^namespace\s+(\w+)/, kind: 'namespace', nameGroup: 1 },
-      { regex: /^(?:static\s+)?(?:inline\s+)?(?:\w+\s+)+(\w+)\s*\(/, kind: 'function', nameGroup: 1 },
       // Ruby patterns
       { regex: /^module\s+(\w+)/, kind: 'module', nameGroup: 1 },
       // PHP patterns
@@ -886,7 +884,7 @@ Features: Depth traversal, caching, deduplication, private symbol filtering.`;
 
     return (
       `Failed to retrieve docs for ${symbolCount} symbol(s). ` +
-      `Try: grep -rn "def \\|fn \\|func \\|function \\|class \\|struct \\|interface " ${filename} ` +
+      `Try: grep -n "def \\|fn \\|func \\|function \\|class \\|struct \\|interface " ${filename} ` +
       `to find symbol definitions manually.`
     );
   }

@@ -401,6 +401,14 @@ describe('GetDocsTool', () => {
     });
 
     it('should extract kind from multi-language signature patterns', async () => {
+      // Map language to file extension
+      const langToExt: Record<string, string> = {
+        python: 'py',
+        rust: 'rs',
+        go: 'go',
+        java: 'java',
+      };
+
       const testCases = [
         // Python patterns
         { signature: 'def my_function()', expectedKind: 'function', lang: 'python' },
@@ -429,9 +437,10 @@ describe('GetDocsTool', () => {
 
         mockClient.sendRequest.mockResolvedValue(mockHover);
 
+        const ext = langToExt[lang] || lang;
         const result = await tool.execute({
           symbols: [
-            { uri: `file:///test.${lang === 'python' ? 'py' : lang === 'rust' ? 'rs' : lang === 'go' ? 'go' : 'java'}`, position: { line: 10, character: 5 } },
+            { uri: `file:///test.${ext}`, position: { line: 10, character: 5 } },
           ],
         });
 
