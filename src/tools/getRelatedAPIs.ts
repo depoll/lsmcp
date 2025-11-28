@@ -65,12 +65,14 @@ export class GetRelatedAPIsTool extends BaseTool<Input, string> {
     return this.formatOutput();
   }
 
-  private async findAndCollectSymbol(name: string, depth: number, _maxLimit: number) {
+  private async findAndCollectSymbol(name: string, depth: number, maxLimit: number) {
       const clients = this.clientManager.getAllActive(); 
       if (clients.length === 0) return;
       
       for (const { language, connection: client } of clients) {
           try {
+              if (this.collectedSymbols.length >= maxLimit) return;
+
               const results = await client.sendRequest<SymbolInformation[] | WorkspaceSymbol[]>('workspace/symbol', { query: name });
               const symbols = results || [];
               
@@ -85,13 +87,14 @@ export class GetRelatedAPIsTool extends BaseTool<Input, string> {
               if (match) {
                   let location: Location | undefined;
                   
-                  if ('location' in match) {
+                  // Use type guard to check for Location property
+                  if ('location' in match && match.location) {
                       location = match.location as Location;
                   } else if ('uri' in match) {
-                       location = {
-                           uri: (match as any).uri, 
-                           range: (match as any).range || { start: { line:0, character:0}, end: {line:0, character:0}}
-                       };
+                       // Handle WorkspaceSymbol without location (rare in modern LSP but possible)
+                       const uri = (match as any).uri as string;
+                       const range = (match as any).range as Range || { start: { line:0, character:0}, end: {line:0, character:0}};
+                       location = { uri, range };
                   }
                   
                   if (!location || !location.uri) continue;
@@ -110,7 +113,7 @@ export class GetRelatedAPIsTool extends BaseTool<Input, string> {
                   }
 
                   if (rootNode) {
-                      await this.processSymbolRecursively(client, rootNode, location.uri, depth);
+                      await this.processSymbolRecursively(client, rootNode, location.uri, depth, maxLimit);
                   } else {
                       await this.processSymbolRecursively(client, {
                           name: match.name, // Use match name
@@ -118,7 +121,7 @@ export class GetRelatedAPIsTool extends BaseTool<Input, string> {
                           range: location.range,
                           selectionRange: location.range,
                           children: []
-                      } as DocumentSymbol, location.uri, depth);
+                      } as DocumentSymbol, location.uri, depth, maxLimit);
                   }
                   return; 
               }
@@ -132,13 +135,14 @@ export class GetRelatedAPIsTool extends BaseTool<Input, string> {
       client: any, 
       node: DocumentSymbol, 
       uri: string, 
-      depth: number
+      depth: number,
+      maxLimit: number
   ) {
       const range = node.selectionRange;
       const key = `${uri}:${range.start.line}:${range.start.character}`;
       
       if (this.visited.has(key)) return;
-      if (this.collectedSymbols.length >= 100) return;
+      if (this.collectedSymbols.length >= maxLimit) return;
       this.visited.add(key);
 
       // 1. Get Hover (Docs)
@@ -155,9 +159,11 @@ export class GetRelatedAPIsTool extends BaseTool<Input, string> {
               if (MarkupContent.is(hover.contents)) {
                   docString = hover.contents.value;
               } else if (Array.isArray(hover.contents)) {
-                  docString = hover.contents.map(c => typeof c === 'string' ? c : c.value).join('\n\n');
+                  docString = hover.contents.map(c => typeof c === 'string' ? c : (c as any).value).join('\n\n');
               } else {
-                   docString = (hover.contents as any).value || String(hover.contents);
+                   // Fallback for MarkedString
+                   const content = hover.contents as any;
+                   docString = typeof content === 'string' ? content : content.value || '';
               }
               
               // Try to extract a better name from the code block if we have a placeholder
@@ -187,7 +193,7 @@ export class GetRelatedAPIsTool extends BaseTool<Input, string> {
           if (this.shouldRecurseIntoChildren(node.kind)) {
               if (node.children) {
                  for (const child of node.children) {
-                     await this.processSymbolRecursively(client, child, uri, depth - 1);
+                     await this.processSymbolRecursively(client, child, uri, depth - 1, maxLimit);
                      symbolDoc.children?.push({
                          name: child.name,
                          kind: child.kind,
@@ -199,11 +205,11 @@ export class GetRelatedAPIsTool extends BaseTool<Input, string> {
           }
 
           // 2. Find referenced types via Semantic Tokens + Definition
-          await this.resolveReferencedTypes(client, uri, node.range, depth - 1);
+          await this.resolveReferencedTypes(client, uri, node.range, depth - 1, maxLimit);
       }
   }
   
-  private async resolveReferencedTypes(client: any, uri: string, range: Range, depth: number) {
+  private async resolveReferencedTypes(client: any, uri: string, range: Range, depth: number, maxLimit: number) {
       try {
           // 1. Get Legend
           const serverId = client.getId ? client.getId() : 'unknown';
@@ -300,10 +306,12 @@ export class GetRelatedAPIsTool extends BaseTool<Input, string> {
                        const lineContent = lines[line];
                        if (lineContent !== undefined) {
                            const tokenLen = data[i+2];
-                           tokenText = lineContent.substr(char, tokenLen);
+                           if (tokenLen !== undefined) {
+                               tokenText = lineContent.substring(char, char + tokenLen);
+                           }
                        }
 
-                       await this.processDefinition(client, defUri, defRange, depth, tokenText);
+                       await this.processDefinition(client, defUri, defRange, depth, tokenText, maxLimit);
                   }
               } catch (e) {
                   // ignore definition errors
@@ -314,7 +322,7 @@ export class GetRelatedAPIsTool extends BaseTool<Input, string> {
       }
   }
   
-  private async processDefinition(client: any, uri: string, range: Range, depth: number, knownName: string) {
+  private async processDefinition(client: any, uri: string, range: Range, depth: number, knownName: string, maxLimit: number) {
       // We have a location. We need the DocumentSymbol to recurse properly.
       try {
           const docSymbols = await client.sendRequest('textDocument/documentSymbol', {
@@ -324,7 +332,7 @@ export class GetRelatedAPIsTool extends BaseTool<Input, string> {
           if (docSymbols && docSymbols.length > 0 && DocumentSymbol.is(docSymbols[0])) {
               const rootNode = this.findSymbolInRange(docSymbols as DocumentSymbol[], range);
               if (rootNode) {
-                  await this.processSymbolRecursively(client, rootNode, uri, depth);
+                  await this.processSymbolRecursively(client, rootNode, uri, depth, maxLimit);
                   return;
               }
           } 
@@ -336,7 +344,7 @@ export class GetRelatedAPIsTool extends BaseTool<Input, string> {
               range: range,
               selectionRange: range,
               children: []
-          } as DocumentSymbol, uri, depth); 
+          } as DocumentSymbol, uri, depth, maxLimit); 
       } catch (e) {
           // ignore
       }
@@ -395,11 +403,8 @@ export class GetRelatedAPIsTool extends BaseTool<Input, string> {
       let md = "# API Documentation\n\n";
       
       for (const sym of this.collectedSymbols) {
-          md += `## ${sym.name} (${this.getKindName(sym.kind)})
-`;
-          md += `**Location**: lexible${sym.location.uri}flexible
-
-`;
+          md += `## ${sym.name} (${this.getKindName(sym.kind)})\n`;
+          md += `**Location**: \`${sym.location.uri}\`\n\n`;
 
           if (sym.documentation) {
               md += `**Documentation**:\n${sym.documentation}\n\n`;
