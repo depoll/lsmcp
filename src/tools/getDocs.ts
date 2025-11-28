@@ -1,7 +1,15 @@
 import { z } from 'zod';
 import { BatchableTool } from './base.js';
 import { ConnectionPool } from '../lsp/index.js';
-import { Hover, Position, MarkupKind } from 'vscode-languageserver-protocol';
+import {
+  Hover,
+  Position,
+  MarkupKind,
+  SymbolKind,
+  DocumentSymbol,
+  Location,
+  LocationLink,
+} from 'vscode-languageserver-protocol';
 import { FileAwareLRUCache } from '../utils/fileCache.js';
 import { getLanguageFromUri } from '../utils/languages.js';
 import { retryWithBackoff } from '../utils/retry.js';
@@ -10,6 +18,39 @@ import { FILE_URI_DESCRIPTION } from './file-uri-description.js';
 import { SYMBOL_POSITION_DESCRIPTION } from './position-schema.js';
 import type { LSPClient } from '../lsp/client-v2.js';
 import { marked } from 'marked';
+
+/**
+ * Map LSP SymbolKind to user-friendly string.
+ * Language-agnostic: uses the standard LSP symbol kinds.
+ */
+const SYMBOL_KIND_MAP: Record<number, string> = {
+  [SymbolKind.File]: 'file',
+  [SymbolKind.Module]: 'module',
+  [SymbolKind.Namespace]: 'namespace',
+  [SymbolKind.Package]: 'package',
+  [SymbolKind.Class]: 'class',
+  [SymbolKind.Method]: 'method',
+  [SymbolKind.Property]: 'property',
+  [SymbolKind.Field]: 'field',
+  [SymbolKind.Constructor]: 'constructor',
+  [SymbolKind.Enum]: 'enum',
+  [SymbolKind.Interface]: 'interface',
+  [SymbolKind.Function]: 'function',
+  [SymbolKind.Variable]: 'variable',
+  [SymbolKind.Constant]: 'constant',
+  [SymbolKind.String]: 'string',
+  [SymbolKind.Number]: 'number',
+  [SymbolKind.Boolean]: 'boolean',
+  [SymbolKind.Array]: 'array',
+  [SymbolKind.Object]: 'object',
+  [SymbolKind.Key]: 'key',
+  [SymbolKind.Null]: 'null',
+  [SymbolKind.EnumMember]: 'enumMember',
+  [SymbolKind.Struct]: 'struct',
+  [SymbolKind.Event]: 'event',
+  [SymbolKind.Operator]: 'operator',
+  [SymbolKind.TypeParameter]: 'typeParameter',
+};
 
 // Configuration constants
 const CACHE_SIZE = 200;
@@ -337,7 +378,8 @@ Features: Depth traversal, caching, deduplication, private symbol filtering.`;
   }
 
   /**
-   * Get documentation for a single symbol at the given position
+   * Get documentation for a single symbol at the given position.
+   * Uses LSP to get symbol information (kind, name) and hover for documentation.
    */
   private async getSymbolDoc(
     uri: string,
@@ -365,12 +407,15 @@ Features: Depth traversal, caching, deduplication, private symbol filtering.`;
     const language = getLanguageFromUri(uri);
     await this.ensureFileOpened(client, uri, language);
 
-    // Get hover information
     const lspPosition: Position = {
       line: position.line,
       character: position.character,
     };
 
+    // First, try to get symbol information from document symbols (LSP-native approach)
+    const symbolInfo = await this.getSymbolAtPosition(client, uri, position);
+
+    // Get hover information for documentation and signature
     const hover = await retryWithBackoff(
       async () => {
         const result = await client.sendRequest<Hover | null>('textDocument/hover', {
@@ -407,8 +452,11 @@ Features: Depth traversal, caching, deduplication, private symbol filtering.`;
       return null;
     }
 
-    // Parse the hover response to extract structured documentation
-    const doc = this.parseHoverToDoc(hover, uri, position, name, depth);
+    // Get related types by using textDocument/definition to find type definitions
+    const relatedTypes = await this.findRelatedTypesViaDefinition(client, uri, position);
+
+    // Parse the hover response, using symbol info from LSP when available
+    const doc = this.parseHoverToDoc(hover, uri, position, name, depth, symbolInfo, relatedTypes);
 
     if (doc) {
       // Cache without depth (depth is added when retrieved)
@@ -419,14 +467,151 @@ Features: Depth traversal, caching, deduplication, private symbol filtering.`;
   }
 
   /**
-   * Parse LSP Hover response into SymbolDoc format
+   * Get symbol information at a specific position using LSP document symbols.
+   * This provides language-agnostic kind and name extraction.
+   */
+  private async getSymbolAtPosition(
+    client: LSPClient,
+    uri: string,
+    position: { line: number; character: number }
+  ): Promise<{ name: string; kind: string } | null> {
+    try {
+      // Get all symbols in the document
+      const symbols = await client.sendRequest<DocumentSymbol[] | null>(
+        'textDocument/documentSymbol',
+        { textDocument: { uri } }
+      );
+
+      if (!symbols || symbols.length === 0) {
+        return null;
+      }
+
+      // Find the symbol that contains or is at the given position
+      const symbol = this.findSymbolAtPosition(symbols, position);
+      if (symbol) {
+        return {
+          name: symbol.name,
+          kind: SYMBOL_KIND_MAP[symbol.kind] || 'unknown',
+        };
+      }
+
+      return null;
+    } catch (error) {
+      this.logger.debug({ error, uri, position }, 'Failed to get document symbols');
+      return null;
+    }
+  }
+
+  /**
+   * Find a symbol at a specific position in the document symbol tree.
+   */
+  private findSymbolAtPosition(
+    symbols: DocumentSymbol[],
+    position: { line: number; character: number }
+  ): DocumentSymbol | null {
+    for (const symbol of symbols) {
+      // Check if position is within this symbol's range
+      if (this.isPositionInRange(position, symbol.range)) {
+        // Check children first for more specific match
+        if (symbol.children && symbol.children.length > 0) {
+          const childMatch = this.findSymbolAtPosition(symbol.children, position);
+          if (childMatch) {
+            return childMatch;
+          }
+        }
+        // Return this symbol if position is at or near the selection range
+        if (this.isPositionInRange(position, symbol.selectionRange)) {
+          return symbol;
+        }
+        // Fall back to this symbol if no better match found
+        return symbol;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Check if a position is within a range.
+   */
+  private isPositionInRange(
+    position: { line: number; character: number },
+    range: { start: { line: number; character: number }; end: { line: number; character: number } }
+  ): boolean {
+    if (position.line < range.start.line || position.line > range.end.line) {
+      return false;
+    }
+    if (position.line === range.start.line && position.character < range.start.character) {
+      return false;
+    }
+    if (position.line === range.end.line && position.character > range.end.character) {
+      return false;
+    }
+    return true;
+  }
+
+  /**
+   * Find related types by using textDocument/definition to navigate to type definitions.
+   * This is language-agnostic and relies entirely on the LSP.
+   */
+  private async findRelatedTypesViaDefinition(
+    client: LSPClient,
+    uri: string,
+    position: { line: number; character: number }
+  ): Promise<string[]> {
+    const relatedTypes: string[] = [];
+
+    try {
+      // Use textDocument/definition to find where the symbol is defined
+      const definitions = await client.sendRequest<Location | Location[] | LocationLink[] | null>(
+        'textDocument/definition',
+        {
+          textDocument: { uri },
+          position: { line: position.line, character: position.character },
+        }
+      );
+
+      if (!definitions) {
+        return relatedTypes;
+      }
+
+      // Normalize to array
+      const defArray = Array.isArray(definitions) ? definitions : [definitions];
+
+      for (const def of defArray) {
+        // Handle both Location and LocationLink
+        const defUri = 'targetUri' in def ? def.targetUri : def.uri;
+        const defRange = 'targetRange' in def ? def.targetRange : def.range;
+
+        // Skip if same location (pointing to itself)
+        if (defUri === uri && defRange.start.line === position.line) {
+          continue;
+        }
+
+        // Get symbol info at the definition location
+        const defSymbol = await this.getSymbolAtPosition(client, defUri, defRange.start);
+        if (defSymbol && defSymbol.name && !relatedTypes.includes(defSymbol.name)) {
+          relatedTypes.push(defSymbol.name);
+        }
+      }
+    } catch (error) {
+      this.logger.debug({ error, uri, position }, 'Failed to find definitions for related types');
+    }
+
+    return relatedTypes;
+  }
+
+  /**
+   * Parse LSP Hover response into SymbolDoc format.
+   * Uses LSP-provided symbol info when available, falls back to signature extraction.
    */
   private parseHoverToDoc(
     hover: Hover,
     uri: string,
     position: { line: number; character: number },
     providedName?: string,
-    depth: number = 0
+    depth: number = 0,
+    symbolInfo?: { name: string; kind: string } | null,
+    lspRelatedTypes?: string[]
   ): SymbolDoc | null {
     if (!hover.contents) {
       return null;
@@ -434,9 +619,12 @@ Features: Depth traversal, caching, deduplication, private symbol filtering.`;
 
     let signature: string | undefined;
     let documentation: string | undefined;
-    let kind: string | undefined;
-    let name = providedName || 'unknown';
-    const relatedTypes: string[] = [];
+    // Use LSP-provided kind if available
+    let kind: string | undefined = symbolInfo?.kind;
+    // Use LSP-provided name, then providedName, then 'unknown'
+    let name = symbolInfo?.name || providedName || 'unknown';
+    // Use LSP-provided related types
+    const relatedTypes: string[] = lspRelatedTypes ? [...lspRelatedTypes] : [];
 
     // Handle different content formats
     if (typeof hover.contents === 'string') {
@@ -447,15 +635,13 @@ Features: Depth traversal, caching, deduplication, private symbol filtering.`;
       const text = hover.contents.value;
 
       if (hover.contents.kind === MarkupKind.Markdown) {
-        // Parse markdown to extract structured content
+        // Parse markdown to extract signature and documentation
         const parsed = this.parseMarkdownContent(text);
         signature = parsed.signature;
         documentation = parsed.documentation;
-        kind = parsed.kind;
-        if (parsed.name) {
-          name = parsed.name;
-        }
-        relatedTypes.push(...parsed.relatedTypes);
+        // Only use parsed kind/name if LSP didn't provide them
+        if (!kind && parsed.kind) kind = parsed.kind;
+        if (name === 'unknown' && parsed.name) name = parsed.name;
       } else {
         documentation = text;
       }
@@ -467,14 +653,11 @@ Features: Depth traversal, caching, deduplication, private symbol filtering.`;
         } else if ('language' in item) {
           // Code block - likely the signature
           signature = item.value;
-          // Extract types from the signature
-          const types = this.extractTypesFromSignature(item.value);
-          relatedTypes.push(...types);
         }
       }
     }
 
-    // If we still don't have a name, try to extract from signature
+    // Last resort: try to extract name from signature if still unknown
     if (name === 'unknown' && signature) {
       const extractedName = this.extractNameFromSignature(signature);
       if (extractedName) {
@@ -495,16 +678,16 @@ Features: Depth traversal, caching, deduplication, private symbol filtering.`;
   }
 
   /**
-   * Parse markdown content from hover to extract signature, docs, and related types
+   * Parse markdown content from hover to extract signature and documentation.
+   * Kind and name extraction is now handled by LSP document symbols.
+   * This method is a fallback when LSP doesn't provide symbol information.
    */
   private parseMarkdownContent(text: string): {
     signature?: string;
     documentation?: string;
     kind?: string;
     name?: string;
-    relatedTypes: string[];
   } {
-    const relatedTypes: string[] = [];
     let signature: string | undefined;
     let documentation: string | undefined;
     let kind: string | undefined;
@@ -519,12 +702,8 @@ Features: Depth traversal, caching, deduplication, private symbol filtering.`;
           if (!signature) {
             signature = String(token.text).trim();
 
-            // Extract types from signature
-            const types = this.extractTypesFromSignature(signature);
-            relatedTypes.push(...types);
-
-            // Try to extract kind and name from signature
-            const parsed = this.parseSignature(signature);
+            // Fallback: try to extract kind and name from signature if LSP didn't provide them
+            const parsed = this.extractKindAndNameFromSignature(signature);
             if (parsed.kind) kind = parsed.kind;
             if (parsed.name) name = parsed.name;
           }
@@ -547,68 +726,34 @@ Features: Depth traversal, caching, deduplication, private symbol filtering.`;
       documentation: documentation?.trim(),
       kind,
       name,
-      relatedTypes,
     };
   }
 
   /**
-   * Parse a signature string to extract kind and name.
-   * Language-agnostic: supports patterns from multiple programming languages.
-   * Note: More specific patterns must come before less specific ones.
+   * Extract kind and name from a signature string.
+   * This is a fallback when LSP document symbols don't provide this information.
+   * Uses simple heuristics that work across languages without language-specific parsing.
    */
-  private parseSignature(signature: string): { kind?: string; name?: string } {
-    // Match common patterns across multiple languages
-    // Order matters - more specific patterns should come first
+  private extractKindAndNameFromSignature(signature: string): { kind?: string; name?: string } {
+    // Simple heuristic patterns that work across most languages
+    // These are intentionally minimal - LSP document symbols are preferred
     const patterns = [
-      // Go patterns (must come before generic "type" pattern)
-      { regex: /^type\s+(\w+)\s+struct/, kind: 'struct', nameGroup: 1 },
-      { regex: /^type\s+(\w+)\s+interface/, kind: 'interface', nameGroup: 1 },
-      { regex: /^func\s+\([^)]+\)\s+(\w+)/, kind: 'method', nameGroup: 1 },
-      { regex: /^func\s+(\w+)/, kind: 'function', nameGroup: 1 },
-      // TypeScript/JavaScript patterns
-      { regex: /^(const|let|var)\s+(\w+)/, kind: 'variable' },
-      { regex: /^(function)\s+(\w+)/, kind: 'function' },
-      { regex: /^(class)\s+(\w+)/, kind: 'class' },
-      { regex: /^(interface)\s+(\w+)/, kind: 'interface' },
-      { regex: /^(type)\s+(\w+)/, kind: 'type' },
-      { regex: /^(enum)\s+(\w+)/, kind: 'enum' },
-      { regex: /^\(method\)\s+(?:\w+\.)?(\w+)/, kind: 'method', nameGroup: 1 },
-      { regex: /^\(property\)\s+(?:\w+\.)?(\w+)/, kind: 'property', nameGroup: 1 },
-      { regex: /^(\w+)\s*[=:]\s*\(/, kind: 'function' },
-      // Python patterns (note: 'class' handled by TypeScript pattern above)
-      { regex: /^async\s+def\s+(\w+)/, kind: 'function', nameGroup: 1 },
-      { regex: /^def\s+(\w+)/, kind: 'function', nameGroup: 1 },
-      // Rust patterns (note: 'struct' handled separately, 'enum' handled by TypeScript pattern)
-      { regex: /^pub\s+fn\s+(\w+)/, kind: 'function', nameGroup: 1 },
-      { regex: /^fn\s+(\w+)/, kind: 'function', nameGroup: 1 },
-      { regex: /^pub\s+struct\s+(\w+)/, kind: 'struct', nameGroup: 1 },
-      { regex: /^struct\s+(\w+)/, kind: 'struct', nameGroup: 1 },
-      { regex: /^trait\s+(\w+)/, kind: 'trait', nameGroup: 1 },
-      { regex: /^impl\s+(\w+)/, kind: 'impl', nameGroup: 1 },
-      { regex: /^mod\s+(\w+)/, kind: 'module', nameGroup: 1 },
-      // Java/C#/Kotlin patterns
-      { regex: /^public\s+(?:static\s+)?(?:final\s+)?class\s+(\w+)/, kind: 'class', nameGroup: 1 },
-      { regex: /^public\s+(?:static\s+)?(?:final\s+)?interface\s+(\w+)/, kind: 'interface', nameGroup: 1 },
-      { regex: /^public\s+(?:static\s+)?(?:\w+\s+)?(\w+)\s*\(/, kind: 'method', nameGroup: 1 },
-      { regex: /^private\s+(?:static\s+)?(?:\w+\s+)?(\w+)\s*\(/, kind: 'method', nameGroup: 1 },
-      { regex: /^protected\s+(?:static\s+)?(?:\w+\s+)?(\w+)\s*\(/, kind: 'method', nameGroup: 1 },
-      // C/C++ patterns
-      { regex: /^namespace\s+(\w+)/, kind: 'namespace', nameGroup: 1 },
-      // Ruby patterns
-      { regex: /^module\s+(\w+)/, kind: 'module', nameGroup: 1 },
-      // PHP patterns
-      { regex: /^public\s+function\s+(\w+)/, kind: 'method', nameGroup: 1 },
-      { regex: /^private\s+function\s+(\w+)/, kind: 'method', nameGroup: 1 },
-      { regex: /^protected\s+function\s+(\w+)/, kind: 'method', nameGroup: 1 },
+      // Function-like patterns (common across languages)
+      { regex: /^\s*(?:async\s+)?(?:function|func|fn|def)\s+(\w+)/, kind: 'function', nameGroup: 1 },
+      // Class-like patterns
+      { regex: /^\s*(?:class|struct|type)\s+(\w+)/, kind: 'class', nameGroup: 1 },
+      // Interface/trait patterns
+      { regex: /^\s*(?:interface|trait|protocol)\s+(\w+)/, kind: 'interface', nameGroup: 1 },
+      // Generic name extraction (last resort)
+      { regex: /^\s*(?:const|let|var|val)?\s*(\w+)\s*[=:]/, kind: 'variable', nameGroup: 1 },
     ];
 
     for (const pattern of patterns) {
       const match = signature.match(pattern.regex);
-      if (match) {
-        const nameGroup = 'nameGroup' in pattern ? (pattern.nameGroup as number) : 2;
+      if (match && match[pattern.nameGroup]) {
         return {
           kind: pattern.kind,
-          name: match[nameGroup],
+          name: match[pattern.nameGroup],
         };
       }
     }
@@ -617,148 +762,16 @@ Features: Depth traversal, caching, deduplication, private symbol filtering.`;
   }
 
   /**
-   * Extract type references from a signature string.
-   * Language-agnostic: excludes common built-in types across multiple languages.
-   */
-  private extractTypesFromSignature(signature: string): string[] {
-    const types: string[] = [];
-
-    // Exclude common built-in types across multiple languages
-    const excludeKeywords = new Set([
-      // JavaScript/TypeScript built-ins
-      'Promise',
-      'Array',
-      'Object',
-      'String',
-      'Number',
-      'Boolean',
-      'Function',
-      'Symbol',
-      'Map',
-      'Set',
-      'Date',
-      'RegExp',
-      'Error',
-      // TypeScript-specific keywords
-      'void',
-      'null',
-      'undefined',
-      'any',
-      'unknown',
-      'never',
-      'true',
-      'false',
-      // Python built-ins
-      'None',
-      'True',
-      'False',
-      'List',
-      'Dict',
-      'Tuple',
-      'Optional',
-      'Union',
-      'Callable',
-      'Iterator',
-      'Generator',
-      'Iterable',
-      'Sequence',
-      'Mapping',
-      'Type',
-      'Self',
-      // Rust built-ins
-      'Vec',
-      'Box',
-      'Rc',
-      'Arc',
-      'Cell',
-      'RefCell',
-      'Option',
-      'Result',
-      'Ok',
-      'Err',
-      'Some',
-      'Sized',
-      'Send',
-      'Sync',
-      'Copy',
-      'Clone',
-      'Default',
-      'Debug',
-      'Display',
-      // Go built-ins
-      'int',
-      'int8',
-      'int16',
-      'int32',
-      'int64',
-      'uint',
-      'uint8',
-      'uint16',
-      'uint32',
-      'uint64',
-      'float32',
-      'float64',
-      'complex64',
-      'complex128',
-      'byte',
-      'rune',
-      'uintptr',
-      // Java/C# built-ins
-      'Integer',
-      'Long',
-      'Short',
-      'Byte',
-      'Float',
-      'Double',
-      'Character',
-      'Void',
-      'Class',
-      'Interface',
-      'Enum',
-      'Annotation',
-      'Throwable',
-      'Exception',
-      'RuntimeException',
-      'Thread',
-      'Runnable',
-      'Comparable',
-      'Serializable',
-      'Cloneable',
-      'Override',
-      'Deprecated',
-      'SuppressWarnings',
-      // C++ built-ins
-      'size_t',
-      'ptrdiff_t',
-      'nullptr_t',
-      'max_align_t',
-      'nullptr',
-    ]);
-
-    // Match PascalCase identifiers (likely custom types)
-    const typePattern = /\b([A-Z][a-zA-Z0-9]*)\b/g;
-    let match;
-
-    while ((match = typePattern.exec(signature)) !== null) {
-      const typeName = match[1];
-      if (typeName && !excludeKeywords.has(typeName) && !types.includes(typeName)) {
-        types.push(typeName);
-      }
-    }
-
-    return types;
-  }
-
-  /**
-   * Extract the symbol name from a signature
+   * Extract the symbol name from a signature (fallback when LSP doesn't provide it).
    */
   private extractNameFromSignature(signature: string): string | undefined {
-    const parsed = this.parseSignature(signature);
+    const parsed = this.extractKindAndNameFromSignature(signature);
     return parsed.name;
   }
 
   /**
-   * Find positions of related type definitions in the workspace
+   * Find positions of related type definitions in the workspace.
+   * Uses workspace/symbol LSP request to find type definitions.
    */
   private async findRelatedTypePositions(
     sourceUri: string,
