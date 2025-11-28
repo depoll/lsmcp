@@ -805,7 +805,7 @@ Features: Depth traversal, caching, deduplication, private symbol filtering.`;
 
   /**
    * Find positions of related type definitions in the workspace.
-   * Uses workspace/symbol LSP request to find type definitions.
+   * Uses workspace/symbol to find the type, then textDocument/definition to get the actual definition.
    */
   private async findRelatedTypePositions(
     sourceUri: string,
@@ -842,6 +842,37 @@ Features: Depth traversal, caching, deduplication, private symbol filtering.`;
           const symbol = exactMatch || symbols[0];
 
           if (symbol) {
+            // Use textDocument/definition to follow through to the actual definition
+            // This handles imports by navigating to the real type definition
+            try {
+              const definitions = await client.sendRequest<Location | Location[] | LocationLink[] | null>(
+                'textDocument/definition',
+                {
+                  textDocument: { uri: symbol.location.uri },
+                  position: symbol.location.range.start,
+                }
+              );
+
+              if (definitions) {
+                const defArray = Array.isArray(definitions) ? definitions : [definitions];
+                const def = defArray[0];
+                if (def) {
+                  const defUri = 'targetUri' in def ? def.targetUri : def.uri;
+                  const defRange = 'targetRange' in def ? def.targetRange : def.range;
+
+                  results.push({
+                    uri: defUri,
+                    position: defRange.start,
+                    name: symbol.name,
+                  });
+                  continue;
+                }
+              }
+            } catch (defError) {
+              this.logger.debug({ defError, typeName }, 'Failed to get definition, using symbol location');
+            }
+
+            // Fallback to symbol location if definition lookup fails
             results.push({
               uri: symbol.location.uri,
               position: symbol.location.range.start,
