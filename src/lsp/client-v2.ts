@@ -114,7 +114,16 @@ export class LSPClient extends EventEmitter {
       // Initialize
       const initParams: InitializeParams = {
         processId: process.pid,
-        capabilities: {},
+        capabilities: {
+          textDocument: {
+            documentSymbol: {
+              hierarchicalDocumentSymbolSupport: true,
+            },
+            hover: {
+              contentFormat: ['markdown', 'plaintext'],
+            },
+          },
+        },
         // rootUri is deprecated but still required by the type, provide first workspace folder
         rootUri: this.options.workspaceFolders?.[0]
           ? this.toFileUri(this.options.workspaceFolders[0])
