@@ -689,36 +689,20 @@ Features: Depth traversal, caching, deduplication, private symbol filtering.`;
 
   /**
    * Extract type names from a signature string.
-   * Finds PascalCase identifiers that are likely custom types.
+   * Finds identifiers that could be types - no language-specific filtering.
+   * The LSP workspace/symbol will determine which ones are real symbols.
    */
   private extractTypesFromSignature(signature: string): string[] {
     const types: string[] = [];
 
-    // Common built-in types to exclude (language-agnostic)
-    const builtinTypes = new Set([
-      // JS/TS
-      'Promise', 'Array', 'Object', 'String', 'Number', 'Boolean', 'Function',
-      'Map', 'Set', 'Date', 'RegExp', 'Error', 'Symbol',
-      // Primitives
-      'string', 'number', 'boolean', 'void', 'null', 'undefined', 'any', 'unknown', 'never',
-      'true', 'false', 'int', 'float', 'double', 'char', 'byte', 'long', 'short',
-      // Python
-      'None', 'True', 'False', 'List', 'Dict', 'Tuple', 'Optional', 'Union', 'Callable',
-      // Rust
-      'Vec', 'Box', 'Option', 'Result', 'Rc', 'Arc', 'Self',
-      // Go
-      'error', 'interface',
-      // Generic
-      'T', 'K', 'V', 'E', 'R', 'S', 'U',
-    ]);
-
-    // Match PascalCase identifiers (likely custom types)
-    const typePattern = /\b([A-Z][a-zA-Z0-9]*)\b/g;
+    // Match identifiers that start with uppercase (common type naming convention)
+    // No language-specific filtering - let LSP determine what's valid
+    const typePattern = /\b([A-Z][a-zA-Z0-9_]*)\b/g;
     let match;
 
     while ((match = typePattern.exec(signature)) !== null) {
       const typeName = match[1];
-      if (typeName && !builtinTypes.has(typeName) && !types.includes(typeName)) {
+      if (typeName && !types.includes(typeName)) {
         types.push(typeName);
       }
     }
