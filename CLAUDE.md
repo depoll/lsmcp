@@ -97,7 +97,7 @@ The project has a comprehensive implementation plan (see PLAN.md) and foundation
 
 The project implements:
 
-1. **8 MCP Tools**: Focused on semantic refactoring over text editing
+1. **9 MCP Tools**: Focused on semantic refactoring over text editing
    - `navigate` - Definition, implementation, and type navigation
    - `getCodeIntelligence` - Hover, signatures, and completions
    - `findSymbols` - Document and workspace symbol search
@@ -106,6 +106,7 @@ The project implements:
    - `renameSymbol` - Semantic symbol renaming across files
    - `applyCodeAction` - Apply quick fixes and refactorings
    - `executeCommand` - Execute language-specific commands
+   - `getDocs` - Retrieve API documentation for symbols with depth traversal
 
 2. **Key Design Decisions**:
    - Batch operations by default for efficiency
