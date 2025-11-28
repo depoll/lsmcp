@@ -361,11 +361,9 @@ Features: Depth traversal, caching, deduplication, private symbol filtering.`;
       return null;
     }
 
-    // Ensure the file is opened for TypeScript/JavaScript
+    // Ensure the file is opened in the language server (works for all languages)
     const language = getLanguageFromUri(uri);
-    if (language === 'typescript' || language === 'javascript') {
-      await this.ensureFileOpened(client, uri, language);
-    }
+    await this.ensureFileOpened(client, uri, language);
 
     // Get hover information
     const lspPosition: Position = {
@@ -554,11 +552,19 @@ Features: Depth traversal, caching, deduplication, private symbol filtering.`;
   }
 
   /**
-   * Parse a signature string to extract kind and name
+   * Parse a signature string to extract kind and name.
+   * Language-agnostic: supports patterns from multiple programming languages.
+   * Note: More specific patterns must come before less specific ones.
    */
   private parseSignature(signature: string): { kind?: string; name?: string } {
-    // Match common patterns
+    // Match common patterns across multiple languages
+    // Order matters - more specific patterns should come first
     const patterns = [
+      // Go patterns (must come before generic "type" pattern)
+      { regex: /^type\s+(\w+)\s+struct/, kind: 'struct', nameGroup: 1 },
+      { regex: /^type\s+(\w+)\s+interface/, kind: 'interface', nameGroup: 1 },
+      { regex: /^func\s+\([^)]+\)\s+(\w+)/, kind: 'method', nameGroup: 1 },
+      { regex: /^func\s+(\w+)/, kind: 'function', nameGroup: 1 },
       // TypeScript/JavaScript patterns
       { regex: /^(const|let|var)\s+(\w+)/, kind: 'variable' },
       { regex: /^(function)\s+(\w+)/, kind: 'function' },
@@ -566,14 +572,36 @@ Features: Depth traversal, caching, deduplication, private symbol filtering.`;
       { regex: /^(interface)\s+(\w+)/, kind: 'interface' },
       { regex: /^(type)\s+(\w+)/, kind: 'type' },
       { regex: /^(enum)\s+(\w+)/, kind: 'enum' },
-      // Method patterns
       { regex: /^\(method\)\s+(?:\w+\.)?(\w+)/, kind: 'method', nameGroup: 1 },
       { regex: /^\(property\)\s+(?:\w+\.)?(\w+)/, kind: 'property', nameGroup: 1 },
-      // Function with arrow
       { regex: /^(\w+)\s*[=:]\s*\(/, kind: 'function' },
       // Python patterns
+      { regex: /^async\s+def\s+(\w+)/, kind: 'function', nameGroup: 1 },
       { regex: /^def\s+(\w+)/, kind: 'function', nameGroup: 1 },
       { regex: /^class\s+(\w+)/, kind: 'class', nameGroup: 1 },
+      // Rust patterns
+      { regex: /^pub\s+fn\s+(\w+)/, kind: 'function', nameGroup: 1 },
+      { regex: /^fn\s+(\w+)/, kind: 'function', nameGroup: 1 },
+      { regex: /^pub\s+struct\s+(\w+)/, kind: 'struct', nameGroup: 1 },
+      { regex: /^struct\s+(\w+)/, kind: 'struct', nameGroup: 1 },
+      { regex: /^trait\s+(\w+)/, kind: 'trait', nameGroup: 1 },
+      { regex: /^impl\s+(\w+)/, kind: 'impl', nameGroup: 1 },
+      { regex: /^mod\s+(\w+)/, kind: 'module', nameGroup: 1 },
+      // Java/C#/Kotlin patterns
+      { regex: /^public\s+(?:static\s+)?(?:final\s+)?class\s+(\w+)/, kind: 'class', nameGroup: 1 },
+      { regex: /^public\s+(?:static\s+)?(?:final\s+)?interface\s+(\w+)/, kind: 'interface', nameGroup: 1 },
+      { regex: /^public\s+(?:static\s+)?(?:\w+\s+)?(\w+)\s*\(/, kind: 'method', nameGroup: 1 },
+      { regex: /^private\s+(?:static\s+)?(?:\w+\s+)?(\w+)\s*\(/, kind: 'method', nameGroup: 1 },
+      { regex: /^protected\s+(?:static\s+)?(?:\w+\s+)?(\w+)\s*\(/, kind: 'method', nameGroup: 1 },
+      // C/C++ patterns
+      { regex: /^namespace\s+(\w+)/, kind: 'namespace', nameGroup: 1 },
+      { regex: /^(?:static\s+)?(?:inline\s+)?(?:\w+\s+)+(\w+)\s*\(/, kind: 'function', nameGroup: 1 },
+      // Ruby patterns
+      { regex: /^module\s+(\w+)/, kind: 'module', nameGroup: 1 },
+      // PHP patterns
+      { regex: /^public\s+function\s+(\w+)/, kind: 'method', nameGroup: 1 },
+      { regex: /^private\s+function\s+(\w+)/, kind: 'method', nameGroup: 1 },
+      { regex: /^protected\s+function\s+(\w+)/, kind: 'method', nameGroup: 1 },
     ];
 
     for (const pattern of patterns) {
@@ -591,14 +619,15 @@ Features: Depth traversal, caching, deduplication, private symbol filtering.`;
   }
 
   /**
-   * Extract type references from a signature string
+   * Extract type references from a signature string.
+   * Language-agnostic: excludes common built-in types across multiple languages.
    */
   private extractTypesFromSignature(signature: string): string[] {
     const types: string[] = [];
 
-    // Match type patterns (PascalCase identifiers that look like types)
-    // Exclude common keywords
+    // Exclude common built-in types across multiple languages
     const excludeKeywords = new Set([
+      // JavaScript/TypeScript built-ins
       'Promise',
       'Array',
       'Object',
@@ -612,6 +641,7 @@ Features: Depth traversal, caching, deduplication, private symbol filtering.`;
       'Date',
       'RegExp',
       'Error',
+      // TypeScript-specific keywords
       'void',
       'null',
       'undefined',
@@ -620,6 +650,91 @@ Features: Depth traversal, caching, deduplication, private symbol filtering.`;
       'never',
       'true',
       'false',
+      // Python built-ins
+      'None',
+      'True',
+      'False',
+      'List',
+      'Dict',
+      'Tuple',
+      'Optional',
+      'Union',
+      'Callable',
+      'Iterator',
+      'Generator',
+      'Iterable',
+      'Sequence',
+      'Mapping',
+      'Type',
+      'Self',
+      // Rust built-ins
+      'Vec',
+      'Box',
+      'Rc',
+      'Arc',
+      'Cell',
+      'RefCell',
+      'Option',
+      'Result',
+      'Ok',
+      'Err',
+      'Some',
+      'Sized',
+      'Send',
+      'Sync',
+      'Copy',
+      'Clone',
+      'Default',
+      'Debug',
+      'Display',
+      // Go built-ins
+      'int',
+      'int8',
+      'int16',
+      'int32',
+      'int64',
+      'uint',
+      'uint8',
+      'uint16',
+      'uint32',
+      'uint64',
+      'float32',
+      'float64',
+      'complex64',
+      'complex128',
+      'byte',
+      'rune',
+      'uintptr',
+      // Java/C# built-ins
+      'Integer',
+      'Long',
+      'Short',
+      'Byte',
+      'Float',
+      'Double',
+      'Character',
+      'Void',
+      'Class',
+      'Interface',
+      'Enum',
+      'Annotation',
+      'Throwable',
+      'Exception',
+      'RuntimeException',
+      'Thread',
+      'Runnable',
+      'Comparable',
+      'Serializable',
+      'Cloneable',
+      'Override',
+      'Deprecated',
+      'SuppressWarnings',
+      // C++ built-ins
+      'size_t',
+      'ptrdiff_t',
+      'nullptr_t',
+      'max_align_t',
+      'nullptr',
     ]);
 
     // Match PascalCase identifiers (likely custom types)
@@ -761,7 +876,8 @@ Features: Depth traversal, caching, deduplication, private symbol filtering.`;
   }
 
   /**
-   * Generate fallback suggestion when documentation retrieval fails
+   * Generate fallback suggestion when documentation retrieval fails.
+   * Language-agnostic: provides generic grep pattern.
    */
   private getFallbackSuggestion(params: GetDocsParams): string {
     const symbolCount = params.symbols.length;
@@ -770,7 +886,7 @@ Features: Depth traversal, caching, deduplication, private symbol filtering.`;
 
     return (
       `Failed to retrieve docs for ${symbolCount} symbol(s). ` +
-      `Try: grep -n "function\\|class\\|interface\\|type" ${filename} ` +
+      `Try: grep -rn "def \\|fn \\|func \\|function \\|class \\|struct \\|interface " ${filename} ` +
       `to find symbol definitions manually.`
     );
   }

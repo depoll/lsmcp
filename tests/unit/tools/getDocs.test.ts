@@ -399,6 +399,47 @@ describe('GetDocsTool', () => {
         jest.clearAllMocks();
       }
     });
+
+    it('should extract kind from multi-language signature patterns', async () => {
+      const testCases = [
+        // Python patterns
+        { signature: 'def my_function()', expectedKind: 'function', lang: 'python' },
+        { signature: 'class MyPythonClass:', expectedKind: 'class', lang: 'python' },
+        { signature: 'async def async_func()', expectedKind: 'function', lang: 'python' },
+        // Rust patterns
+        { signature: 'fn my_rust_func()', expectedKind: 'function', lang: 'rust' },
+        { signature: 'pub fn public_func()', expectedKind: 'function', lang: 'rust' },
+        { signature: 'struct MyStruct', expectedKind: 'struct', lang: 'rust' },
+        { signature: 'trait MyTrait', expectedKind: 'trait', lang: 'rust' },
+        // Go patterns
+        { signature: 'func myGoFunc()', expectedKind: 'function', lang: 'go' },
+        { signature: 'type MyGoStruct struct', expectedKind: 'struct', lang: 'go' },
+        // Java/C# patterns
+        { signature: 'public class MyJavaClass', expectedKind: 'class', lang: 'java' },
+        { signature: 'public interface MyInterface', expectedKind: 'interface', lang: 'java' },
+      ];
+
+      for (const { signature, expectedKind, lang } of testCases) {
+        const mockHover = {
+          contents: {
+            kind: 'markdown',
+            value: `\`\`\`${lang}\n${signature}\n\`\`\``,
+          },
+        };
+
+        mockClient.sendRequest.mockResolvedValue(mockHover);
+
+        const result = await tool.execute({
+          symbols: [
+            { uri: `file:///test.${lang === 'python' ? 'py' : lang === 'rust' ? 'rs' : lang === 'go' ? 'go' : 'java'}`, position: { line: 10, character: 5 } },
+          ],
+        });
+
+        expect(result.data.symbols[0]?.kind).toBe(expectedKind);
+
+        jest.clearAllMocks();
+      }
+    });
   });
 
   describe('cache functionality', () => {
