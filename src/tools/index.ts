@@ -8,6 +8,7 @@ export { FindUsagesTool } from './find-usages.js';
 export { RenameSymbolTool } from './renameSymbol.js';
 export { ApplyCodeActionTool } from './applyCodeAction.js';
 export { ExecuteCommandTool } from './executeCommand.js';
+export { GetRelatedAPIsTool } from './getRelatedAPIs.js';
 
 export type { ToolMetadata, BatchSupport, StreamingSupport } from './base.js';
 export type {
